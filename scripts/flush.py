@@ -82,35 +82,35 @@ async def run_flush(context: str) -> str:
         query,
     )
 
-    prompt = f"""Review the conversation context below and respond with a concise summary
-of important items that should be preserved in the daily log.
-Do NOT use any tools — just return plain text.
+    prompt = f"""Проанализируй контекст разговора ниже и ответь кратким резюме важных моментов, которые стоит сохранить в дневном логе.
+НЕ используй инструменты — верни только текст.
 
-Format your response as a structured daily log entry with these sections:
+Формат ответа — структурированная запись дневного лога с разделами:
 
-**Context:** [One line about what the user was working on]
+**Контекст:** [Одна строка о том, над чем работал пользователь]
 
-**Key Exchanges:**
-- [Important Q&A or discussions]
+**Ключевые обсуждения:**
+- [Важные вопросы-ответы или дискуссии]
 
-**Decisions Made:**
-- [Any decisions with rationale]
+**Принятые решения:**
+- [Решения с обоснованием]
 
-**Lessons Learned:**
-- [Gotchas, patterns, or insights discovered]
+**Выводы:**
+- [Подводные камни, паттерны, инсайты]
 
-**Action Items:**
-- [Follow-ups or TODOs mentioned]
+**Задачи:**
+- [Дальнейшие шаги или TODO]
 
-Skip anything that is:
-- Routine tool calls or file reads
-- Content that's trivial or obvious
-- Trivial back-and-forth or clarification exchanges
+Пропускай:
+- Обычные вызовы инструментов или чтения файлов
+- Тривиальный или очевидный контент
+- Обычные уточняющие переписки
 
-Only include sections that have actual content. If nothing is worth saving,
-respond with exactly: FLUSH_OK
+Включай только разделы с реальным содержанием. Если нечего сохранять — ответь точно: FLUSH_OK
 
-## Conversation Context
+Язык ответа: русский. Технические термины (названия функций, переменных, команд) можно оставить на английском.
+
+## Контекст разговора
 
 {context}"""
 
@@ -139,7 +139,7 @@ respond with exactly: FLUSH_OK
     return response
 
 
-COMPILE_AFTER_HOUR = 18  # 6 PM local time
+COMPILE_AFTER_HOUR = 8  # 8 AM local time — triggers after any session ending after 8:00
 
 
 def maybe_trigger_compilation() -> None:

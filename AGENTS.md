@@ -277,8 +277,9 @@ Output: a markdown report with severity levels (error, warning, suggestion).
 
 ## Conventions
 
+- **Язык:** Все статьи, дневники, индексы и записи компилятора — на **русском языке**. Технические термины, названия переменных, функций, команд — оставлять на английском. Текст объяснений, выводов, контекста, разделов — на русском.
 - **Wikilinks:** Use Obsidian-style `[[path/to/article]]` without `.md` extension
-- **Writing style:** Encyclopedia-style, factual, third-person where appropriate
+- **Writing style:** Энциклопедический стиль — фактический, краткий, третье лицо где уместно
 - **Dates:** ISO 8601 (YYYY-MM-DD for dates, full ISO for timestamps in log.md)
 - **File naming:** lowercase, hyphens for spaces (e.g., `supabase-row-level-security.md`)
 - **Frontmatter:** Every article must have YAML frontmatter with at minimum: title, sources, created, updated
