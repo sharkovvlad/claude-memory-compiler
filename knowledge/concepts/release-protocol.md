@@ -156,11 +156,30 @@ git diff origin/main..HEAD --stat
 2. **Sanity-check diff перед push.** `git diff origin/main..HEAD --stat` — если в diff файлы, не упомянутые в commit message, или удаления >500 строк в чужих файлах → стоп.
 3. **Force-push только `--force-with-lease`.** Никогда не `--force` без `--with-lease`. Lease защищает от перезаписи параллельной работы другого агента.
 
-### Что система автоматизирует (в работе)
+### Что система автоматизирует (PR #32, ждёт merge)
 
-- **CI sanity-check workflow** (`.github/workflows/pr-sanity.yml`) — для каждого PR проверять «удаление >500 строк в файлах не из commit message» → status check `⚠️ Suspicious diff`. Не enforces в Free, но визуально шумит и виден в UI PR.
-- **Stale-worktree pre-push hook** — отказ push'ить, если worktree отстал от main на >50 коммитов без явного override. Расширение существующего `.github/hooks/pre-push.sh`.
-- **Nightly mergeability check** — workflow раз в сутки проходит по всем открытым PR, считает diff vs main; >5000 строк удалено → алерт в админ-чат `417002669`.
+3 защиты реализованы в PR #32 (стэкован поверх PR #31 с `deploy.yml` + базовым `pre-push.sh`):
+
+- **Защита 1 — CI sanity-check workflow** (`.github/workflows/pr-sanity.yml` + `.github/scripts/pr_sanity_audit.py`). Триггер `pull_request: [opened, synchronize, reopened]`. Чеки:
+  1. Total deletions > 5000 (configurable через repo variable `PR_SANITY_TOTAL_DELETIONS_LIMIT`).
+  2. Удаление любого `migrations/*.sql` (миграции forward-only, всегда suspicious).
+  3. Удаление файлов без mention в PR title/body и без ключевых слов «delete/remove/drop/cleanup».
+  4. Удаления > 500 строк (configurable `PR_SANITY_PER_FILE_DELETIONS_LIMIT`) в файле не из scope title/body.
+
+  При флаге → fail status check + идемпотентный PR comment (обновляется при каждом push, не плодится). На GitHub Free required-status-check для приватного репо не enforce'ится → не блокирует merge физически, но видим в UI PR.
+
+- **Защита 2 — stale-worktree pre-push hook** (расширение `.github/hooks/pre-push.sh` +82 строки). Перед каждым push в feature-ветку считает `git rev-list --count $(git merge-base HEAD origin/main)..origin/main`:
+  - > 10 коммитов — warning, push продолжается.
+  - > 50 коммитов — block (override `ALLOW_STALE_PUSH=1 git push ...`).
+
+  Тихо skip при недоступном remote (offline). Пороги настраиваются через env `STALE_WARN_THRESHOLD` / `STALE_BLOCK_THRESHOLD`. Hook требует one-time локальной установки (`git config core.hooksPath .github/hooks`) — см. `.github/HOOKS.md`.
+
+- **Защита 3 — nightly mergeability check** (`.github/workflows/nightly-pr-audit.yml` + `.github/scripts/nightly_pr_audit.py`). Cron `0 3 * * *` UTC + `workflow_dispatch`. Через `gh pr list` обходит все open PR, для каждого `git diff --numstat` vs base. Suspicious (deletions > 5000 ИЛИ удалённые migrations) → один аггрегированный Telegram-alert в admin chat `417002669`. Тишина при чистом state — не шумит. Использует те же secrets что `deploy.yml` (`TG_ADMIN_BOT_TOKEN`, `TG_ADMIN_CHAT_ID`).
+
+**Defense-in-depth логика:**
+- Защита 2 ловит до создания PR (push в feature-ветку).
+- Защита 1 ловит при создании / push в PR (серверный аудит).
+- Защита 3 ловит уже-существующие PR, созданные до того, как защита 1 появилась в main (backup).
 
 ## Related Concepts
 
