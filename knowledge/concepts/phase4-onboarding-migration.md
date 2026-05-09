@@ -346,6 +346,83 @@ RETURN render_screen(tid, v_top);
 - Profile v5 глубокая иерархия (edit_age, edit_goal, etc.) → `back_nav` (parent в дереве)
 - Shared Screen из нестандартного контекста (edit_lang из онбординга) → peek+pop (вернуть origin)
 
+### 23. set_user_training_type не продвигал status в онбординге (mig 190, lesson 9.05)
+
+**Симптом (live UAT 786301802 9.05 12:53):** юзер выбрал activity=light → status='registration_step_training' (set_user_activity OK). Юзер выбрал training=cardio → `set_user_training_type` сохранил `training_type='cardio'`, но status **остался** `'registration_step_training'`. FSM render('edit_goal'), но в БД status=training. Юзер выбрал goal=lose → FSM попадает опять в ветку `IF v_status='registration_step_training'` → `set_user_training_type(tid, 'cmd_select_lose')` → 'lose' не валидный training_type → render('edit_training'). **Циклится.**
+
+**Root cause:** в `set_user_training_type` `next_status` определялся как:
+```sql
+v_next_status := CASE WHEN v_current_status = 'edit_training' THEN 'registered' ELSE v_current_status END;
+```
+
+То есть только Profile retake продвигался. Онбординг — нет. Все остальные `set_user_*` (gender/age/weight/height/activity) имеют ELSE-ветку на `registration_step_X+1`.
+
+**Fix (mig 190):**
+```sql
+v_next_status := CASE
+    WHEN v_current_status = 'edit_training' THEN 'registered'
+    WHEN v_current_status = 'registration_step_training' THEN 'registration_step_goal'
+    ELSE v_current_status
+END;
+```
+
+**Watchlist для будущих RPC:** при добавлении нового `set_user_<новое_поле>` обязательно паттерн как в `set_user_activity` (handle оба контекста — edit_X и registration_step_X). Аудит остальных существующих RPC на полноту pattern — отдельный TODO.
+
+### 24. ⛔ Half-measures (manual UPDATE юзеров) — anti-pattern (lesson 9.05)
+
+**Контекст:** юзер 786301802 после Phase 4 quiz (mig 187/188/189) застрял на `status='onboarding:country'` — legacy n8n `02.1_Location` workflow не активировался после Python forward'a (HTTP 200 OK, но юзер молчит). Я применил manual hotfix:
+```sql
+UPDATE users SET status='registered', xp = xp + 50, nomscoins = nomscoins + 100,
+    mana_current = LEAST(mana_current + 500, 500), country_code='ES', timezone='Europe/Madrid'
+WHERE telegram_id=786301802;
+```
+
+**Тимлид явно отверг такой подход:**
+> «Я против таких половинчатых мер: 'обойти location, complete_onboarding вручную'. Нам надо решать проблемы, а не затыкать течи. Важно расследовать n8n 02.1_Location workflow и предложить лучшее решение, например, переход на Питон.»
+
+**Правило для будущих агентов:**
+
+| Сценарий | Можно manual hotfix? |
+|---|---|
+| Bot stuck из-за неизвестного бага, root cause не найден | ❌ **НЕТ.** Сначала копать root cause (n8n routing / SQL FSM / Python handler), чинить там. |
+| Root cause fix задеплоен, нужно вытащить **уже пострадавших** юзеров | ✅ Да — это catch-up, а не workaround. |
+| Root cause требует много времени, юзер ждёт | ❌ Нет. Лучше сообщить юзеру явно «есть баг, чиним», чем дать ложное «работает». |
+
+Manual hotfixes маскируют проблему, ставят precedent для других агентов делать так же, и оставляют **untracked invariant violations** в БД. Каждый half-measure — кредит, который потом возвращать с процентами при следующем баге.
+
+**Текущий открытый вопрос:** legacy 02.1_Location → Python migration (Variant B Phase 6) — следующий таргет `TARGET_TO_PATH` после onboarding handler. Spawn task создан 9.05 (см. daily/2026-05-09.md «Phase 4 onboarding hotfixes session»).
+
+### 25. Phenotype quiz UX flow — finalized (mig 187b/188/189, 8-9.05)
+
+Финальная архитектура after migrations 187b/188/189:
+
+**Онбординг flow:**
+```
+goal=lose/gain → speed → edit_phenotype (Q1, Skip available) →
+  Skip → forward to location (phenotype='default')
+  Q1 ans → phenotype_q2 → Q3 → Q4 → classify_phenotype + forward to location (NO result screen, mig 189)
+```
+
+**Profile retake flow** (через `cmd_edit_phenotype` на `my_plan`):
+```
+my_plan → cmd_edit_phenotype (meta: set_status='edit_phenotype', target_screen='edit_phenotype')
+        → process_user_input → render edit_phenotype (Back available, Skip hidden)
+        → Q1 → Q2 → Q3 → Q4 → classify_phenotype + render('phenotype_result')
+        → Continue → my_plan, status='registered'
+```
+
+**Shared screens** (5 экранов на оба контекста): `edit_phenotype, phenotype_q2/q3/q4, phenotype_result`. Кнопки conditional через `visible_condition`:
+- Skip: `u.status = 'registration_step_phenotype_quiz'` (col=0 на row=3)
+- Back: `u.status = 'edit_phenotype'` (col=1 на row=3, mig 188 — UNIQUE constraint screen+row+col требует разный col)
+
+**dispatch_with_render gate** (mig 187/189): онбординг path для статусов `new`, `registration_step_*`, `restoring:choose`, `edit_phenotype`, `onboarding:country`, `onboarding:timezone`. Гарантирует FSM в `process_onboarding_input` для shared phenotype quiz ветки.
+
+**Result screen text** (Profile retake only): `text_key='phenotype.result_template'` = literal `'{result_html}'` (одинарные скобки! Иначе `_VAR_PLACEHOLDER_RE` оставляет внешние `{` `}` literally в тексте — mig 189 fix). business_data.result_html — pre-rendered HTML composite (title + explanation_<phenotype> + recalculated, locale-aware).
+
+**Translation `buttons.edit_phenotype` deprecated** (mig 188): кнопка `cmd_edit_phenotype` на `my_plan` теперь использует canonical `text_key='profile.body_type'` (переведён на все 13 языков, в отличие от `buttons.edit_phenotype` который был только на ru). Старый ключ остаётся orphan для backward compat.
+
+**onboarding_success message** — после full Phase 4 flow (location + timezone) `finalize_onboarding_location` (mig 179) вызывает `complete_onboarding` → status='registered' + grants + render('onboarding_success'). Currently заблокирован на legacy 02.1_Location path (см. gotcha #24). После переноса location в Python — onboarding_success message появится корректно.
+
 ---
 
 ## TODO для будущих сессий (бэклог)
