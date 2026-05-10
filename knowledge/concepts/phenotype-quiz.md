@@ -213,6 +213,29 @@ FROM users WHERE telegram_id = 417002669;
 
 **Rollback snapshot:** `/tmp/04_menu_pre_v2.json` (versionId 11326b05) — стабильное состояние до Action Router миграции. PUT этого файла возвращает 04_Menu в рабочее состояние (Menu Router Switch, до Action Router pattern).
 
+### Phase 2 status (2026-05-10): полная Python-only архитектура
+
+Phase 2 квиза перенесена в Python authoritative path. Цепочка cutover'а:
+
+1. **mig 187b/188/189/190** (08-09.05) — headless screens (`phenotype_q1..q4` shared) + FSM ветки в `process_user_input` для `registration_step_phenotype_quiz` (онбординг) и `edit_phenotype` (Profile retake). Callbacks нового формата: `cmd_quiz_q{1..4}_{a,b,c}` + `cmd_quiz_skip` + `cmd_quiz_continue`. Старый формат `cmd_phenotype_q*_*` оставался в legacy 04_Menu.
+2. **mig 193 + 194 (10.05)** — попытка добавить `{icon_X}` placeholder в `ui_translations.content->phenotype.*`, обнаружен blocker: legacy 04_Menu JS-ноды читали raw translations и не резолвили placeholder, юзеры на legacy путь видели literal. Mig 194 откатила префиксы. icon_pheno_* константы в `app_constants` сохранены.
+3. **04_Menu surgical strip + mig 195 (10.05, PR #39)** — удалены 6 phenotype-only нод (`Build Quiz Screen`, `Push Nav (Quiz)`, `Is Classify?`, `RPC Classify Phenotype`, `Build Quiz Result`, `Edit Phenotype Screen`) + branches phenotype из routers (`Command Classifier` jsCode, `Menu Router` outputKey, `Edit Type Router` outputKey). Удалено 7 connections, 130/136 нод осталось. После strip — replay mig 193 как mig 195 (идемпотентен через `value LIKE '{icon_%'` guard). Phenotype путь теперь **только Python** → template_engine `_resolve_text` подставляет emoji на consumer-side.
+4. **Дополнительный fix:** `Go to Language` нода (executeWorkflow → удалённый `JRaKFPb5sOFL3xlc`) была disabled — n8n PUT валидирует все executeWorkflow refs и блокирует publish при dangling. См. [[n8n-data-flow-patterns]] секция «Gotcha: PUT блокируется dangling executeWorkflow refs».
+
+**Verify recipe (e2e):**
+```sql
+-- DB: префикс на всех 13 языках
+SELECT count(*) FROM ui_translations WHERE content->'phenotype'->>'q1_a' LIKE '{icon_%';  -- expect 13
+```
+```python
+# Python: end-to-end resolve
+from services.template_engine import _resolve_text
+out = _resolve_text("phenotype.q1_a", translations, template_vars, constants)
+# expect '👕 Плечи и грудь', not '{icon_pheno_q1_a} Плечи и грудь'
+```
+
+**p95 после rollout** (10.05): `render_screen('edit_phenotype', user_id)` — p50=44ms, p95=48ms (10 прогонов, persistent psycopg2 с VPS).
+
 ### Планируемые следующие итерации
 
 - **Онбординг-интеграция**: добавить тест после `registration_step_goal` в 02_Onboarding_v3 (когда picker unification будет готов — `ui_pickers` таблица + `get_picker_config` RPC).

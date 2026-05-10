@@ -87,6 +87,40 @@ This is a second real-world confirmation of the stale PUT base rule: **always GE
 
 **Anti-pattern:** правка локального JSON в `n8n_workflows/<workflow>.json` + git push + `./deploy.sh` **не обновляет прод n8n**. `deploy.sh` rsync'ит код Python, не workflows. `n8n_workflows/` — это snapshot для документации/git-tracking, не источник правды для runtime n8n. Runtime живёт в SQLite на VPS, обновляется только через API или UI.
 
+#### Gotcha: PUT блокируется dangling executeWorkflow refs (2026-05-10)
+
+В новых версиях n8n (по крайней мере на `n8nio/n8n:latest` 10.05.2026) PUT валидирует все executeWorkflow ноды и **отказывается публиковать** workflow если хоть одна нода ссылается на удалённый sub-workflow:
+
+```
+HTTP 400: Cannot publish workflow: Node "Go to Language" references workflow JRaKFPb5sOFL3xlc which is not published.
+```
+
+При этом **раньше работавший `active=true` workflow с такими же мёртвыми ссылками продолжает крутиться** — валидация только на PUT, не на runtime. Поэтому проблема всплывает в первый раз когда ты делаешь любое легитимное изменение в workflow с pre-existing мёртвой ссылкой.
+
+**Recipe (расширение Safe PUT шаг 2.5):**
+
+После загрузки GET response — **audit все executeWorkflow refs** против списка существующих workflow:
+
+```python
+existing = {w["id"]: w["name"] for w in GET("/workflows?limit=100")["data"]}
+for n in wf["nodes"]:
+    if n.get("type") == "n8n-nodes-base.executeWorkflow":
+        wid = n["parameters"].get("workflowId")
+        if isinstance(wid, dict): wid = wid.get("value")
+        if wid not in existing:
+            print(f"DEAD: {n['name']} -> {wid}")
+```
+
+**Resolution для каждой dead ноды (выбор зависит от роли):**
+
+1. **Disable** (`node["disabled"] = True`) — если нода уже неreachable (callback мигрирован в Python authoritative path) или вызов sub-workflow закомментирован выше по цепочке. Минимальный scope, безопасный default.
+2. **Update workflowId** на актуальный ID — если sub-workflow был переименован/пересоздан с новым ID.
+3. **Удалить ноду** + связанные connections — только если уверен что путь полностью dead. Расширяет scope изменения, требует отдельного KB-объяснения в commit message.
+
+**Важно:** не объяснять команде «починил n8n» как side effect — пометить в commit/PR явно («kept scope minimal: disabled `Go to Language` to unblock PUT, dead ref pre-dates this strip»).
+
+**Контекст обнаружения:** session 2026-05-10 surgical strip phenotype quiz из `04_Menu` (PR #39). Нода `Go to Language` ссылалась на удалённый workflow `JRaKFPb5sOFL3xlc`. Language editing был мигрирован в Python (`cmd_edit_lang` через menu_v3 target), нода — dead код. Disable разблокировал PUT без расширения scope.
+
 ### editMessageText vs sendMessage routing
 
 When a node can be triggered by both a reply-keyboard tap (text message) and an inline-button tap (callback_query), use an IF node:
