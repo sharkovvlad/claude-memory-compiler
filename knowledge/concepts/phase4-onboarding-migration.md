@@ -463,6 +463,54 @@ else:
 
 **Recipe для будущих handlers:** если новый handler зовёт `dispatch_with_render` для статусов в onboarding-gate (mig 188 список) — обязательно ту же нормализацию `status is None + telegram_ui present → 'render'`. Контракт `render_screen` (no top-level status) — стабилен, не меняем (или меняем сразу для всех 4+ consumers, что дорого).
 
+### 27. Headless meta dispatch требует callback в `PROFILE_V5_CALLBACKS` (lesson 10.05)
+
+**Симптом** (после deploy menu_v3 status normalization fix): юзер кликает «🧬 Тип тела» на my_plan → бот не реагирует (раньше показывал ошибку, теперь тишина).
+
+**Диагноз через логи** (`journalctl -u noms-webhooks`):
+```
+SHADOW_ROUTE update_id=... target=menu reason=menu_command synth=-
+AUTHORITATIVE skip — fall through to legacy
+```
+
+Callback `cmd_edit_phenotype` → `target=menu` (legacy 01_Dispatcher → 04_Menu), а **не** `target=menu_v3`. После 10.05 strip legacy 04_Menu больше не имеет phenotype branch (Command Classifier / Menu Router / Edit Type Router зачищены) → callback уходит в void.
+
+**Корневая причина — half-measure в mig 187b:**
+
+Mig 187b (08.05) настроил **headless meta dispatch** для кнопки cmd_edit_phenotype на my_plan:
+```sql
+UPDATE ui_screen_buttons
+   SET meta = jsonb_build_object('set_status', 'edit_phenotype', 'target_screen', 'edit_phenotype')
+ WHERE screen_id = 'my_plan' AND callback_data = 'cmd_edit_phenotype';
+```
+
+`process_user_input` уже умеет читать `meta.set_status` + `meta.target_screen` (L332-340 в живой версии): применяет UPDATE users + рендерит target_screen. **НО:** для этого callback должен попасть в `process_user_input`, что требует роутинга через `target=menu_v3` в Python диспатчере.
+
+Mig 187b забыл добавить `cmd_edit_phenotype` в `dispatcher/router.py:PROFILE_V5_CALLBACKS` set. До 10.05 это было замаскировано legacy 04_Menu: cмd_edit_phenotype попадал в `target=menu` → 01_Dispatcher → 04_Menu (`Edit Type Router` branch `edit_phenotype` → `Edit Phenotype Screen` → переход в quiz) → работало. После strip'а — путь в legacy остался, но edit_phenotype branch там удалён → silent failure.
+
+**Fix (PR #39, 1 commit):** добавить `"cmd_edit_phenotype"` в `PROFILE_V5_CALLBACKS` в `dispatcher/router.py`. После: диспетчер роутит → menu_v3 → dispatch_with_render → process_user_input (status='registered' до клика, gate не срабатывает) → meta dispatch:
+- `set_status='edit_phenotype'` (UPDATE users)
+- `target_screen='edit_phenotype'` (render Q1)
+- Push 'edit_phenotype' в nav_stack автоматически.
+
+Последующие cmd_quiz_q* клики (status='edit_phenotype' уже) роутятся через **section 9 BUTTON_ONLY_STATUSES** → target='onboarding' → onboarding_v3 handler (уже работает корректно с нормализацией статуса).
+
+**Verify-after** (live savepoint, юзер 417002669, имитация my_plan стека):
+```sql
+UPDATE users SET status='registered', nav_stack='["profile_main","my_plan"]' WHERE telegram_id=417002669;
+SELECT public.dispatch_with_render(417002669, 'callback',
+    '{"callback_data":"cmd_edit_phenotype"}'::jsonb, '{}'::jsonb, true);
+-- expect: status='render', screen_id='edit_phenotype',
+--         text_key='phenotype.q1_prompt', keyboard=[cmd_quiz_q1_a/b/c, cmd_back],
+--         user.status → 'edit_phenotype', nav_stack += 'edit_phenotype'
+```
+
+**Recipe для headless meta dispatch buttons:**
+
+Когда добавляешь `ui_screen_buttons.meta = {set_status, target_screen}` для нового callback'а — **обязательно** добавь callback в `dispatcher/router.py:PROFILE_V5_CALLBACKS`. SQL meta только описывает что делать в `process_user_input`, но не управляет роутингом Python ↔ legacy n8n. Без route'а callback падает в legacy `target=menu`, что после полного n8n cutover превратится в silent void.
+
+Это две разные ответственности (SQL FSM + Python dispatcher), миграция должна обновлять обе одновременно. Test для регрессии: pytest `test_route_decisions_for_callback_table` (если есть) или live savepoint repro как выше.
+
 **Verify-after** (live savepoint на проде, юзер `417002669`):
 ```sql
 BEGIN; SAVEPOINT s;
