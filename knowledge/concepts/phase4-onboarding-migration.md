@@ -546,6 +546,61 @@ text='🔙 Назад'                cb='cmd_back'  (icon_const_key='icon_back'
 
 **Recipe для будущих headless кнопок:** контракт явно зафиксирован в `_build_button_text` docstring — text может содержать `{icon_*}` / `{tr:*}` placeholder'ы, Python резолвит через `_resolve_text`. Не хардкодить эмодзи через `icon_const_key` если текст уже содержит placeholder (двойной эмодзи). При добавлении новых headless экранов проверять `_verify_button_rendering.py` шаблон для регрессионного теста.
 
+### 29. `edit_phenotype` отсутствовал в `ONBOARDING_STATUSES` → quiz callbacks в legacy void (lesson 10.05)
+
+**Симптом** (после PR #39/#40/#41 deploy): Phenotype Q1 рендерится корректно (эмодзи в шапке + кнопках). **Но** клик `cmd_quiz_q1_a` (или Q1/2/3 любой) — бот молчит. Quiz не двигается дальше.
+
+**Логи** (`journalctl -u noms-webhooks` 22:29:47+):
+```
+SHADOW_ROUTE update_id=455699381 target=menu reason=menu_command synth=-
+AUTHORITATIVE skip — fall through to legacy
+```
+
+`cmd_quiz_q1_a` ушёл в `target=menu` (legacy 01_Dispatcher → 04_Menu). После 10.05 strip phenotype branch'ев из 04_Menu — клик в void. Onboarding handler не получил callback.
+
+**Причина — section ordering в `dispatcher/router.py`:**
+
+Router имеет несколько секций, проверяемых по порядку:
+- **Section 4l** (L614-634) — legacy menu catch-all: `is_menu_callback = has_callback AND "cmd_" in callback AND status not in ONBOARDING_STATUSES` → routes `target='menu'`.
+- **Section 9** (L673+) — BUTTON_ONLY_STATUSES: callback → `target='onboarding'`.
+
+`cmd_quiz_q1_a` matches 4l criteria. Guard `status not in ONBOARDING_STATUSES` (L629) пропускает только онбординг-юзеров — `ONBOARDING_STATUSES` set (L194-208) содержал `'registration_step_phenotype_quiz'`, но **НЕ** `'edit_phenotype'`. Для Profile retake юзера в `edit_phenotype` статусе 4l перехватывал quiz callback до того как section 9 успевал его поймать.
+
+Half-measure mig 187b (08.05) **#3**: добавил `edit_phenotype` в `BUTTON_ONLY_STATUSES` (L82), но не в `ONBOARDING_STATUSES`. До 04_Menu strip это маскировалось legacy путём (он умел обрабатывать `cmd_quiz_*`). После strip'а — silent void.
+
+**Fix (1 строка):** добавить `"edit_phenotype"` в `ONBOARDING_STATUSES` set. После: section 4l пропускает edit_phenotype юзеров → section 9 BUTTON_ONLY_STATUSES ловит callback → routes to onboarding handler → `dispatch_with_render` → `process_onboarding_input` → FSM matcher `cmd_quiz_q[1-3]_[abc]$` (L279) → `save_phenotype_answer` + render next Q.
+
+**Verify** (live router dispatch без БД):
+```python
+from dispatcher.router import route
+from dispatcher.context import UserCtx
+update = {'callback_query': {'data': 'cmd_quiz_q1_a', ...}}
+
+# До fix:
+route(update, UserCtx(status='edit_phenotype')).target == 'menu'  # bug
+
+# После fix:
+route(update, UserCtx(status='edit_phenotype')).target == 'onboarding'   ✓
+route(update, UserCtx(status='registration_step_phenotype_quiz')).target == 'onboarding'  ✓
+route(update, UserCtx(status='registered')).target == 'menu'  # OK — у registered нет quiz buttons
+```
+
+**Side effects добавления `edit_phenotype` в ONBOARDING_STATUSES:**
+
+ONBOARDING_STATUSES используется также в:
+- **Section 4a** (L456): PROFILE_V5_CALLBACKS guard. Для status='edit_phenotype' клики на cmd_my_plan/cmd_settings/cmd_get_profile теперь пойдут в onboarding handler, не menu_v3. ✓ (PR #39 fix добавил status normalization в menu_v3, но onboarding handler тоже корректно обрабатывает status=None+telegram_ui → так что путь работает одинаково в обоих случаях).
+- **Section 4b** (L483): PROFILE_V5_PICKER_PREFIXES guard. Для edit_phenotype нет picker buttons (cmd_select_/cmd_speed_), edge case не возникает.
+
+**Pattern:** «section ordering strikes again». Гарды `status not in ONBOARDING_STATUSES` — это форма «состояние X — особое, не для меня, пропусти дальше». Когда добавляется новый FSM-управляемый «эфемерный» статус (как `edit_phenotype` для Profile retake), его **обязательно** добавлять в **обе**: `BUTTON_ONLY_STATUSES` (чтобы section 9 поймал) + `ONBOARDING_STATUSES` (чтобы section 4l не перехватил раньше). Test для регрессии:
+
+```python
+@pytest.mark.parametrize("status", BUTTON_ONLY_STATUSES)
+def test_cmd_callback_in_button_only_status_routes_to_onboarding(status):
+    decision = route(_fake_update("cmd_quiz_q1_a"), UserCtx(status=status))
+    assert decision.target == "onboarding", f"{status} routes to {decision.target}"
+```
+(не добавил в этой PR — TODO для следующей сессии).
+
 **Verify-after** (live savepoint на проде, юзер `417002669`):
 ```sql
 BEGIN; SAVEPOINT s;
