@@ -425,6 +425,56 @@ my_plan → cmd_edit_phenotype (meta: set_status='edit_phenotype', target_screen
 
 ---
 
+### 26. menu_v3 vs onboarding_v3 status normalization asymmetry (lesson 10.05, после 04_Menu strip)
+
+**Симптом:** юзер `417002669` в `status='edit_phenotype'` кликает reply «👤 Профиль» → бот шлёт «⚠️ Что-то пошло не так. Попробуй ещё раз.». Второй клик отрабатывает нормально (status уже `'registered'` после первого как side-effect).
+
+**Цепочка:**
+1. Юзер в `edit_phenotype` (зашёл в Profile retake quiz через my_plan).
+2. Reply tap «👤 Профиль» → telegram_proxy синтезирует `cmd_get_profile` → диспетчер `reason=profile_v5_reply_text` → target=`menu_v3`.
+3. `menu_v3` зовёт `dispatch_with_render` → SQL onboarding-gate (mig 188 расширил gate на `edit_phenotype`) → `process_onboarding_input` catch-all (L341-344): `UPDATE status='registered'` + `RETURN public.render_screen('profile_main')`.
+4. `render_screen` возвращает структуру **без `status` field** (контракт), `process_onboarding_input` пробрасывает as-is.
+5. `menu_v3._envelope_from_rpc_result` (`handlers/menu_v3.py:290`): `status = result.get("status") or "error"` → status=`"error"` → error envelope с локализованным «errors.generic».
+
+**Корневая проблема — asymmetry handlers:**
+
+- `handlers/onboarding_v3.py:518-526` **уже умеет** нормализовать: `if raw_status is None and isinstance(result.get("telegram_ui"), dict): status = "render"`. Комментарий явно фиксирует контракт: «render_screen returns a dict WITHOUT an explicit status field. process_onboarding_input calls render_screen directly and propagates its result».
+- `handlers/menu_v3.py:290` — той же нормализации НЕ имеет. До 10.05 пути `menu_v3 → process_onboarding_input` не было в проде: legacy n8n 04_Menu обрабатывал phenotype-callbacks для `edit_phenotype` юзеров, Python onboarding-gate не активировался.
+- **04_Menu phenotype strip (10.05, PR #39)** удалил legacy путь → menu_v3 для `edit_phenotype` юзеров теперь стабильно попадает в `process_onboarding_input` → bug стал воспроизводимым.
+
+**Pre-existing scope:** контракт «process_onboarding_input возвращает render без status field» — задокументирован ещё в mig 187 (комментарий в onboarding_v3.py). Asymmetry была pre-existing с 02.05, замаскирована legacy 04_Menu. Не уникален для `cmd_get_profile` — потенциально срабатывает для любого callback от юзера в `edit_phenotype` / `onboarding:country` / `onboarding:timezone` который роутится через menu_v3.
+
+**Fix (PR #39, 10.05):** backport нормализации из `onboarding_v3.py:518-526` в `menu_v3.py:_envelope_from_rpc_result`:
+
+```python
+# render_screen returns a dict WITHOUT an explicit "status" field. When the
+# user's status hits the dispatch_with_render onboarding gate (mig 188: edit_phenotype,
+# mig 189: onboarding:country/timezone), process_onboarding_input propagates
+# render_screen result directly — status is None even though telegram_ui is present.
+# Treat that as "render" so we don't false-positive into the generic error envelope.
+raw_status = result.get("status")
+if raw_status is None and isinstance(result.get("telegram_ui"), dict):
+    status = "render"
+else:
+    status = raw_status or "error"
+```
+
+**Альтернатива (отвергнута):** SQL fix — обернуть все 43 `RETURN public.render_screen(...)` в `process_onboarding_input` через `|| jsonb_build_object('status', 'render')`. 4 из 43 — validation_error paths (телeграм UI + `validation_error: true` + `error_key`), требуют status=`'validation_error'`. Большой surface, риск семантического сдвига. Python fix — 4 строки, mirror'ит существующий контракт onboarding_v3, не трогает SQL.
+
+**Recipe для будущих handlers:** если новый handler зовёт `dispatch_with_render` для статусов в onboarding-gate (mig 188 список) — обязательно ту же нормализацию `status is None + telegram_ui present → 'render'`. Контракт `render_screen` (no top-level status) — стабилен, не меняем (или меняем сразу для всех 4+ consumers, что дорого).
+
+**Verify-after** (live savepoint на проде, юзер `417002669`):
+```sql
+BEGIN; SAVEPOINT s;
+UPDATE users SET status='edit_phenotype' WHERE telegram_id=417002669;
+SELECT (public.dispatch_with_render(417002669, 'callback',
+        '{"callback_data":"cmd_get_profile"}'::jsonb, '{}'::jsonb, true))
+       ? 'status' AS has_status_field;
+-- false (SQL контракт);
+-- но menu_v3 после fix нормализует → status='render' → ResponseEnvelope с render
+ROLLBACK TO SAVEPOINT s; ROLLBACK;
+```
+
 ## TODO для будущих сессий (бэклог)
 
 ### TODO #1 — Интегрировать `process_onboarding_input` через `process_user_input` для auto-push nav_stack
