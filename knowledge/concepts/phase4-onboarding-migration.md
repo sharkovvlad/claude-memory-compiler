@@ -511,6 +511,41 @@ SELECT public.dispatch_with_render(417002669, 'callback',
 
 Это две разные ответственности (SQL FSM + Python dispatcher), миграция должна обновлять обе одновременно. Test для регрессии: pytest `test_route_decisions_for_callback_table` (если есть) или live savepoint repro как выше.
 
+### 28. `_build_button_text` не резолвил `{icon_*}` placeholder'ы (lesson 10.05)
+
+**Симптом** (после PR #40 deploy): Phenotype Q1 рендерится, шапка `👕 В1/4 — Где облегающая футболка...` корректна, но **inline-кнопки** показывают literal placeholder'ы: `{icon_pheno_q1_a} Плечи и грудь`, `{icon_scales} Равномерно везде`, `{icon_pheno_q1_c} Живот и талия`.
+
+**Причина — asymmetry в `services/template_engine.py`:**
+
+- `_resolve_text` (для шапки сообщения) делает **два прохода**: Pass 1 `{tr:section.key}` → translations lookup, Pass 2 `{var}` → template_vars (P1) + constants (P2). `{icon_pheno_q1}` → Pass 2 находит в `constants` → подставляет `👕`. ✓
+- `_build_button_text` (для inline-кнопок) делал просто `_get_nested(translations, text_key)` — **raw text без substitution**. `{icon_pheno_q1_a}` оставался literal. ✗
+
+Asymmetry pre-existing с момента создания template_engine'а. Замаскирована тем, что:
+1. До mig 187b/193/195 (08-10.05) в `ui_translations.content` placeholder'ов почти не было — иконки кнопок собирались через `icon_const_key` префикс (отдельное поле в `ui_screen_buttons`).
+2. Phenotype quiz (mig 187b) внёс новый паттерн: `icon_const_key=NULL` + `{icon_pheno_*}` placeholder в text для централизации эмодзи через `app_constants`. Это контракт «headless emoji» — text содержит свой icon, NULL в `icon_const_key` чтобы избежать «правила двойных эмодзи».
+3. Тестировалось в legacy 04_Menu (JS code ноды) до 10.05 — они тоже не резолвили `{icon_*}`. Откатил mig 193 → 194. После strip'а 04_Menu (PR #39) + replay mig 195 phenotype путь полностью на Python → `_build_button_text` начал получать text с `{icon_*}` placeholder'ом → literal выплыл наружу.
+
+**Fix (PR #40 follow-up commit, 4 строки):** заменить `_build_button_text` raw text lookup на `_resolve_text(text_key, translations, {}, constants)`. template_vars не пробрасываем (кнопочный text не использует `{var}` сейчас; при необходимости расширим signature). `icon_const_key` префиксование оставлено как есть — для legacy кнопок без placeholder'ов.
+
+**Safety guard:** если кнопка имеет одновременно `icon_const_key` И `{icon_*}` placeholder в text → двойной эмодзи (правило CLAUDE.md). Mig 187b установил контракт: для phenotype-кнопок `icon_const_key=NULL`. Live check:
+```sql
+SELECT screen_id, callback_data, text_key, icon_const_key FROM ui_screen_buttons
+ WHERE callback_data LIKE 'cmd_quiz_q%';
+-- expect: icon_const_key=NULL для всех 12 quiz answer buttons
+```
+
+**Verify-after (live)** (`scripts/_verify_button_rendering.py`): `dispatch_with_render(cmd_edit_phenotype)` → `_build_inline_keyboard(keyboard, translations, constants)` → ожидаемый output:
+```
+text='👕 Плечи и грудь'        cb='cmd_quiz_q1_a'
+text='⚖️ Равномерно везде'     cb='cmd_quiz_q1_b'
+text='🍔 Живот и талия'        cb='cmd_quiz_q1_c'
+text='🔙 Назад'                cb='cmd_back'  (icon_const_key='icon_back' path сохранён)
+```
+
+**Pytest:** `tests/services/test_template_engine.py` (42 теста) и full suite (399 passed) — без регрессий. Существующие тесты для кнопок без placeholder'ов проходят как раньше; placeholder paths теперь резолвятся корректно.
+
+**Recipe для будущих headless кнопок:** контракт явно зафиксирован в `_build_button_text` docstring — text может содержать `{icon_*}` / `{tr:*}` placeholder'ы, Python резолвит через `_resolve_text`. Не хардкодить эмодзи через `icon_const_key` если текст уже содержит placeholder (двойной эмодзи). При добавлении новых headless экранов проверять `_verify_button_rendering.py` шаблон для регрессионного теста.
+
 **Verify-after** (live savepoint на проде, юзер `417002669`):
 ```sql
 BEGIN; SAVEPOINT s;
