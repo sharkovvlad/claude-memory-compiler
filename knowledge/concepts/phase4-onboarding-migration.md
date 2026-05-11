@@ -546,6 +546,86 @@ text='🔙 Назад'                cb='cmd_back'  (icon_const_key='icon_back'
 
 **Recipe для будущих headless кнопок:** контракт явно зафиксирован в `_build_button_text` docstring — text может содержать `{icon_*}` / `{tr:*}` placeholder'ы, Python резолвит через `_resolve_text`. Не хардкодить эмодзи через `icon_const_key` если текст уже содержит placeholder (двойной эмодзи). При добавлении новых headless экранов проверять `_verify_button_rendering.py` шаблон для регрессионного теста.
 
+### 31. ✅ checkmark на кнопках текущего выбора — JSONB через generated columns (lesson 11.05, mig 198)
+
+**Контекст:** запрос юзера — на квиз-кнопках показывать ✅ если данный вариант ранее выбран (как в Settings/My Plan для edit_goal/edit_activity/...). Если параметр не выбран — галочка НЕ ставится.
+
+**Существующий паттерн NOMS (mig 086+, edit_goal et al.):**
+
+```
+ui_screens.meta.current_value_col      → имя плоской колонки в users
+ui_screen_buttons.meta.save_value      → значение, представляемое этой кнопкой
+render_screen (L161-177):
+    v_current_col := v_screen.meta->>'current_value_col';
+    EXECUTE format('SELECT ($1.%I)::text', v_current_col) INTO v_user_val USING v_user;
+    IF v_user_val IS NOT NULL AND v_user_val = v_button.meta->>'save_value' THEN
+        v_is_current := TRUE;
+    END IF;
+template_engine._build_button_text:
+    IF is_current → префикс '✅ ' (icon_check константа).
+```
+
+**Проблема для quiz:** `users.phenotype_answers` — JSONB, не плоский столбец. Каждый Q-экран требует свой JSON path: Q1 → `answers->>'q1'`, Q2 → `->>'q2'`, и т.д.
+
+**Решение (mig 198) — generated columns:** добавить 4 read-only stored generated columns, которые автоматически синхронизируются с `phenotype_answers`:
+
+```sql
+ALTER TABLE users
+  ADD COLUMN phenotype_q1 TEXT GENERATED ALWAYS AS (phenotype_answers->>'q1') STORED,
+  ADD COLUMN phenotype_q2 TEXT GENERATED ALWAYS AS (phenotype_answers->>'q2') STORED,
+  ADD COLUMN phenotype_q3 TEXT GENERATED ALWAYS AS (phenotype_answers->>'q3') STORED,
+  ADD COLUMN phenotype_q4 TEXT GENERATED ALWAYS AS (phenotype_answers->>'q4') STORED;
+```
+
+Затем существующий `current_value_col` паттерн работает «как есть» — **ноль изменений в `render_screen` / `template_engine`:**
+
+```sql
+UPDATE ui_screens SET meta = meta || jsonb_build_object('current_value_col', 'phenotype_q1')
+ WHERE screen_id = 'edit_phenotype';
+-- аналогично phenotype_q2/q3/q4
+
+UPDATE ui_screen_buttons SET meta = meta || jsonb_build_object('save_value', SUBSTRING(callback_data FROM '_([abc])$'))
+ WHERE callback_data ~ '^cmd_quiz_q[1-4]_[abc]$';
+-- 12 quiz answer buttons получают save_value='a'/'b'/'c'
+```
+
+**Edge cases — все работают «бесплатно»:**
+
+| Состояние | Поведение ✅ |
+|---|---|
+| `phenotype_answers={}` (фреш) | phenotype_q1=NULL → IF v_user_val IS NOT NULL ... FALSE → нет ✅ ✓ |
+| `phenotype_answers={q1:a}` (mid-quiz) | на Q1: phenotype_q1='a' = save_value('a') → ✅ только на q1_a; на Q2: phenotype_q2=NULL → нет ✅ ✓ |
+| classified (q1..q4 заполнены) | на каждом Q-экране ✅ на соответствующем варианте — Closed-Loop Learning view ✓ |
+| rollback в mig 197 cmd_back (Q3→Q2 удаляет q2) | phenotype_q2 → NULL (через generated col) → нет ✅ ✓ |
+| cmd_back button (meta пустой) | save_value отсутствует → IF check fails → нет ✅ ✓ |
+
+**Recipe для будущих JSONB-based wizards (общий паттерн):**
+
+Если состояние формы — JSONB (массив ответов, multi-step данные), и нужно показывать ✅ текущего выбора:
+
+1. **Generated columns** для каждого JSONB key, который встречается в UI как «текущее значение» — `text GENERATED ALWAYS AS (jsonb_col->>'key') STORED`. Read-only, авто-sync.
+2. **`ui_screens.meta.current_value_col`** = имя generated column на каждом screen, который показывает этот выбор.
+3. **`ui_screen_buttons.meta.save_value`** = значение каждой кнопки (литерал, не JSON path).
+4. **Не трогать render_screen / template_engine** — существующая инфраструктура is_current работает «как есть».
+5. **Не использовать `icon_const_key='icon_check'`** для quiz/wizard buttons — render_screen сам ставит ✅ при is_current=TRUE через template_engine `_build_button_text`. icon_const_key — для permanent иконок (не зависящих от состояния).
+
+**Анти-паттерн (отвергнут):**
+
+- Хардкодить ✅ в text_key переводов (`'✅ Плечи и грудь'`) — статичный, не реагирует на состояние. Нарушает principle of decorations from state.
+- Добавить `meta.current_value_jsonpath` в render_screen — отдельный кодовый путь, дублирует механизм. Generated columns делают то же без расширения функции.
+- Per-question micro-статусы FSM (см. gotcha #30) — overhead для UI-только feature.
+
+**Симметричный pop_nav для оставшихся exit paths (часть 2 mig 198):**
+
+После mig 197 cmd_back правильно вызывал `pop_nav`. Но `cmd_quiz_continue` (Profile retake exit → my_plan, L386-389) и catch-all (любой неожиданный callback в edit_phenotype → profile_main, L393-398) — нет. Симметричный fix добавил `PERFORM public.pop_nav(p_telegram_id)` в обе ветки. Любой exit-from-wizard теперь поддерживает инвариант «nav_stack не содержит wizard-screen после exit».
+
+**Verify** (`scripts/_verify_mig_198_checkmarks.py`, 5 сценариев — все ✓):
+- Fresh quiz → no ✅
+- Mid-quiz {q1:a} → ✅ только на q1_a (Q1), нет ✅ на Q2
+- Classified → ✅ на каждом Q соответствующего ответа
+- cmd_quiz_continue exit → pop_nav OK
+- catch-all (cmd_get_profile в edit_phenotype) exit → pop_nav OK
+
 ### 30. Stateless Sub-FSM для multi-step quiz / wizard (lesson 11.05, mig 197)
 
 **Контекст:** после PR #39-#42 phenotype quiz работает end-to-end (router fixed, button placeholders резолвятся, status normalized). Live UAT обнаружил 3 связанных UX-бага: Back исчезал при revisit, Q-buttons не работали после revisit, Back на Q3 шёл в my_plan а не в Q2.
