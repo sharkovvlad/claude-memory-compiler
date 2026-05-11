@@ -546,7 +546,7 @@ text='🔙 Назад'                cb='cmd_back'  (icon_const_key='icon_back'
 
 **Recipe для будущих headless кнопок:** контракт явно зафиксирован в `_build_button_text` docstring — text может содержать `{icon_*}` / `{tr:*}` placeholder'ы, Python резолвит через `_resolve_text`. Не хардкодить эмодзи через `icon_const_key` если текст уже содержит placeholder (двойной эмодзи). При добавлении новых headless экранов проверять `_verify_button_rendering.py` шаблон для регрессионного теста.
 
-### 31. ✅ checkmark на кнопках текущего выбора — JSONB через generated columns (lesson 11.05, mig 198)
+### 31. ✅ checkmark на кнопках текущего выбора — JSONB через generated columns (lesson 11.05, mig 199)
 
 **Контекст:** запрос юзера — на квиз-кнопках показывать ✅ если данный вариант ранее выбран (как в Settings/My Plan для edit_goal/edit_activity/...). Если параметр не выбран — галочка НЕ ставится.
 
@@ -567,7 +567,7 @@ template_engine._build_button_text:
 
 **Проблема для quiz:** `users.phenotype_answers` — JSONB, не плоский столбец. Каждый Q-экран требует свой JSON path: Q1 → `answers->>'q1'`, Q2 → `->>'q2'`, и т.д.
 
-**Решение (mig 198) — generated columns:** добавить 4 read-only stored generated columns, которые автоматически синхронизируются с `phenotype_answers`:
+**Решение (mig 199) — generated columns:** добавить 4 read-only stored generated columns, которые автоматически синхронизируются с `phenotype_answers`:
 
 ```sql
 ALTER TABLE users
@@ -615,11 +615,11 @@ UPDATE ui_screen_buttons SET meta = meta || jsonb_build_object('save_value', SUB
 - Добавить `meta.current_value_jsonpath` в render_screen — отдельный кодовый путь, дублирует механизм. Generated columns делают то же без расширения функции.
 - Per-question micro-статусы FSM (см. gotcha #30) — overhead для UI-только feature.
 
-**Симметричный pop_nav для оставшихся exit paths (часть 2 mig 198):**
+**Симметричный pop_nav для оставшихся exit paths (часть 2 mig 199):**
 
 После mig 197 cmd_back правильно вызывал `pop_nav`. Но `cmd_quiz_continue` (Profile retake exit → my_plan, L386-389) и catch-all (любой неожиданный callback в edit_phenotype → profile_main, L393-398) — нет. Симметричный fix добавил `PERFORM public.pop_nav(p_telegram_id)` в обе ветки. Любой exit-from-wizard теперь поддерживает инвариант «nav_stack не содержит wizard-screen после exit».
 
-**Verify** (`scripts/_verify_mig_198_checkmarks.py`, 5 сценариев — все ✓):
+**Verify** (`scripts/_verify_mig_199_checkmarks.py`, 5 сценариев — все ✓):
 - Fresh quiz → no ✅
 - Mid-quiz {q1:a} → ✅ только на q1_a (Q1), нет ✅ на Q2
 - Classified → ✅ на каждом Q соответствующего ответа
