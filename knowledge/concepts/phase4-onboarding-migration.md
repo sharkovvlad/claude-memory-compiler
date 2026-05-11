@@ -546,6 +546,61 @@ text='🔙 Назад'                cb='cmd_back'  (icon_const_key='icon_back'
 
 **Recipe для будущих headless кнопок:** контракт явно зафиксирован в `_build_button_text` docstring — text может содержать `{icon_*}` / `{tr:*}` placeholder'ы, Python резолвит через `_resolve_text`. Не хардкодить эмодзи через `icon_const_key` если текст уже содержит placeholder (двойной эмодзи). При добавлении новых headless экранов проверять `_verify_button_rendering.py` шаблон для регрессионного теста.
 
+### 30. Stateless Sub-FSM для multi-step quiz / wizard (lesson 11.05, mig 197)
+
+**Контекст:** после PR #39-#42 phenotype quiz работает end-to-end (router fixed, button placeholders резолвятся, status normalized). Live UAT обнаружил 3 связанных UX-бага: Back исчезал при revisit, Q-buttons не работали после revisit, Back на Q3 шёл в my_plan а не в Q2.
+
+**Корневая причина:** mig 188 cmd_back exit path делал `UPDATE status='registered' + render('my_plan')`, но **не pop'ал nav_stack**. После exit'а nav_stack оставался `[..., my_plan, edit_phenotype]`. Revisit через `cmd_edit_phenotype` с status='registered' → `process_user_input` ищет button cmd_edit_phenotype на `current_screen = nav_stack[-1] = edit_phenotype` → кнопка живёт на my_plan, FOUND=FALSE → meta-dispatch не применился → status остался 'registered' → последующий quiz callback идёт через section 4l → legacy void.
+
+Плюс: Back игнорировал текущий Q-шаг, всегда exit в my_plan (плохой quiz UX, нарушает Closed-Loop Learning для коррекции ответов).
+
+**Решение (тимлид утвердил):** Stateless Sub-FSM pattern. Не плодим micro-статусы (`registration_step_q1`/`_q2`/...), сохраняем NOMS архитектурный принцип «макро-статус FSM = global stage». Step внутри quiz **выводится** из числа сохранённых ответов в `users.phenotype_answers` (sequential contract: q1 < q2 < q3 < q4 ⇒ наибольший заполненный key = answered count). 
+
+**Spec поведения cmd_back при status='edit_phenotype':**
+
+| answered | юзер на | действие |
+|---|---|---|
+| 0 | Q1 (нет прогресса) | exit → my_plan + `pop_nav` (снять edit_phenotype с nav_stack) |
+| 1 | Q2 (q1 сохранён) | rollback q1, render Q1 (edit_phenotype screen) |
+| 2 | Q3 (q1+q2 сохранены) | rollback q2, render phenotype_q2 |
+| 3 | Q4 (q1+q2+q3 сохранены) | rollback q3, render phenotype_q3 |
+
+**Архитектурные инварианты, которые соблюдаются:**
+- **Единая кнопка cmd_back** (NOMS Profile v5 spec): клиент Dumb Renderer, навигация в БД.
+- **`pop_nav` reuse** (симметрично `push_nav`): единый nav helper — extension в будущем (logging, edge cases) бесплатно для quiz.
+- **Headless config-driven UI**: добавление Q5 = добавление row в `ui_screens` + `ui_screen_buttons`, FSM код не трогается (только в Q-matcher regex `cmd_quiz_q[1-3]_[abc]$` → `cmd_quiz_q[1-4]_[abc]$`).
+- **Closed-Loop Learning**: Back на Q3 → Q2 → юзер исправляет ответ → XP correction bonus возможен в classify_phenotype path.
+
+**Mig 197** замещает старый блок `IF v_callback = 'cmd_back' AND v_status = 'edit_phenotype'` в `process_onboarding_input` на context-aware DECLARE-BEGIN-END с инспекцией phenotype_answers.
+
+**Verify-after (live savepoint, 4 scenarios — все ✓):**
+
+```python
+# Scenario 1: Q1 → q1_a → Q2 → Back → Q1, ans={}
+# Scenario 2: Q1→a → Q2→b → Q3 → Back → Q2, ans={q1:'a'}
+# Scenario 3: Q1→a → Q2→b → Q3→c → Q4 → Back → Q3, ans={q1:'a',q2:'b'}
+# Scenario 4: Q1 → Back → exit my_plan, status='registered', nav_stack pop'нул edit_phenotype
+```
+
+Script: `scripts/_verify_mig_197_flow.py` — оставлен в репо для регрессии.
+
+**Recipe для multi-step wizards (общий паттерн):**
+
+1. **Один макро-статус FSM** на всю форму (`edit_phenotype` / `wizard_X`). Не плодить статусы по шагам.
+2. **Шаг внутри wizard'а — выводится** из JSONB state (sequential keys / answer count / explicit step field в payload). Никаких FSM-статусов на каждый шаг.
+3. **Cmd_back — context-aware** в SQL FSM: проверка прогресса → exit (если на первом шаге) OR previous step (rollback + re-render).
+4. **Exit ВСЕГДА pop'ает nav_stack** через `pop_nav` — иначе revisit ломает meta-dispatch.
+5. **visible_condition на back button** через `u.status = '<wizard_status>'` — после exit статус меняется, кнопка автоматически скрывается на чужих экранах.
+6. **Closed-Loop Learning**: Back должен позволять исправление, не только полный exit.
+
+**TODO (отдельный PR — symmetric pattern для других exit paths):**
+
+В `process_onboarding_input` есть ещё **2 exit path** где status меняется `edit_phenotype` → `registered`, но nav_stack не pop'ается:
+- L386-389: `cmd_quiz_continue` в Profile retake context → render my_plan.
+- L393-398: catch-all (unknown callback в edit_phenotype) → render profile_main.
+
+Оба имеют ту же ahistorical асимметрию — если юзер выйдет через эти пути, revisit сломается симметрично. Не критично (rare paths), но fix для консистентности. Pattern: каждое `UPDATE status='registered'` в exit-from-wizard-path должно сопровождаться `PERFORM pop_nav(p_telegram_id)`.
+
 ### 29. `edit_phenotype` отсутствовал в `ONBOARDING_STATUSES` → quiz callbacks в legacy void (lesson 10.05)
 
 **Симптом** (после PR #39/#40/#41 deploy): Phenotype Q1 рендерится корректно (эмодзи в шапке + кнопках). **Но** клик `cmd_quiz_q1_a` (или Q1/2/3 любой) — бот молчит. Quiz не двигается дальше.
