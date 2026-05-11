@@ -546,6 +546,68 @@ text='🔙 Назад'                cb='cmd_back'  (icon_const_key='icon_back'
 
 **Recipe для будущих headless кнопок:** контракт явно зафиксирован в `_build_button_text` docstring — text может содержать `{icon_*}` / `{tr:*}` placeholder'ы, Python резолвит через `_resolve_text`. Не хардкодить эмодзи через `icon_const_key` если текст уже содержит placeholder (двойной эмодзи). При добавлении новых headless экранов проверять `_verify_button_rendering.py` шаблон для регрессионного теста.
 
+### 33. cmd_back preserves answers + onboarding result screen (lesson 11.05, mig 202)
+
+**Контекст (Live UAT после mig 200):**
+
+**Bug A — ✅ исчезает при Back.** Юзер 417002669 (classified, phenotype_answers={q1:a,q2:b,q3:c,q4:c}) на phenotype_q4, click Back → render Q3 **БЕЗ ✅** на q3_c. Ожидание юзера: «вернулся посмотреть свой выбор» — должна быть ✅. Реальность: mig 200 rollback'ал q(prev_q) при Back ради «свежего ответа» → phenotype_q3 = NULL → render_screen `is_current` fails → ✅ скрыт.
+
+**Bug B (UX) — нет result screen в онбординге.** Тестовый юзер 786301802 (status='new') после Q4 сразу попадает на location picker. Не понимает «что я узнал о себе». mig 189 ввёл skip-result для скорости, но юзер просит вернуть закрывающий момент Closed-Loop Learning.
+
+**Fixes mig 202:**
+
+**A. Убрать rollback в cmd_back.** Сохранять `phenotype_answers` при Back navigation. `save_phenotype_answer` is idempotent → клик same answer = no-op navigate; клик different = overwrite navigate. Closed-Loop Learning **сохраняется** без удаления ответа.
+
+```sql
+-- mig 200:                                  mig 202:
+v_prev_q := v_current_q - 1;                 v_prev_q := v_current_q - 1;
+UPDATE users                                 -- НЕТ rollback'а
+   SET phenotype_answers =                   PERFORM pop_nav(p_telegram_id);
+       phenotype_answers - 'q'||v_prev_q;    UPDATE users SET last_active_at=NOW();
+PERFORM pop_nav(p_telegram_id);
+RETURN render_screen(prev Q);                RETURN render_screen(prev Q);
+```
+
+UX-эталон TypeForm/Google Forms: previous answer preserved on Back navigation. Юзер видит свой выбор, может пере-выбрать.
+
+**B. Render phenotype_result в онбординге.** mig 188 для Q4 в онбординге делал forward to location. Теперь:
+
+```sql
+IF v_was_profile_retake THEN                            -- Profile retake (existing)
+    UPDATE users SET status='edit_phenotype';
+    PERFORM push_nav('phenotype_result');
+    RETURN render_screen('phenotype_result');
+ELSE                                                     -- Онбординг (NEW)
+    UPDATE users SET status='registration_step_phenotype_quiz';  -- preserve!
+    PERFORM push_nav('phenotype_result');
+    RETURN render_screen('phenotype_result') || jsonb_build_object('status','render');
+END IF;
+```
+
+**Why preserve status='registration_step_phenotype_quiz'?** Юзер увидит result screen с кнопкой Continue. Click Continue → existing `cmd_quiz_continue` handler в `registration_step_phenotype_quiz` branch forward'ит на location (mig 188 logic). Chain не прерывается, status переход happen позже (на click Continue).
+
+**Existing infrastructure переиспользована** (mig 187):
+- Screen `phenotype_result` с `text_key='phenotype.result_template'`.
+- Translations `phenotype.result_template = '{result_html}'`, `result_title`, `result_explanation_{default,athlete,monw,obese}`, `result_recalculated` — 13 lang.
+- `classify_phenotype` RPC уже строит `result_html` template variable.
+- Buttons cmd_quiz_continue → `buttons.done`, cmd_back → `buttons.back`.
+
+**Ничего нового не создаём.** Только UPDATE 2 веток в `process_onboarding_input`.
+
+**Verify** (`scripts/_verify_mig_202.py`, 3 scenarios — все ✓):
+1. **A.** Profile retake Q4 → Back → Q3 + ✅ на q3_c (preserved). phenotype_answers нетронут.
+2. **B.** Back chain Q4→Q3→Q2→Q1 — ✅ visible на каждом step (q3, q2, q1 на соответствующих экранах).
+3. **C.** Onboarding Q4 click → render phenotype_result. click Continue → forward to location. Chain преемственный.
+
+**Совместимость с push_nav truncate-on-existing** (mig 147): если юзер из Q3 Back на Q2, потом forward на Q3 → push 'phenotype_q3'. Старый Q3 уже в nav_stack — push truncate'нет nav_stack до Q3 (включительно). Корректно работает с моим mig 200/202 logic.
+
+**Recipe для будущих wizards (обновлённый):**
+
+1. **Back preserves answers** — не rollback'ать на Back navigation. Idempotent save (overwrite или no-op).
+2. **Result screen перед exit transition** в multi-step форме — даже в speed onboarding flow. UX закрывающий момент важнее +1 click.
+3. **Status preserved до user-explicit Continue** — не переходить в next state на «system-driven» событии (Q4 classify ≠ переход в onboarding:country). Юзерский click Continue владеет переходом.
+4. **nav_stack push для result screen** — Back с result возвращает на Q4 (через generic back_nav). Нет специальной cmd_back ветки нужно.
+
 ### 32. Sub-FSM step inference: nav_stack ≻ answered count (lesson 11.05, mig 200)
 
 **Контекст:** mig 197 определял текущий Q-шаг через **answered count** (`v_answered := count keys in phenotype_answers`). Валидно для initial flow (юзер прошёл n шагов = answered=n, current = Q(n+1)). **Ломается для classified revisit**: phenotype_answers={q1,q2,q3,q4} → answered=4 → cmd_back **независимо от реального screen** делает rollback q4 + render Q4. Юзер на Q3 нажимает Back → попадает в Q4 (вместо Q2).
