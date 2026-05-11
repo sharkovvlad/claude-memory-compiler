@@ -2,10 +2,10 @@
 
 - **Status:** Accepted (Stage 1 + 1.1 live; Stage 2 in review; Stage 3 backlog)
 - **Date:** 2026-05-11
-- **Migrations:** `198_stickers_unified_foundation.sql` + `200_sticker_one_time_semantics.sql`
+- **Migrations:** `198_stickers_unified_foundation.sql` + `201_sticker_one_time_semantics.sql` (initially numbered 200, renamed to 201 after collision with parallel phenotype-quiz mig 200)
 - **Stages:**
   - 1.0 (mig 198, PR #45 merged) — Channel A headless infrastructure
-  - 1.1 (mig 200, PR #47 — this branch) — one-time-per-user semantics for UI stickers
+  - 1.1 (mig 201, PR #47 — this branch) — one-time-per-user semantics for UI stickers
   - 2.0 (PR #46 in review) — Channel C/D code consolidation onto common cache
   - 3.0 (backlog) — Channel B event facade for AI-Engine reactions
 
@@ -172,7 +172,7 @@ Track popularity in `bot_stickers.send_count` via SQL.
 
 # ADR 0001 — Stage 1.1 Amendment: One-Time Semantics for UI Stickers
 
-- **Status:** Accepted (mig 200, PR #47)
+- **Status:** Accepted (mig 201, PR #47)
 - **Date:** 2026-05-11
 - **Trigger:** Live observation on test account 267703 — welcome sticker fired multiple times because `cmd_select_lang` in `status='new'` re-renders `onboarding_welcome` without advancing FSM.
 
@@ -197,7 +197,7 @@ The atomic UPDATE inside what looks like a read-shaped function is a deliberate 
 
 ### Backfill
 
-Existing users who already finished onboarding must not see the stickers again at next /start. Mig 200 backfills:
+Existing users who already finished onboarding must not see the stickers again at next /start. Mig 201 backfills:
 - `onboarding_welcome` → all users where `status != 'new'`
 - `onboarding_success` → all users where `status = 'registered'`
 
@@ -235,7 +235,7 @@ Only emit when transitioning to the screen for the first time.
 
 ## References (amendment)
 
-- Migration: `migrations/200_sticker_one_time_semantics.sql`
+- Migration: `migrations/201_sticker_one_time_semantics.sql`
 - Baseline: `migrations/_baseline_render_screen_2026-05-11_post_mig198.sql`
 - PR: #47 (`claude/sticker-one-time-fix`)
 - Live evidence: test account 267703, `/start` + `cmd_select_lang` on 2026-05-11
