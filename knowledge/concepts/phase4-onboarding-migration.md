@@ -546,6 +546,82 @@ text='🔙 Назад'                cb='cmd_back'  (icon_const_key='icon_back'
 
 **Recipe для будущих headless кнопок:** контракт явно зафиксирован в `_build_button_text` docstring — text может содержать `{icon_*}` / `{tr:*}` placeholder'ы, Python резолвит через `_resolve_text`. Не хардкодить эмодзи через `icon_const_key` если текст уже содержит placeholder (двойной эмодзи). При добавлении новых headless экранов проверять `_verify_button_rendering.py` шаблон для регрессионного теста.
 
+### 32. Sub-FSM step inference: nav_stack ≻ answered count (lesson 11.05, mig 200)
+
+**Контекст:** mig 197 определял текущий Q-шаг через **answered count** (`v_answered := count keys in phenotype_answers`). Валидно для initial flow (юзер прошёл n шагов = answered=n, current = Q(n+1)). **Ломается для classified revisit**: phenotype_answers={q1,q2,q3,q4} → answered=4 → cmd_back **независимо от реального screen** делает rollback q4 + render Q4. Юзер на Q3 нажимает Back → попадает в Q4 (вместо Q2).
+
+**Корень:** answered count — это **history**, не **current position**. В headless SDUI правильный источник «где юзер сейчас» — `users.nav_stack[-1]`.
+
+**Решение (mig 200) — три части:**
+
+#### A. cmd_back читает nav_stack top
+
+```sql
+SELECT nav_stack->>-1 INTO v_curr_screen FROM users WHERE telegram_id = p_telegram_id;
+v_current_q := CASE v_curr_screen
+    WHEN 'edit_phenotype' THEN 1
+    WHEN 'phenotype_q2'   THEN 2
+    WHEN 'phenotype_q3'   THEN 3
+    WHEN 'phenotype_q4'   THEN 4
+    ELSE NULL  -- phenotype_result / unknown → exit
+END;
+
+IF v_current_q IS NULL OR v_current_q = 1 THEN
+    -- exit + strip ALL phenotype-* screens
+ELSE
+    -- rollback q(v_current_q - 1) + pop_nav + render previous Q
+END IF;
+```
+
+#### B. Forward path push_nav (симметрия с cmd_back pop)
+
+В `cmd_quiz_q[1-3]_[abc]` matcher теперь:
+```sql
+PERFORM save_phenotype_answer(...);
+PERFORM push_nav(p_telegram_id, 'phenotype_q' || (v_q + 1));  -- NEW
+RETURN render_screen(p_telegram_id, 'phenotype_q' || (v_q + 1));
+```
+
+nav_stack теперь честно растёт `[..., my_plan, edit_phenotype, phenotype_q2, phenotype_q3, ...]` в forward и сжимается по pop'ам Back.
+
+#### C. Strip-all на exit paths
+
+Старые mig 197/199 делали `PERFORM pop_nav` единожды на exit. Теперь когда forward push'ает несколько quiz screens, exit должен strip'ать **ВСЕ** phenotype-* screens до root non-quiz screen:
+
+```sql
+LOOP
+    SELECT nav_stack->>-1 INTO v_top FROM users WHERE telegram_id = p_telegram_id;
+    EXIT WHEN v_top IS NULL OR v_top NOT IN
+        ('edit_phenotype','phenotype_q2','phenotype_q3','phenotype_q4','phenotype_result');
+    PERFORM pop_nav(p_telegram_id);
+END LOOP;
+```
+
+Применяется в 3 exit paths: cmd_back на Q1, cmd_quiz_continue Profile retake, catch-all.
+
+**Verify** (`scripts/_verify_mig_200_flow.py`, 5 сценариев — все ✓):
+1. Initial Q1→Q2→Q3→Q4: nav_stack правильно растёт.
+2. Back chain Q4→Q3→Q2→Q1→exit: правильное сжатие + rollback ответов.
+3. Classified revisit (cmd_edit_phenotype с {q1..q4}): ✅ на q1's saved answer.
+4. Classified Q3 Back → Q2 (THE BUG): теперь корректно идёт на Q2 (раньше mig 197 → Q4).
+5. cmd_quiz_continue exit: strip ВСЕ quiz screens из nav_stack.
+
+**Также (часть D mig 200): UX-полировка кнопки**
+
+`buttons.start = "Поехали"` использовался в **двух** местах:
+- `onboarding_welcome` cmd_select_start — энергичный «Поехали» подходит (юзер начинает onboarding).
+- `phenotype_result` cmd_quiz_continue — после виденного результата в Profile retake юзер просто подтверждает (не «едет»).
+
+Создан новый text_key `buttons.done` в 13 языках (Готово/Done/Listo/...). UPDATE phenotype_result button → buttons.done. buttons.start остался для onboarding_welcome.
+
+**Recipe для будущих wizards с возможным revisit'ом:**
+
+1. Source of truth для current step = `nav_stack[-1]`, не accumulator (answered count, completed flags).
+2. **push_nav на каждый screen transition** в forward, **pop_nav** в Back. Симметрия.
+3. **Strip-all-on-exit** — loop pop или array filter, если в стеке несколько wizard screens.
+4. Reuse существующих nav helpers (push_nav / pop_nav / back_nav). Не плодить новые.
+5. Headless SDUI invariant: **nav_stack ≻ accumulator** для current-step inference.
+
 ### 31. ✅ checkmark на кнопках текущего выбора — JSONB через generated columns (lesson 11.05, mig 199)
 
 **Контекст:** запрос юзера — на квиз-кнопках показывать ✅ если данный вариант ранее выбран (как в Settings/My Plan для edit_goal/edit_activity/...). Если параметр не выбран — галочка НЕ ставится.
