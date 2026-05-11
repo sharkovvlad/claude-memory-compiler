@@ -82,24 +82,39 @@
 1. **Получить file_id**: переслать стикер боту @RawDataBot (или любому echo-bot), скопировать `message.sticker.file_id` — длинная строка `CAACAg...`. File_id видеостикеров глобально валидны для всех ботов.
 2. **Миграция (SQL only)**:
    ```sql
-   -- Add sticker row
+   -- Add sticker row (mig 200: meta.channel='A' маркер для самодокументации)
    INSERT INTO public.bot_stickers
-       (sticker_key, category, file_id, file_type, description, sort_order, is_active)
+       (sticker_key, category, file_id, file_type, description, sort_order, is_active, meta)
    VALUES
        ('level_up_celebration_1', 'level_up_celebration',
         '<file_id>', 'video_sticker',
-        'Celebration sticker shown after level-up.', 0, true)
+        'Celebration sticker shown after level-up.', 0, true,
+        '{"channel": "A"}'::jsonb)
    ON CONFLICT (sticker_key) DO UPDATE
-      SET file_id = EXCLUDED.file_id, is_active = true;
+      SET file_id = EXCLUDED.file_id, is_active = true,
+          meta = EXCLUDED.meta;
 
-   -- Declare on screen
+   -- Declare on screen. show_sticker_once=true → стикер покажется ровно
+   -- ОДИН раз на пользователя (mig 200). Опустите если стикер должен
+   -- эмиттиться при каждом рендере (но для Channel A это редкий кейс).
    UPDATE public.ui_screens
       SET meta = meta
-                 || jsonb_build_object('show_sticker', true)
-                 || jsonb_build_object('sticker_category', 'level_up_celebration')
+                 || jsonb_build_object(
+                     'show_sticker',      true,
+                     'sticker_category',  'level_up_celebration',
+                     'show_sticker_once', true)
     WHERE screen_id = 'level_up_screen';
    ```
 3. **Никаких правок в Python**. Reload `POST /internal/stickers/reload` или жди 60s TTL.
+
+### Сбросить one-time флаг для конкретного юзера (e.g. account-restore)
+
+```sql
+UPDATE public.users
+   SET stickers_shown = stickers_shown - 'level_up_celebration'
+ WHERE telegram_id = <tid>;
+```
+После этого пользователь снова увидит стикер при следующем рендере экрана.
 
 ## Что НЕЛЬЗЯ делать
 
@@ -118,7 +133,9 @@
 ## История
 
 - **Mig 161** (2026-04-30): положила декларацию `meta.show_sticker` для `onboarding_welcome` + placeholder в `bot_stickers`, но цепочку не дошила (мёртвая декларация ~10 дней).
+- **Mig 191** (2026-05-09): Smart Freeze добавил `bot_stickers` row `freeze_used` (Channel C placeholder, file_id=TODO, is_active=false).
 - **Mig 198** (2026-05-11): дошила Channel A — `render_screen` подмешивает `sticker_category`, `template_engine` добавляет `send_sticker` item. Заполнила реальные file_id для welcome + success. `bot_stickers` расширена (`meta jsonb`, `updated_at`, partial index, `trg_set_updated_at`).
+- **Mig 200** (2026-05-11): one-time semantics — `users.stickers_shown jsonb`, флаг `ui_screens.meta.show_sticker_once`, `render_screen` Step 8b атомарно проверяет+помечает. Backfill для существующих юзеров. `bot_stickers.meta.channel` (A/C/D) маркер для самодокументации. Триггер — наблюдение что welcome выпадал повторно при `cmd_select_lang`.
 
 ## Связанные KB
 
