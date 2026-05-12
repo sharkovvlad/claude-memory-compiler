@@ -546,6 +546,64 @@ text='🔙 Назад'                cb='cmd_back'  (icon_const_key='icon_back'
 
 **Recipe для будущих headless кнопок:** контракт явно зафиксирован в `_build_button_text` docstring — text может содержать `{icon_*}` / `{tr:*}` placeholder'ы, Python резолвит через `_resolve_text`. Не хардкодить эмодзи через `icon_const_key` если текст уже содержит placeholder (двойной эмодзи). При добавлении новых headless экранов проверять `_verify_button_rendering.py` шаблон для регрессионного теста.
 
+### 34. Terminal Action перед long-latency transitions (lesson 12.05)
+
+**Контекст:** Live UAT user 786301802 onboarding test — на phenotype_result юзер нажимал «Готово» **дважды** с интервалом 6 секунд. Diagnostic patch (PR #52 cb_data в логах) показал:
+
+```
+16:56:14.614  cb_data=cmd_quiz_continue → AUTHORITATIVE_ONBOARDING_FORWARD_LOCATION  (1-й click)
+16:56:14-19   тишина — bot forward'ит to legacy n8n 02.1_Location, n8n рендерит picker (5-6 сек)
+16:56:20.922  cb_data=cmd_quiz_continue → onboarding_location_funnel               (2-й click через 6 сек)
+16:57:00.535  cb_data=cmd_auto_location → location picker наконец появился
+```
+
+Два разных update_id, тот же callback_data — **не дублирующий Telegram retry**, а юзер реально нажал второй раз. После первого клика **визуально ничего не изменилось** — кнопки «Готово»/«Назад» остались на экране, location picker не приходил → юзер думал «не сработало», кликал повторно.
+
+**Root cause:** Forward to legacy n8n 02.1_Location имеет latency 5-6 секунд (cold workflow exec). За это время отсутствует visual feedback что первый клик принят. `answerCallbackQuery` шлётся (крутилка убрана), но юзер этого не замечает.
+
+**Это НЕ:**
+- Telegram retry (разные update_id, интервал 6 сек > Telegram retry window)
+- Bug рендеринга (оба клика обработаны корректно SQL FSM)
+- Race condition (sequential дispatch)
+
+**Это:** UX-проблема отсутствия Terminal Action при slow transitions.
+
+**Fix:** pre-emptive `editMessageReplyMarkup` с пустым reply_markup ДО forward to legacy n8n. Кнопки на phenotype_result сообщении исчезают мгновенно → юзер видит «принято», ждёт следующий экран.
+
+```python
+# webhook_server.py
+TERMINAL_CALLBACKS_PRE_FORWARD = frozenset({"cmd_quiz_continue", "cmd_quiz_skip"})
+
+if envelope.flags.get("forward_target") == "location":
+    if _cb_pre in TERMINAL_CALLBACKS_PRE_FORWARD:
+        msg_id = (update["callback_query"]["message"] or {}).get("message_id")
+        if isinstance(msg_id, int):
+            asyncio.create_task(_clear_inline_keyboard_safe(chat_id, msg_id))
+    await forward_to_n8n(body, fwd_hdr)
+```
+
+**Defensive design:**
+- **Whitelist** terminal callbacks (только 2: `cmd_quiz_continue`, `cmd_quiz_skip`) — не задеть другие forwards.
+- **Fire-and-forget** через `asyncio.create_task` — не блокирует main forward flow.
+- **Silent failure** — `_post` уже логирует WARNING, исключения не пробрасывает. Если editMessageReplyMarkup fails (msg deleted, "not modified", network) — main flow продолжается без проблем.
+- **Только в forward_target=location path** — не задеть Profile retake (там dispatch_with_render → delete_and_send_new pattern уже clears keyboard).
+
+**Recipe для будущих long-latency transitions:**
+
+Когда bot делает action с visible delay >1 сек (forward to legacy n8n, long RPC, external API), и юзер остаётся с активными inline кнопками — обязательно clear keyboard immediately после click через editMessageReplyMarkup. Иначе двойные клики.
+
+Альтернативы (хуже):
+- `deleteMessage` на исходящем сообщении — destructive, юзер теряет context.
+- `answerCallbackQuery(text="Готово ✓", show_alert=false)` — toast notification, но юзер быстрых toasts не замечает.
+- Bot-side debounce (silently drop duplicate в 10 сек) — маскирует root cause, не fixes UX.
+
+**Не путать с Terminal Action в `template_engine`:**
+- `delete_and_send_new` strategy (template_engine.py:602) — для `replace_existing` render_strategy, использует **deleteMessage + sendMessage**. Применяется когда bot сам отправляет следующий экран.
+- Этот recipe — для **forward к legacy n8n**, где Python не send'ит следующий экран. Нужна явная editMessageReplyMarkup pre-action.
+
+**Verify** (после deploy, по логам):
+- В следующем UAT — если cmd_quiz_continue все ещё дважды → ну значит и Telegram-side есть auto-retry; нужен bot-side debounce. Если только 1 callback в логах → fix работает, юзер увидел clear keyboard и не нажал повторно.
+
 ### 33. cmd_back preserves answers + onboarding result screen (lesson 11.05, mig 202)
 
 **Контекст (Live UAT после mig 200):**
