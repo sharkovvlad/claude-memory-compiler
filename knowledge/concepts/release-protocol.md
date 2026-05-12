@@ -109,6 +109,31 @@ gh api -X PUT repos/<owner>/<repo>/pulls/<n>/merge -f merge_method=merge
 
 Возвращает `{merged:true, sha:...}` без локального checkout. Но **деплой агент не делает** — это задача тимлида (или следующего агента) из основного клона `main`.
 
+## SQL-миграции — отдельный lifecycle от code deploy
+
+**Принцип:** SQL и Python имеют разные точки применения. `deploy.sh` (rsync файлов на VPS) не трогает БД. Миграции применяются отдельно.
+
+| Артефакт | Как применяется | Когда |
+|---|---|---|
+| Python / config файлы | **Автоматически** через GitHub Actions при merge в `main` | Сразу после merge |
+| `migrations/NNN_*.sql` | psycopg2 → Supabase pooler ([[access-credentials]] Recipe 1) | До flip флага feature функциональности |
+| `app_constants` feature flag flip | psycopg2 UPDATE, **с явным approval тимлида в разговоре** | После migration apply + после ручного UAT |
+| `.env` на VPS | `ssh + sed` + `systemctl restart noms-webhooks noms-cron` | Только когда вне-git секреты меняются |
+
+### Phase-style migration workflow (canonical с Phase 4)
+
+1. Агент строит миграцию через builder script (stale-base snapshot live прода через `pg_get_functiondef`, см. [[safe-create-or-replace-recipe]]).
+2. Файл миграции коммитится в PR-ветку — для аудита (PR review видит логику).
+3. Миграция применяется через psycopg2 → verify через `pg_get_functiondef` + spot-check rows. Допустимо как до, так и после merge PR, но обязательно до flip флага feature-функциональности.
+4. PR merge → код деплоится через GitHub Actions.
+5. Flag flip — отдельный шаг, требует явного approval тимлида в разговоре. Migration apply = безопасное backward-compatible изменение схемы/RPC; flag flip = переключение прод-трафика на новый код-путь.
+
+### Запрещено
+
+- **Полагаться на `./deploy.sh` для применения миграций** — он только rsync файлов, БД не меняет. Файл миграции в `main` без psycopg2-apply = «висящая» миграция, бот ломается («код ожидает новой колонки/RPC, в БД её нет»).
+- **`UPDATE app_constants ... SET value='true'` без явного approval тимлида** в текущем разговоре.
+- **`CREATE OR REPLACE FUNCTION` с базой из git-файла** — всегда `pg_get_functiondef` ЖИВОГО прода в момент применения (см. [[safe-create-or-replace-recipe]] — 3 stale-base regression incidents).
+
 ## Pre-merge sanity check (PR review)
 
 GitHub `mergeable=true` ≠ семантически безопасный merge (lesson 04.05, PR #6). Если PR-ветка ушла от main до свежей работы в main, diff PR vs новый main может **удалить** эти изменения.
