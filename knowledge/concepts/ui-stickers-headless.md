@@ -116,6 +116,23 @@ UPDATE public.users
 ```
 После этого пользователь снова увидит стикер при следующем рендере экрана.
 
+## Активация placeholder-стикера (Channel C, D — cron-driven push / indicator)
+
+Channel A добавляется через миграцию (см. выше). **Channel C и D** обычно имеют placeholder-строку в `bot_stickers` (`file_id LIKE 'TODO_%'`, `is_active=false`), созданную feature-миграцией. Когда владелец сгенерирует и пришлёт реальный file_id — активация одной командой, **без деплоя**:
+
+```sql
+UPDATE public.bot_stickers
+   SET file_id = '<file_id из Telegram>',
+       is_active = true
+ WHERE sticker_key = '<sticker_key>';
+```
+
+Эффект — через ≤60s (TTL `services/stickers_cache`) или мгновенно через `POST /internal/stickers/reload` (с `X-Stickers-Reload-Token` заголовком).
+
+Существующие placeholder'ы (на момент 2026-05-12) — серия `streak_milestone_7/14/30/100`, `streak_healed` (Channel C, mig 205), `freeze_used` (Channel C, mig 191).
+
+**Полный pipeline-recipe для генерации source → активация:** KB [[concepts/telegram-sticker-pipeline]] секции 6.5 (активация в БД) и 6.6 (canonical Negative-блок для Veo промптов — обязательно содержать в каждом, иначе risk розовых splash-артефактов в финальном стикере).
+
 ## Что НЕЛЬЗЯ делать
 
 1. **Не клади логику Channel A в `handlers/*.py`** — нарушение headless. Только через `ui_screens.meta`.
