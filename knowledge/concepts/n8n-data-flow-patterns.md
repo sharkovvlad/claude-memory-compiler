@@ -207,3 +207,61 @@ This routes the 400 error response to the normal output instead of stopping exec
 - [[daily/2026-04-25.md]] — `continueOnFail: true` + `onError: continueRegularOutput` on HTTP deleteMessage nodes required to prevent silent workflow stoppage on Telegram 400 (stale message ID)
 - [[daily/2026-04-27.md]] — JSON.stringify anti-pattern: `specifyBody=json` + `JSON.stringify({...})` → double-serialization → empty body → Supabase 404. Found in 4 Get *Price nodes (pre-existing since original creation). Secondary: `$json.telegram_id` from Extract Sub `{}` for free users → fix to `$('Merge Data').item.json.telegram_id`
 - [[daily/2026-05-04.md]] — Safe PUT recipe + scp+ssh для крупных payload (>50 KB), settings whitelist (правило 13), refactor `03_AI_Engine` Send error через GET-modify-PUT API (PR #9). Anti-pattern: коммит локального JSON ≠ деплой на runtime n8n. `n8n_workflows/` — git-tracking, не источник правды
+
+---
+
+## 2026-05-13 — execution_entity SQLite diagnostic + Command Classifier syntax hotfix
+
+### Diagnostic recipe — find 100% fail rate workflow
+
+n8n self-hosted SQLite на VPS содержит полную историю executions. Для быстрого triage «работает / нет» по workflow:
+
+```bash
+ssh root@89.167.86.20 'docker exec n8n-n8n-1 sqlite3 /home/node/.n8n/database.sqlite \
+  "SELECT status, COUNT(*) FROM execution_entity \
+   WHERE workflowId='\''<id>'\'' \
+     AND startedAt > datetime('\''now'\'', '\''-48 hours'\'') \
+   GROUP BY status;"'
+```
+
+Если result типа `error: 18` без `success` — workflow зацикливается на crash. Lookup error через `execution_data` table:
+
+```bash
+ssh root@89.167.86.20 'docker exec n8n-n8n-1 sqlite3 /home/node/.n8n/database.sqlite \
+  "SELECT data FROM execution_data WHERE executionId=<id>;"'
+```
+
+JSON большой. `jq -r '.executionData.resultData.lastNodeExecuted, .executionData.resultData.error.message'` извлекает relevant.
+
+### Lesson — UAT 13.05 inquest: `Command Classifier` JS syntax error
+
+Сценарий: тимлид + НЛМ предлагали откатить mig 211 на `forward_to_n8n cmd_edit_last` (через legacy 04_Menu). Я не доверился без верификации — диагностика обнаружила что 04_Menu сломан с 11.05 19:18 UTC (100% error rate, 18/18 fail за 48ч).
+
+Корень — пустой `else` без body в JS Command Classifier (lines 170-173):
+```js
+}
+else                              // L170 — пустой else (no body)
+                                  // L171 — empty line
+// ── Coming soon stubs ──         // L172 — comment
+else if (command === 'cmd_notifications') {  // L173 — SyntaxError: Unexpected token 'else'
+```
+
+JS-парсер видит `else else if` → нода падает на КАЖДОМ исполнении до того как `menu_route` устанавливается. Никакая ветка Menu Router не достигается.
+
+### Hotfix через PUT (single-node surgical patch)
+
+Recipe — PUT workflow с измененённым **только одним нодом**, остальные verbatim. Body whitelist `{name, nodes, connections, settings}`. Settings whitelist (см. секцию «Safe PUT»).
+
+1. GET workflow → save in `/tmp/`. sha256 + size + updatedAt.
+2. Python script: find node by id (id = UUID из `Command Classifier` ноды, не name — name может меняться).
+3. Patch `parameters.jsCode`: точная regex `}\n        else\n\n        // ── Coming soon stubs ──\n        else if` → `}\n        // ── Coming soon stubs ──\n        else if` (убрали пустой `else\n\n`).
+4. Local sanity: `node --check` если установлен Node.js на маке (можно skip — PUT validation поймает).
+5. scp payload (175 KB > 50 KB threshold) на VPS → `curl --data @file PUT`.
+6. Verify: fresh GET, diff против baseline, **только 1 node changed**. updatedAt новый, versionId новый.
+7. Trigger через user click — нельзя touch'нуть напрямую (real users). Мониторим `execution_entity` после PUT: следующий клик → status=success.
+
+**Single-node surgical = no scope creep.** Все 129 других нод нетронуты. Risk минимальный, PUT validation чистая (без dangling executeWorkflow refs blocked).
+
+### General rule — when to fix legacy n8n vs migrate
+
+Legacy n8n workflows которые **уже работают** — не трогать (KB n8n-self-host-migration risk). Workflows которые **100% fail** — точечный hotfix через PUT, не переписывание на Python (Phase X — большая задача). Hotfix защищает остальные команды которые legacy всё ещё обслуживает (cmd_notifications, cmd_delete_account etc) пока их не мигрируют.

@@ -463,3 +463,62 @@ Full details: [[concepts/anti-spam-debounce]].
 - [[daily/2026-04-22.md]] — Migrations 116–120: Session 10 final polish (picker routing guard fix, cmd_back hierarchy, success_reaction callback fix, training none value, edit_country/timezone 2-button entry); Migration 121: back_nav anchor fallback (new signature + p_current_screen hint, 3-priority chain, source debug field, 7-scenario E2E)
 - [[daily/2026-04-23.md]] — Migrations 122–124: Phase 3A stats_main headless. 122: get_stats_business_data wrapper + ui_screens seed + 3 buttons + stats.* keys; adversarial review caught 3 criticals. 123: report.* keys × 13 langs + process_user_input fast-path. 124: full rewrite → get_daily_stats_rpc FLAT + светофоры + meals_list_formatted + 1 button; caught double-nest + {tr:} inside {var} bugs post-apply.
 - [[daily/2026-04-25.md]] — Migration 140: debounce cooldown 1500ms→500ms workaround. Migration 141: `users.last_action_ms BIGINT` + атомарный `UPDATE WHERE` в `debounce_user_action` — устранение race condition с n8n `Sync Profile` нодой; `last_active_at` остаётся для cron/streak.
+
+---
+
+## 2026-05-13 — `food_logs.id` vs `food_logs.meal_id` (critical lesson)
+
+**Symptom (UAT 13.05):** после клика «Исправить» на карточке лога еды юзер пишет короткую корректировку «200 гр» → бот зависает (стикер «думающего Номса» крутится бесконечно). Через 5 минут юзер пишет полное название («каша гречневая») → бот отвечает «✅ Готово! Обновил» НО в БД появляется новая отдельная запись поверх старой.
+
+**Root cause (mig 209 my bug):**
+
+`food_logs` имеет ДВА UUID-столбца:
+- `id` — **PK строки** (per food item).
+- `meal_id` — **grouping UUID** для multi-item meals. Пример: «пицца + кола» = 2 rows в food_logs, **один общий meal_id**.
+
+`id ≠ meal_id`. У одиночных logs id и meal_id могут совпадать или не совпадать, но это **never гарантировано**.
+
+`get_meal_by_id(p_meal_id uuid)` (03_AI_Engine `Get Current Meal`) ищет `WHERE food_logs.meal_id = p_meal_id`. Если в `users.editing_meal_id` лежит row PK (а не meal_id) — lookup возвращает 0 строк → `success=false, error=meal_not_found`.
+
+Мой bug в mig 209 `set_editing_last_meal`:
+```sql
+-- WRONG (mig 209):
+SELECT id INTO v_meal_id FROM food_logs ORDER BY consumed_at DESC LIMIT 1;
+UPDATE users SET editing_meal_id = v_meal_id;
+```
+
+Должно быть:
+```sql
+-- CORRECT (mig 215 fix):
+SELECT meal_id INTO v_meal_id FROM food_logs ORDER BY consumed_at DESC LIMIT 1;
+UPDATE users SET editing_meal_id = v_meal_id;
+```
+
+**Cascade:**
+
+1. `editing_meal_id` = битый row PK.
+2. 03_AI_Engine `Get Current Meal` → 0 rows → `meal_not_found`.
+3. AI Recalculate работает БЕЗ контекста (`ORIGINAL USER INPUT: 'unknown'` fallback).
+4. Для **короткого** input («200 гр» — просто quantity без food name): AI возвращает `is_food:false, items:[]` → Split Edit Items пропускает Save/Send → **silent dead-end**. Стикер indicator никогда не очищен (Clear Indicator не выполнен).
+5. Для **длинного** input («каша гречневая»): AI без контекста инферно классифицирует как food → продолжает edit path → INSERT food_log с `meal_id=editing_meal_id (=row id)` → юзер видит «Обновил» НО в БД новый отдельный лог.
+
+**Verification proof (live):**
+
+`set_editing_last_meal(417002669, NULL)` в транзакции с ROLLBACK после mig 215:
+```sql
+SELECT EXISTS (SELECT 1 FROM food_logs WHERE meal_id = <returned editing_meal_id>) AS meal_id_valid;
+-- meal_id_valid: true ✓
+SELECT EXISTS (SELECT 1 FROM food_logs WHERE id = <returned editing_meal_id>) AS row_id_valid;
+-- row_id_valid: false ✓ (то что не нашли — definitive proof что взяли meal_id, не id)
+```
+
+**Rule for future agents:**
+
+- Любая RPC которая работает с **meal references** (set_editing_*, delete_*_meal, get_meal_*) должна использовать `food_logs.meal_id`, не `food_logs.id`.
+- Точечный lookup конкретной строки (для UPDATE single food_log) — да, через `id` PK.
+- **PR review checkpoint:** grep `editing_meal_id` против `SELECT id INTO` в новых миграциях.
+- `delete_last_meal_with_revert` (mig 211) — образец как делать правильно (`SELECT meal_id`).
+
+**Why это скрывалось:** RPC сама `set_editing_last_meal` не падала (UPDATE прошёл, ничто не throw), и `users.editing_meal_id` имел валидный UUID. Bug проявлялся только **в downstream** consumer (`get_meal_by_id` lookup'е). Это classic **silent integration bug** на границе нескольких систем (mig 209 SQL ↔ legacy n8n 03_AI_Engine ↔ ui_screens state).
+
+**Related mig 215** (CREATE OR REPLACE) — `migrations/215_fix_set_editing_last_meal_uses_meal_id.sql`. PR #65.

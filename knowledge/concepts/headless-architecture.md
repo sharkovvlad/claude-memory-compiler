@@ -310,3 +310,86 @@ if (!callback && message && PROFILE_V5_STATUSES.has(user.status)) {
 - [[concepts/n8n-switch-duplicate-outputkey-bug]] — original driver of this migration
 - [[concepts/nav-stack-architecture]] — reused as-is
 - [[concepts/n8n-template-engine]] — stays in JS (TMA architectural decision)
+
+---
+
+## Update 2026-05-13 (UAT edit-meal series) — Virtual Screens + url_template
+
+Два расширения headless-контракта закреплены тимлидом + Архитектором по итогам UAT 13.05 (5 PR'ов #61-#65).
+
+### Virtual Screens (`_<name>` namespace) + PUI lookup fallback chain
+
+**Когда:** inline-кнопка показывается **из standalone-сообщения** (не из конкретного screen в headless tree). Пример — карточка лога еды от 03_AI_Engine `sendMessage` с inline_keyboard содержит `cmd_edit_last` / `cmd_delete_last`. Юзер может быть на любом current_screen (Банда, Прогресс, Профиль…) когда кликает.
+
+**Проблема:** стандартный PUI lookup `SELECT b.* FROM ui_screen_buttons WHERE screen_id=v_current_screen` промазывает → fallthrough → re-render «текущего» экрана (то что юзер видит — не related screen).
+
+**Решение (mig 211 Option B, отвергнут НЛМ-совет forward_to_n8n):**
+
+1. **INSERT virtual screen** с `_<name>` prefix. Convention `_<name>` зарезервирована под lookup-only utility. Mig 211 ввёл первый — `_global_floating_actions`:
+   ```sql
+   INSERT INTO ui_screens (screen_id, text_key, render_strategy, input_type, ...)
+   VALUES ('_global_floating_actions', NULL, 'noop', 'inline_kb', ...);
+   ```
+   `render_strategy='noop'` гарантирует — если кто-то вызовет render_screen на этом screen_id, вернётся пустой UI (safe degradation, не падение).
+
+2. **ALTER CONSTRAINT** `ui_screens_screen_id_check` regex `^[a-z][a-z0-9_:]{1,62}$` → `^[a-z_][a-z0-9_:]{1,62}$` чтобы поддержать underscore prefix. Lowercase letter ⊂ `[a-z_]`, existing rows pass.
+
+3. **PUI lookup fallback chain** (mig 211 patch в `process_user_input`):
+   ```sql
+   SELECT b.* INTO v_button FROM ui_screen_buttons b
+    WHERE b.screen_id = v_current_screen
+      AND matches_callback_template(b.callback_data, v_callback);
+   
+   IF NOT FOUND THEN
+       SELECT b.* INTO v_button FROM ui_screen_buttons b
+        WHERE b.screen_id = '_global_floating_actions'
+          AND matches_callback_template(b.callback_data, v_callback);
+   END IF;
+   ```
+   Остальная логика (save_via_callback, target_screen, clear_status, error_screen_map) переиспользуется без изменений.
+
+4. **Кнопки в virtual screen** получают standard `meta` keys:
+   ```sql
+   INSERT INTO ui_screen_buttons (screen_id, ..., meta) VALUES (
+     '_global_floating_actions', ..., jsonb_build_object(
+       'save_via_callback', true,
+       'save_rpc', 'set_editing_last_meal',
+       'target_screen', 'edit_food_prompt'
+     )
+   );
+   ```
+
+**Anti-pattern (отвергнут):** `meta.action` универсальный dispatcher с CASE-блоками в PUI — тимлид охарактеризовал как «архитектурная мина» (хардкод спам, рост surface area по мере добавления callbacks). Virtual screens переиспользуют existing `save_via_callback` контракт (40+ кнопок уже работают по этой схеме).
+
+### `meta.url_template` — динамические URL-кнопки
+
+Расширение existing `meta.url` (mig 176) на template-name'ы которые Python резолвит через `services/template_engine._URL_TEMPLATE_RESOLVERS`. Используется когда URL зависит от user-state (telegram_id, language, etc) или содержит non-ASCII (кириллица в `text` параметре share-ссылок).
+
+**Зачем не SQL:** percent-encoding кириллицы + спецсимволов в БД-side небезопасно. `urllib.parse.quote` в Python — стандарт.
+
+**Запись в БД** (mig 209):
+```sql
+UPDATE ui_screen_buttons
+   SET meta = jsonb_build_object('url_template', 'share_invite')
+ WHERE callback_data='share_invite_link';
+```
+
+**Резолвер в Python** (`services/template_engine.py`):
+```python
+_URL_TEMPLATE_RESOLVERS = {
+    "share_invite": _resolve_share_invite_url,
+}
+
+def _resolve_share_invite_url(telegram_id, translations, constants):
+    bot = constants.get("bot_username", "").lstrip("@")
+    deep_link = f"https://t.me/{bot}?start=ref_{telegram_id}"
+    share_text = translations.get("referral", {}).get("share_text", "")
+    return ("https://t.me/share/url?url=" + quote(deep_link, safe="")
+            + "&text=" + quote(share_text, safe=""))
+```
+
+**Расширение `render_screen`** — добавить `'url_template', v_button.meta->>'url_template'` в keyboard JSON рядом с `'url', v_button.meta->>'url'` (mig 209 Block E, см. baseline `_baseline_render_screen_2026-05-13_post_mig209.sql`).
+
+**Расширение `_build_inline_keyboard`** — приоритет `url > url_template > callback_data`. Если url_template есть но resolver вернул None — **дроп кнопки** (broken share-кнопка без URL бесполезна), НЕ fallback на callback.
+
+Добавление нового template: одна функция в `_URL_TEMPLATE_RESOLVERS` dict + UPDATE meta нужной кнопки. Без правок render_screen / PUI.
