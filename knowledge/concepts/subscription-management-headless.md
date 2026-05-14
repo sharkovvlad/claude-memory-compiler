@@ -92,20 +92,24 @@ delete_user_account(tid) [mig 222 Gatekeeper]:
 
 | payment_method | Behaviour |
 |---|---|
-| `trial` | Silent cancel при delete. Никаких Stripe API. |
-| `stripe` | Blocker. cancel_subscription меняет cancelled_at локально. **Phase 6.4 gap**: Stripe auto-renew продолжается до expires_at. |
+| `trial` | Silent cancel при delete. Никаких Stripe API. **Single текущий path (14.05)** — Stripe ещё не подключён. |
+| `stripe` | Blocker. cancel_subscription меняет cancelled_at локально. **Когда Stripe подключат (Phase 6.4)** — обеспечить `stripe.Subscription.modify(cancel_at_period_end=True)` в cancel handler. |
 | `stars` | Blocker. Cancel — Telegram API (TODO Phase 6.4). |
 | `ton` | Blocker. Cancel — TON blockchain monitor (TODO Phase 6.4). |
 
-## Zombie Subscriptions risk (acceptable временный gap)
+## Zombie Subscriptions — design consideration для Phase 6.4
 
-Текущая `cancel_subscription` RPC меняет только `cancelled_at` локально, НЕ дёргает Stripe API. Real-paid юзер:
+**Сейчас (14.05) Stripe не подключён к боту** — все active subs это `payment_method='trial'` (auto-trial через mig 034 для рефералов). Никаких реальных payment.* событий, никаких реальных списаний.
 
-1. Клик «Отменить» в my_subscription → `cancelled_at=NOW()` в local БД.
-2. Через месяц Stripe charge'нет karту (auto-renew не остановлен на Stripe-стороне).
+**После Phase 6.4 (Stripe integration)** возникнет gap если cancel flow остаётся pure-SQL:
+
+1. Real-paid юзер клик «Отменить» в my_subscription → `cancelled_at=NOW()` в local БД.
+2. Stripe auto-renew не остановлен на Stripe-стороне → через месяц charge.
 3. Юзер видит chargebacks → жалобы.
 
-**Phase 6.4 биллинг-модуль закроет** через `stripe.Subscription.modify(cancel_at_period_end=True)` Python handler перед локальным `cancel_subscription`. До тех пор — известный gap. Separation of Concerns: delete_user_account не должна делать Stripe API call.
+**Phase 6.4 биллинг-модуль ОБЯЗАН закрыть** через `stripe.Subscription.modify(cancel_at_period_end=True)` Python handler перед локальным `cancel_subscription`. Это design constraint, не текущий active risk.
+
+Separation of Concerns: `delete_user_account` НЕ должна делать Stripe API call. Логика отмены биллинга живёт в дедикейтид handler, который зовётся при click «Отменить» в my_subscription.
 
 ## get_subscription_business_data fields
 
