@@ -546,6 +546,65 @@ text='🔙 Назад'                cb='cmd_back'  (icon_const_key='icon_back'
 
 **Recipe для будущих headless кнопок:** контракт явно зафиксирован в `_build_button_text` docstring — text может содержать `{icon_*}` / `{tr:*}` placeholder'ы, Python резолвит через `_resolve_text`. Не хардкодить эмодзи через `icon_const_key` если текст уже содержит placeholder (двойной эмодзи). При добавлении новых headless экранов проверять `_verify_button_rendering.py` шаблон для регрессионного теста.
 
+### 35. Phenotype quiz UX rewrite — Sassy Sage tone + 13-lang i18n strategy (lesson 14.05, mig 216)
+
+**Контекст:** quiz texts от mig 187b/188 имели 3 UX-проблемы:
+- **Anti-shaming violation** в Q1: «Реальное тело прямо сейчас, не идеальное» — имплицирует «у тебя тело не идеальное». Прямое нарушение NOMS principle (CLAUDE.md L91).
+- **Gender-specific метафора** в Q1: «облегающая футболка давит» — мужской фитнес-шаблон, для женщин искажается грудью. Не unisex.
+- **Sage tone отсутствует на Q3/Q4** — сухие медицинские вопросы без характера, ломают immersion (юзер выпадает из Sassy Sage диалога).
+
+**Архитектурный constraint:** `classify_phenotype` RPC (mig 187) ожидает **строго 3 ответа** (a/b/c) на каждом Q с фиксированной semantic mapping:
+- Q1: a=upper body (athlete), b=even (default), c=belly (monw/obese)
+- Q2: a=cardio/none, b=irregular, c=consistent strength
+- Q3: a=soft, b=normal, c=firm
+- Q4: a=yo-yo, b=stable, c=gradual gain
+
+**Other agent proposal (отвергнутый):** добавить 4-ю кнопку «💪 Растут только мышцы» в Q1 → **сломало бы RPC**. Принято решение остаться на 3 кнопках и переписать только tone/wording.
+
+**Стратегия rewrite (mig 216):**
+
+1. **Section title pattern** перед каждым Q: `{section_emoji} <b>{Section}</b>` (Q1: 🧬 Зона риска, Q2: 🏋️ Железо, Q3: 🔬 Плотность, Q4: 📈 История). Дает «бренд-feel» и визуальный rhythm.
+
+2. **Progress bar** `[⬛⬛⬜⬜] N/4` под заголовком (universal Unicode squares, работает в 13 langs включая RTL ar/fa).
+
+3. **Sassy line в курсиве `<i>...</i>`** (Telegram HTML parse_mode) отделяет «мысли бота» от prompt. Объясняет *зачем* спрашиваем (Radical Transparency — Master Blueprint principle).
+
+4. **Anti-shaming framings**:
+   - Q1: «У моих алгоритмов не подключён модуль стыда» → meta-joke, говорит юзеру «здесь не судят».
+   - Q1: «это генетика, не приговор» → reframes body fat distribution как neutral biology.
+   - Q2: «не оцениваю выбор — просто пересчитываю норму белка» → no judgement, just science.
+   - Q4: «не наука, а вредительство» → self-deprecating sage humor.
+
+5. **Idiomatic love-handles** для Q1_c — adapted per lang:
+   - EN: love handles · ES: michelines · DE: Schwimmreifen · FR: poignées d'amour · IT: maniglie dell'amore · PT: pneuzinhos · PL: boczki · UK: рятувальний круг · ID: ban serep (spare tire) · RU: спасательный круг.
+   - **AR/FA/HI**: neutral phrasing («حول الخصر والبطن» / «دور کمر و شکم» / «कमर के आसपास») — idiom culturally off, fallback to «around waist» для safety.
+
+6. **App_constants emoji refresh** (6 UPDATE + 1 INSERT):
+   - icon_pheno_q1: 👕→🧬, q2: 💪→🏋️, q3: ✋→🔬, q4: ⚖️→📈 (section emoji)
+   - icon_pheno_q1_a: 👕→💪, q1_c: 🍔→🍎 (button emoji)
+   - **NEW** `icon_pheno_q1_b_box` = 📦 (для «равномерно по телу»)
+
+**Implementation:**
+- Mig 216: 1 файл, 153 строки SQL. 8 keys × 13 langs = **104 cell updates** + 7 app_constants ops.
+- Jsonb merge pattern: `jsonb_set(content, '{phenotype}', COALESCE(content->'phenotype','{}') || '<patch>'::jsonb)` — атомарный merge 8 ключей на язык, остальные 15 phenotype-keys (q2_a/b/c, q3_a/b/c, q4_b/c, result_*) preserved.
+- Subagent (general-purpose) translated EN + 11 langs by detailed briefing с tone guideline + idiom map + verify через render_screen.
+
+**Verify** (`scripts/_verify_mig_216.py`):
+- 13 langs × 8 keys complete ✓
+- 6 app_constants updated + 1 new ✓
+- render_screen + template_engine resolve correctly для ru/en/ar (RTL test)
+- preserved keys (q2_a/q3_a + result_*) unchanged ✓
+
+**Recipe для будущих UX rewrites quiz/wizard на NOMS:**
+
+1. **Preserve RPC semantics first** — auditировать classify/save RPC до изменения кнопок. Менять text, не mapping.
+2. **Anti-shaming audit** на каждый prompt: ищи слова «реальное», «настоящее», «идеальное», «правильное» — обычно signal'ы judgment.
+3. **Unisex test**: метафоры должны одинаково работать для м/ж. Apple shape — clinically universal ✓; «футболка» — нет ✗.
+4. **i18n idiom map** — для культурно-специфичных фраз (love handles, прозвища тела) подготовить list per lang ПЕРЕД subagent. Иначе subagent guesses, рискует cultural offense.
+5. **Section emoji + progress bar** работают как «брендовая униформа» quiz — повышают immersion. Progress bar Unicode squares (⬛⬜) safer чем emoji squares (некоторые рендеры рендерят 🔲 как разные glyphs).
+6. **Sassy line в `<i>...</i>`** — отделяет voice от prompt. Telegram HTML parse_mode supports.
+7. **Subagent briefing template** для multi-lang rewrites: canonical RU + style brief + idiom map + verify recipe.
+
 ### 34. Terminal Action перед long-latency transitions (lesson 12.05)
 
 **Контекст:** Live UAT user 786301802 onboarding test — на phenotype_result юзер нажимал «Готово» **дважды** с интервалом 6 секунд. Diagnostic patch (PR #52 cb_data в логах) показал:
