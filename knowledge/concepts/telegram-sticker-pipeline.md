@@ -626,6 +626,34 @@ make_sticker.py --input /tmp/pingpong.mp4 ...
 - **Bbox в scene mode.** Считаем по Номсу (rembg), а не по всему alpha — иначе конфетти растягивают bbox на весь кадр и Номс сжимается до 30 %. Расширение `±18 % / +35 % top / +10 % bot` оставляет звезду над головой и близкие конфетти.
 - **Слишком широкий персонаж (расставленные руки).** Это не баг — square по `max(w, h)`, и Номс с разведёнными руками займёт 89 % ширины и ~60 % высоты. Так и должно быть.
 
+### 7.7 Дифференциация в серии стикеров (lesson 2026-05-14, streak_14days)
+
+> Когда добавляешь стикер в **серию** (streak_3/7/14/30/100, league_promotions, milestones), визуальная схожесть с соседним стикером — **отказной фактор** даже при формально безупречном выходе pipeline.
+
+**Симптом:** pipeline отрабатывает чисто (все 9 пунктов чек-листа §5 ✅, размер ОК, эмоция читается), но пользователь говорит «выглядит как `<соседний>` — стикер должен отличаться». Pivot потерянного времени: вторая итерация с другим окном.
+
+**Корень:** агент анализирует source-видео в изоляции и выбирает «эстетически лучшие 3 секунды», игнорируя что **рядом стоит уже одобренный стикер той же темы**.
+
+**Pattern для агента:**
+
+1. **Перед выбором окна** — `ls Дизайн/stickers/` и идентифицируй **соседние стикеры серии** (одинаковый префикс категории: `noms_streak_*`, `noms_league_*` и т.д.).
+2. **Декодируй t=0 и t=peak** соседних стикеров (через `ffmpeg ... format=rgba`) — это «зрительная константа» для пользователя.
+3. **Выбери окно** где **первый кадр (t=0) визуально отличается** от соседей. Различие должно быть в `позе / атрибутах / фазе действия`, не только в интенсивности.
+4. **Если в source нет уникальной фазы** → запросить перегенерацию source или предложить альтернативный сценарий — не тащить «похожее».
+
+**Конкретный кейс streak_14days:**
+- v1 (single-pass 4.0-7.0с): начинался уже с Номса в огне с поднятыми руками = **визуально идентичен `streak_7days` на t=0**. Отказ пользователя.
+- v2 (ping-pong 2.8-4.3с): t=0 = Номс **с факелом**, спокойная anchor-поза → **отличается с первого кадра** от `streak_7days`. Принят.
+
+**Чек-лист «дифференциация» (добавить в §5 при работе с серией):**
+
+```
+[ ] Соседние стикеры серии идентифицированы (`ls Дизайн/stickers/`)
+[ ] t=0 нового стикера декодирован и сопоставлен с t=0 соседей
+[ ] Различие на t=0 ≠ только интенсивность пламени / цвета. Различие в позе/атрибуте/фазе
+[ ] Если source не даёт уникальной фазы → озвучить пользователю, не «прятать» под фильтрами
+```
+
 ---
 
 ## 8. Генерация исходников через Nano Banana / Veo
@@ -721,10 +749,14 @@ monster's body that could be confused with the background.
 
 Avoid environmental interaction that creates translucent effects:
 no jelly puddles, no liquid splashes, no water reflections, no soft
-shadows on the ground, no mist or fog. These render as semi-transparent
+shadows on the ground, no mist or fog, NO REFLECTIVE FLOOR TILES, no
+glossy ground surface, no horizon line. These render as semi-transparent
 pixels blended with the magenta background, which cannot be cleanly
 removed in post-processing (see KB section 7.5 for math). The monster
 should be in a clean isolated pose against the flat magenta background.
+
+No perspective view — strict orthographic front-facing 1:1 frame. No
+floor visible. Character does not stand on anything.
 ```
 
 ### 8.4 Промпт-шаблон для **video generation** (image-to-video, action only)
@@ -763,18 +795,75 @@ gradients, particles, or floor lines may appear during the animation.
 CRITICAL — no translucent environmental effects during animation:
 no jelly puddles appearing under the character, no liquid splashes from
 jumps, no water reflections, no soft drop shadows, no mist, no fog,
-no semi-transparent particle trails. These render as alpha-blended
-magenta pixels that survive chromakey and stay visible as pink
-artifacts in the final sticker (irreversible in post — see KB 7.5).
-If the action involves jumping or landing, keep the character airborne
-or on an implied flat surface, NEVER let it interact with a translucent
-medium.
+no semi-transparent particle trails, NO REFLECTIVE FLOOR TILES, no
+glossy ground surface. These render as alpha-blended magenta pixels
+that survive chromakey and stay visible as pink artifacts in the
+final sticker (irreversible in post — see KB 7.5). If the action
+involves jumping or landing, keep the character airborne or on an
+implied flat surface, NEVER let it interact with a translucent medium
+or reflective surface.
+
+CRITICAL — no directional movement, no perspective:
+The character must NOT walk, dance, drift sideways, rotate, or move
+toward/away from camera. Camera must be COMPLETELY LOCKED OFF — no
+pan, no zoom, no tilt, no parallax, no perspective shift. Strict
+orthographic front-facing view, 1:1 framing. The character's
+center-of-mass position in the frame must be identical in frame 0
+and frame end (allow ±10px sine-wave idle bounce only). This is
+required because (a) direction-specific motion makes ping-pong
+loops impossible, and (b) perspective views require a floor which
+creates alpha-blended pink halo (see KB 7.5).
+
+Acceptable motions are PURELY PERIODIC: idle bounce (vertical sine),
+flame pulsation, glow flicker, sunglasses glitch, binary-code stream,
+breathing, blinking, slight head turn that returns to original
+position. Do NOT include: walking, dancing, throwing, running,
+spinning, panning, zooming, fading.
 
 Negative — must NOT appear: no watermark, no logo, no text overlay, no
 camera movement, no zoom-in or zoom-out, no character changes (color,
 size, identity), no extra characters appearing, no body parts cut off
 by the frame edges in any frame.
 ```
+
+### 8.4b Чеклист для агентов, которые ПИШУТ промпты для Nano Banana / Veo
+
+Эти эвристики **должен учесть любой агент**, который генерирует промпт для image-to-video Veo (Nano Banana) для NOMS-стикеров. Каждый пункт — обязательный, проверенный на провалах.
+
+**MUST в промпте (positives):**
+
+- [ ] **Duration**: точно указать длину. Veo и Nano Banana по умолчанию выдают 5–10 сек; Nano Banana НЕ генерирует <6 сек. Для наших стикеров мы потом обрежем до 3 сек (window with peak) или применим ping-pong.
+- [ ] **Seamless loop**: «final frame must match first frame so animation repeats without visible cut». Это критично — Telegram-плеер зацикливает стикер.
+- [ ] **Locked camera**: «COMPLETELY LOCKED OFF, no pan/zoom/tilt/parallax/perspective shift». Veo любит добавлять микро-zoom без разрешения.
+- [ ] **Strict 1:1 framing**: «orthographic front-facing, 1:1 frame, character position identical in every frame».
+- [ ] **Periodic action only**: дыхание, моргание, пульсация, вибрация, мерцание, sine-wave idle bounce. Это позволяет ping-pong loop работать (KB 7.6).
+- [ ] **Air margin**: «at least 8-15% empty space on all four sides between outermost element and frame edges».
+- [ ] **Background**: «solid flat #FF1493 magenta, edge-to-edge, NO texture/gradient/floor/shadow/horizon».
+
+**MUST NOT (negatives — этот блок ОБЯЗАТЕЛЕН):**
+
+- [ ] **No floor, no ground, no reflective surfaces, no tiles, no shadow under feet** — даёт alpha-blended pink halo (см. 7.5)
+- [ ] **No splashes, no liquid puddles, no jelly drips, no mist, no fog** — то же самое
+- [ ] **No dancing, walking, running, drifting, rotating, throwing** — direction-specific motion ломает ping-pong loop (см. 7.6)
+- [ ] **No perspective shot, no isometric, no tilted camera** — требует floor → halo
+- [ ] **No watermark, no logo (especially "Veo" badge), no signature, no text** — Veo любит вписать своё лого
+- [ ] **No UI overlay, no progress bar, no border, no scene transition, no fade**
+- [ ] **No body parts crossing frame edges** в любой позе анимации
+- [ ] **No new characters appearing**, no human hands
+
+**Распространённые ошибки промпт-агентов (из практики):**
+
+| Ошибка в промпте | Симптом в стикере | Где учиться |
+|---|---|---|
+| «Character dances joyfully» | Direction-specific motion → ping-pong невозможен | KB 7.6 |
+| «Character lands on the floor» | Reflective surface → unfixable pink halo внизу | KB 7.5 |
+| «Splash of magic appears under feet» | Alpha-blended particles → pink residue | KB 7.5 |
+| «Cinematic shot, dynamic camera» | Veo добавляет zoom/pan → персонаж дрейфует | section 8.5 |
+| «Character looks around` или похожее с поворотом» | End frame ≠ start frame → видимый прыжок на loop | section 8.5 |
+| «Photorealistic environment» | Перспектива + floor → halo | KB 7.5 |
+| Длительность не указана | Veo выдаёт 5-10 сек, лишние сцены попадают в кадр | section 8.4 |
+
+**Шаблон промпта для image-to-video** (копировать и заполнить ACTION-блок): см. секцию 8.4 выше.
 
 ### 8.5 Тонкости и pro-tips
 
@@ -803,6 +892,8 @@ by the frame edges in any frame.
 | 2026-05-12 | `noms_streak_3days.webm` v3 (210 KB, 24 fps, ping-pong 0-1.5 / 1.5-0) | scene | `--start 0 --duration 3 --strip-right 140 --mode scene --bg-color 0xFF1493 --scene-fps 24 --scene-tightness tight` (на pre-built ping-pong mp4) | «Стрик 3 дня» промежуточная версия (заменена v4 из-за чёрных рамок). **Техника ping-pong loop:** обойти splash-проблему. Source pre-puddle окно 0-1.5с. Forward 1.5 + reverse 1.5 = 3 сек seamless loop. **Lesson — секция 7.6.** ⚠️ Имела чёрные пиллабоксы по бокам — `--strip-right 140` отрезал лишь половину правого пиллабокса (280px), левый не трогался вовсе |
 | 2026-05-12 | `noms_streak_3days.webm` v4 (183 KB, 24 fps, ping-pong) | scene | Без `--strip-*` — auto-pillarbox detect | Промежуточная: добавлен `detect_pillarbox()` в `make_sticker.py`: автоматически детектит чёрные полосы Veo (280px слева + 280px справа в стандартном 1280×720 source) и применяет к strip. Чёрные рамки убраны. **Lesson — секция 7.5b:** Veo рендерит 1:1 контент в 16:9 контейнере с pillarbox; для прежних стикеров `--strip-right 140` был неполным — реально нужно было 280. Auto-detect избавляет агентов от ручного подсчёта. Subject 93% canvas — недостаточно, пользователь попросил максимально крупного |
 | 2026-05-12 | `noms_streak_3days.webm` v5 (195 KB, 24 fps, ping-pong) | scene | `--scene-tightness tightest --air-percent 2` | **Финал.** Добавлен preset `tightest` (0%/+5%/0% — minimum scene region around Noms). Subject **96% of canvas**, минимальный air 2%. Огонь сохранён на всех кадрах (с лёгким clip на point reverse t=1.5 где у Номса две руки с огнями). Это технический максимум — больше нельзя сжать без обрезки самого силуэта. SHA `c7467568...` |
+| 2026-05-14 | `noms_streak_7days.webm` (183 KB, 24 fps, окно 5–8с) | scene | `--start 5 --duration 3 --mode scene --bg-color 0xFF1493 --scene-fps 24 --scene-tightness tightest --air-percent 2` | «Стрик 7 дней» — Номс в пиксельных очках, обе руки в V-pose, окружён пульсирующим 8-bit пламенем. Окно 5–8с — пик разгорания пламени. **Первое видео, сгенерированное по обновлённому промпт-шаблону (8.4b чеклист):** без пола, без перспективы, без танца → никаких unfixable артефактов. Auto-pillarbox убрал стандартные 280px+280px Veo-bars вместе с watermark. Subject 96% canvas. SHA `b206643c...`. **Lesson:** улучшенные промпт-шаблоны 8.3/8.4/8.4b после Streak 7 первой попытки работают — провалов с reflective floor / dancing уже нет |
+| 2026-05-14 | `noms_streak_14days.webm` (221 KB, 24 fps, ping-pong 2.8-4.3 / 4.3-2.8) | scene | Pre-built ping-pong source (`ffmpeg ss=2.8 t=1.5` + `reverse` + concat) → `--start 0 --duration 3 --mode scene --bg-color 0xFF1493 --scene-fps 24 --scene-tightness tightest --air-percent 2` | «Стрик 14 дней» — расширение нарратива относительно `streak_7days`. Source изначально single-pass 4.0-7.0 (single-pass, 239 KB) → отвергнут пользователем: визуально дублировал 7days (оба стартуют с уже горящего Номса). **Pivot — захватить factor-фазу с факелом (t=2.8) и взрыв пламени (t=4.3) в одном цикле.** Single-pass с этим окном дал бы резкий loop seam (руки опущены ↔ вверх), поэтому собран ping-pong 1.5×2 = 3.0с (как в `streak_3days` v5). Семантика: «факел → разгорается → собирается обратно → факел». Subject 96%, deep purple body, scene mode сохранил пламя внутри и снаружи контура. SHA `a791a6dc...`. **Lesson:** перед выбором окна стикера в серии (streak_3/7/14/30/...) — **сверять с уже одобренными соседними стикерами**, чтобы кадры дифференцировались с первого фрейма; иначе пользователь воспринимает «то же самое». См. секцию 7.7 |
 
 Чтобы добавить новый сценарий: запустить скрипт, проверить по чек-листу, дописать строку в эту таблицу.
 
