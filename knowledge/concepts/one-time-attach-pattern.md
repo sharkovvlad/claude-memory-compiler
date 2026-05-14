@@ -160,6 +160,6 @@ if result.get("onboarding_complete") is True or screen_id == "onboarding_success
 
 ## Tech debt — открытые вопросы
 
-- **#7:** ghost_remove reply-kb для status='new' после soft-delete restore (NLM-pointed случай — юзер видит "противоречивый" интерфейс)
+- **#7 ✅ closed 2026-05-14 (PR #37):** soft-delete targets (`restore_execute`, `start_fresh_execute`, `restore_choice`) подключены к Python `handle_onboarding` через `_try_authoritative_path`. До PR они проваливались в legacy n8n минуя mig 186 force-attach reply-kb. + ghost_remove_reply_keyboard ПЕРЕД RPC в `_handle_start_fresh`/`_handle_restore_account`. + mig 217: `restore_choice.render_strategy='delete_and_send_new'` (заменяет «Account deleted» сообщение, чтобы не аккумулировать). + defensive cleanup stale `last_bot_message_id` при 400 «message to delete not found» в `services/telegram_send.py` (см. [[concepts/save-bot-message-contract]]). Validated 14/5 12:48 live (`AUTHORITATIVE_RESTORE_FLOW` лог для tid=786301802). Smoke-инструмент: [[concepts/test-user-reset-recipe]].
 - **#8:** Активация bot_stickers (`onboarding_welcome` + `onboarding_success`) — ждёт file_id от owner. После этого первое сообщение онбординга/завершения станет стикером. Архитектура уже готова: 2 messages (стикер + текст-подсказка с kb).
 - **#11:** Расширение conditional re-attach для других root paths (cmd_get_stats, cmd_get_profile, cmd_progress) — сейчас только при возврате с text_input

@@ -196,6 +196,7 @@ This routes the 400 error response to the normal output instead of stopping exec
 - [[concepts/access-credentials]]
 - [[concepts/payment-integration]]
 - [[concepts/one-menu-ux]] — deleteMessage as part of One Menu pattern
+- [[concepts/save-bot-message-contract]] — n8n воркфлоу ОБЯЗАНЫ вызывать save_bot_message после финального user-visible sendMessage. Иначе Python router не сможет удалить старое меню (Tech debt #7 lesson 14.05).
 - [[concepts/language-switch-headless-ux]] — Bug 6: deleteMessage blocking; continueOnFail fix
 
 ## Sources

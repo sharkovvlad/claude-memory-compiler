@@ -157,6 +157,7 @@ Hot-reload: после загрузки UserCtx читается из `ctx.const
 - `pre_checkout` / `successful_payment` обрабатываются inline в n8n 01_Dispatcher (не отдельный sub-workflow). При переписывании `payment` target в Python — учесть, что эти два callback-типа имеют свою логику.
 - **04_Menu (legacy) пока нельзя выключить** — он обслуживает Edit Meal flow (через 04.2_Edit_StatsDaily) и старые routing'и Payment. Phase 5 cutover (Edit Meal в Python) разблокирует деактивацию обеих 04_Menu + 04.2.
 - **Smoke-тест mutating RPC через `EXPLAIN` не выявляет runtime-ошибки** (lesson после мигр. 167, исправивший ambiguity в `cron_check_streak_breaks` — мой adversarial review мигр. 166 пропустил баг т.к. EXPLAIN не parse'ит column references на ambiguity). Использовать `SELECT public.<fn>(...)` для actual call даже при ожидаемых 0-row results.
+- **Phase 6.4 (AI Engine migration) — обязательство по `save_bot_message` контракту:** при переписывании `02.1_AI_Engine` на Python агент Phase 6.4 ОБЯЗАН обеспечить вызов `save_bot_message(tid, final_mid, 'menu')` после финального user-visible sendMessage. Иначе orphaned bubble в чате после каждого food log — Tech debt #7 lesson 14.05. Полная спека — [[concepts/save-bot-message-contract]].
 
 ---
 
