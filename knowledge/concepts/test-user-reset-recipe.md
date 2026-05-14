@@ -195,9 +195,26 @@ UPDATE app_constants SET value='true' WHERE key='handler_location_use_python';
 - После Q4 → render phenotype_result (mig 202) → click «Готово» → forward to location.
 - Location picker → выбор страны/таймзоны → завершение → success sticker (Channel A, mig 198/201).
 
+## ⚠️ Update 2026-05-14 (mig 224): расширенная signature
+
+```sql
+public.reset_to_onboarding(p_telegram_id BIGINT, p_reset_referrer BOOLEAN DEFAULT TRUE)
+```
+
+Mig 224 закрыл gap из mig 203:
+
+- **Безусловно** теперь обнуляется `subscription_status='free'` + `UPDATE user_subscriptions SET status='cancelled' WHERE active`.
+- **Условно** (`p_reset_referrer=TRUE` default): `referrer_id=NULL`, `referral_count=0`, `paid_referral_count=0`.
+
+**Product semantic change**: prod `cmd_start_fresh` теперь полностью обнуляет referrer link. Пригласитель теряет attribution если invitee делает start_fresh.
+
+**Test-loop bug fix**: admin больше не может re-получить trial через `reset_to_onboarding(<self>)` — referrer_id обнуляется, auto-trial mig 034 не сработает.
+
+Связан с [[concepts/subscription-management-headless]].
+
 ## Связанные KB
 
-- [[concepts/start-fresh-gaps-2026-05-11]] — **identified production gaps** в `reset_to_onboarding` RPC (статус 'new' vs 'registration_step_1', `level=1` конфликт с finalize, неполный сброс полей). Этот test recipe закрывает gap'ы для **локального теста**; production RPC требует отдельной миграции.
+- [[concepts/start-fresh-gaps-2026-05-11]] — **identified production gaps** в `reset_to_onboarding` RPC (статус 'new' vs 'registration_step_1', `level=1` конфликт с finalize, неполный сброс полей). Mig 224 закрыл subscription/referrer gaps. Остальные production RPC gaps — отдельные миграции.
 - [[concepts/start-fresh-flow]] — current `cmd_start_fresh` n8n + Python flow.
 - [[concepts/phase4-onboarding-migration]] — gotchas #1-#33, история phenotype quiz Sub-FSM.
 - [[concepts/sticker-architecture-adr]] — mig 198 unified sticker foundation + Stage 1.1 one-time semantics (mig 201).
