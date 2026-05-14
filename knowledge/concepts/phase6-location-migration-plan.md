@@ -264,10 +264,30 @@ else                                       return_status = 'registered';  // cat
 
 Полная семантика разделения — KB [[concepts/headless-fsm-vs-dynamic-handler-separation]].
 
-**Phase 6.3 — Geolocation pin + UTC groups headless.**
-- Перенос Geoapify HTTP вызова в Python.
-- Переносим UTC-groups, all-countries-pagination на ui_screens + ref_timezones SELECT через RPC.
-- Удаляем 4 build-UI JS-ноды.
+**Phase 6.3 — Geolocation pin Python + Canonical Hybrid UX.** ✅ **CLOSED 2026-05-14 (PR #66).**
+
+⚠️ **Architecture decisions на финале планирования (тимлид 14.05):**
+
+1. **Geoapify HTTP, не timezonefinder** — time-to-market > offline independence. Сохранили `GEOAPIFY_API_KEY` на VPS, перенесли HTTP вызов из n8n в Python (`services/geolocation.py` через httpx).
+2. **Headless UTC через виртуальную страну ZZ** — Variant C (подтверждено NLM): `list_timezones_for_country('ZZ')` возвращает 33 зоны с пагинацией. Никаких новых ui_screens для UTC, никаких 4 групп, никакого хардкода `Etc/GMT+N` в Python.
+3. **Canonical Hybrid (Master Blueprint)** — два состояния `onboarding_country_picker`: default reply-kb prompt + list inline picker. Telegram constraint «один reply_markup per message» обходится через **handler-side intercept** по screen_id. Полное описание паттерна — KB [[concepts/canonical-hybrid-location-picker]].
+4. **Все sql-изменения текстов в одной mig 210** (Block A merge `ask_country`, Block B delete `ask_share_location`, Block C INSERT `buttons.share_location`, Block D точечная замена 4 строк в `process_onboarding_input`).
+
+**Реализовано в PR #66:**
+- Subagent (general-purpose) написал `migrations/210_phase6_3_geo_pin_python.sql` (666 LOC) по детальному brief. Main agent review через diff подтвердил ровно 4 substitutions в Block D.
+- Python: `services/geolocation.py` (Geoapify async), `handlers/location.py` extension (`_handle_geo_pin`, `_render_geo_request_prompt`, `_render_country_picker_with_kbd_remove`), `handlers/onboarding_v3.py` intercept по screen_id, `dispatcher/router.py` section 10.4 reply-text matching.
+- Тесты: 52 новых, 574 passed in full suite.
+
+**Critical lesson saved**: Subagent написал SQL технически корректно, но main agent **не проверил Python-side обработку** нового screen_id ДО apply mig. Audit после apply обнаружил отсутствие обработки → preemptive rollback Block D → реализован Python intercept → re-apply. Pattern для KB: **после subagent SQL ready, до psycopg2 apply — grep по Python на ссылки на новый screen_id / RPC name**.
+
+**Перенесено в Phase 6.4** (отложено):
+- UTC-groups, all-countries-pagination — НЕ нужны (плоский ZZ).
+- 4 build-UI JS-ноды — удаляются вместе с workflow decommission.
+
+**Phase 6.3 — Geolocation pin + UTC groups headless** (старый план, depricated):
+- ~~Перенос Geoapify HTTP вызова в Python.~~ ✅ Сделано.
+- ~~Переносим UTC-groups, all-countries-pagination на ui_screens + ref_timezones SELECT через RPC.~~ Отвергнуто: плоский ZZ через `list_timezones_for_country('ZZ')`.
+- ~~Удаляем 4 build-UI JS-ноды.~~ Перенесено в Phase 6.4.
 
 **Phase 6.4 — Cleanup.**
 - Деактивируем 02.1_Location (active=false, не удаляем — safety net 7 дней).
