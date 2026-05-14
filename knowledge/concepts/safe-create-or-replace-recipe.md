@@ -226,6 +226,20 @@ print(f'✅ verify ok — new body {len(new_body)} chars')
 
 ❌ **`pg_dump` для одной функции** — overkill. `pg_get_functiondef` отдаёт ровно то, что нужно, в одной строке.
 
+❌ **`CREATE OR REPLACE FUNCTION` при изменении signature без DROP старой версии** (Lesson 2026-05-14, mig 224 → 226 hotfix). PostgreSQL `CREATE OR REPLACE FUNCTION` **не заменяет** функцию когда signature другая — он создаёт **отдельную перегрузку**. Старая остаётся.
+
+Симптом: после `CREATE OR REPLACE public.foo(bigint, boolean)` (новая) старая `public.foo(bigint)` (mig N-1) **остаётся в pg_proc**. Вызов `SELECT public.foo(123)` падает:
+```
+ERROR: 42725: function public.foo(integer) is not unique
+HINT: Could not choose a best candidate function. You might need to add explicit type casts.
+```
+
+**Fix:** добавь `DROP FUNCTION IF EXISTS public.foo(<old_signature>);` ПЕРЕД `CREATE OR REPLACE` (или в той же мигре сразу после CREATE). Проверь через `SELECT pg_get_function_identity_arguments(oid) FROM pg_proc WHERE proname='foo'` что осталась ровно одна перегрузка post-apply.
+
+Если signature не меняется (только тело) — DROP не нужен, `CREATE OR REPLACE` работает корректно.
+
+Pre-mig checklist для signature change: какие callers есть в коде (`grep -rn "rpc_caller(\"foo\""` Python, `EXECUTE 'SELECT.*foo'` SQL, n8n nodes)? Все ли они работают с новым DEFAULT'ом? Иначе нужны два шага: (1) deploy новой версии + старая остаётся → callers переезжают postpone, (2) DROP старой когда все callers перевести.
+
 ---
 
 ## Пример — гипотетическая правка `set_user_age`
