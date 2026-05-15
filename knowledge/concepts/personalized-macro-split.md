@@ -130,6 +130,62 @@ A new translation key `profile.body_type` was added for all 13 languages to labe
 
 Полный паттерн и список 9 edit cases: [[concepts/edit-picker-dual-render]].
 
+### v4 — mig 227 (2026-05-15): PAL fusion + 'none' coefficients + target rebalance
+
+Аудит v3 выявил три системные проблемы; исправлены без изменения UI и схемы.
+
+**Что починили:**
+
+1. **PAL fusion.** `activity_level` (PAL) и `training_type` были decoupled — sedentary-юзер с тренировками 3×/нед получал TDEE как чистый офисный работник (занижение 15-25%). Добавлены `app_constants.pal_training_bonus_{sedentary|light|moderate|heavy} = 0.15/0.10/0.05/0.00`. Дифференциация по base activity_level — защита от двойного учёта (heavy=1.725 уже включает intense training в Mifflin таблицах). `v_pal_adjusted = LEAST(pal_base + bonus, 1.8)`. Bonus применяется ТОЛЬКО если `training_type IN ('strength','cardio','mixed')` (для `'none'`, `'sedentary'`, NULL — bonus=0).
+
+2. **`'none'` coefficients.** `training_type='none'` (mig 119, для «реально не тренируюсь») попадал в `COALESCE(_, 'mixed')` fallback и получал mixed-tier макро. Добавлены `protein_g_per_kg_none=1.2 / fat_pct_none=30` (= sedentary tier). НЕ путать с `'skip'` mapping — `cmd_select_training_skip → 'mixed'` это сознательная политика тимлида (mig 119/190), означает «не хочу отвечать сейчас, дай дефолт».
+
+3. **Target rebalance — conditional clamp.** Сумма (P×4+F×9+C×4) могла превышать `target_calories` при срабатывании `fat_min_g_per_kg` или `carbs_min_g` floor'ов. Step 8 теперь:
+   ```sql
+   v_actual_kcal := v_protein * 4 + v_fat * 9 + v_carbs * 4;
+   IF v_user.goal_type = 'lose' THEN
+       v_target := LEAST(v_actual_kcal, ROUND(v_tdee)::INTEGER);
+   ELSE
+       v_target := v_actual_kcal;
+   END IF;
+   ```
+
+**Lesson — conditional clamp по goal_type важен.** Изначально написал безусловный `LEAST(actual, ROUND(tdee))`. Это сломало бы gain-юзеров: floor мог поднять `actual_kcal` чуть выше `tdee` (естественно для gain, target должен быть > TDEE), а LEAST срезал бы до TDEE → вместо +10% профицита получаем maintain. Поймал на бумаге при подсчёте sentinel'ов ДО apply. **Правило:** при clamp'ах в RPC, которые применяются к разным целевым модам — всегда conditional по `goal_type`, никогда unconditional.
+
+**JSON.calculations расширен** (без удаления v3 ключей, для будущего UI-warning о смягчённом дефиците):
+- `pal_base`, `pal_adjusted` — telemetry PAL fusion
+- `requested_kcal` — из TDEE×goal_speed_factor (до floor'ов)
+- `actual_kcal` — фактическая сумма БЖУ (после floor'ов)
+- `floor_triggered_fat`, `floor_triggered_carbs` — bool, сработал ли минимум
+- `effective_deficit_pct` — реальный дефицит после rebalance
+
+Все callers (mig 063/085/091/094) парсят только `->>'success'` — добавление новых полей безопасно. Verified grep'ом.
+
+**Snapshot + backfill.** `users_targets_backup_20260515` — rollback rope (drop after 7d). Backfill DO-блок recalc для всех `registered` с полным профилем. Time: миллисекунды (4 юзера в проде).
+
+**Cosmetic gap.** COMMENT в `pg_proc` остался `'v4 (mig 217)'` — миграция применена ещё под именем 217 до rebase-renumbering (collision с параллельным агентом). Не functional.
+
+**Что НЕ покрыто v4** (отложено по решению владельца):
+- Age guard `<18` (Mifflin не валиден для подростков), `>75` (формула занижает RMR)
+- Беременность/лактация — нет поля в users → опасный дефицит
+- `phenotype='athlete'` остаётся no-op (попадает в default ветку)
+- Mifflin у obese переоценивает RMR на 5-10% — Katch-McArdle от LBM был бы точнее (Phase 2 quiz даёт LBM proxy → можно использовать)
+- Adaptive modifiers Phase 3 (сон/стресс/ПМС)
+
+**Verification (sentinel cases, прогнаны через psycopg2 на проде 2026-05-15):**
+
+| Профиль | target_cal | P/F/C | Что доказывает |
+|---|---|---|---|
+| F/30/165/70 sed+cardio lose+slow default | 1728 | 98/56/208 | fat_floor доминирует над cardio 20% |
+| M/25/180/75 mod+strength gain+normal monw | **3090** | 128/86/451 | **gain target>TDEE 2808 — conditional clamp** |
+| F/40/165/100 light+mixed lose+fast obese | 1971 | 88/55/281 | obese phenotype target_weight=55 |
+| M/30/175/70 sed+strength lose+normal default | 1892 | 140/56/207 | PAL fusion +247 ккал/день |
+| M/30/175/70 sed+`none` lose+normal default | 1684 | 84/56/211 | new constants protein_g_per_kg_none |
+
+p95 latency = 45 ms с VPS persistent psycopg2 (25 runs). Baseline RTT = 44 мс → RPC ≈1 мс.
+
+PR: [noms-bot#75](https://github.com/sharkovvlad/noms-bot/pull/75). Daily: [[daily/2026-05-15]].
+
 ## Related Concepts
 
 - [[concepts/day-summary-ux]] — displays personalized targets via get_day_summary v3
