@@ -225,7 +225,9 @@ PR: [noms-bot#75](https://github.com/sharkovvlad/noms-bot/pull/75). Daily: [[dai
 
 **Что НЕ покрыто v5** (отложено): age guard / беременность / `'athlete'` / Katch-McArdle / adaptive modifiers Phase 3 — те же ограничения, что в v4.
 
-PR: [noms-bot#81](https://github.com/sharkovvlad/noms-bot/pull/81). Daily: [[daily/2026-05-16]].
+PR: [noms-bot#81](https://github.com/sharkovvlad/noms-bot/pull/81) — **merged 2026-05-16**. Daily: [[daily/2026-05-16]].
+
+**Digital twin (Google Sheets v6.3).** Pre-staging pattern — владелец заложил v5-формулы под `_proposal_vN` суффиксом ДО apply миграции, после merge mig 230 "proposals" автоматически стали ground truth без переписывания формул. Verification: твин для INPUT F/30/165/70 sed+cardio lose+slow default даёт 1728/98/56/208 — EXACT MATCH с live прод v5. **Pattern для будущих v6, v7...:** закладывать новые константы и формулы в твин под суффиксом `_proposal_vN` параллельно с написанием миграции; после merge владелец срезает суффикс. Никакого переписывания формул на стороне агента-нутрициолога не требуется.
 
 ## Related Concepts
 
