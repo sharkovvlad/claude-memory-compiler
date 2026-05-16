@@ -186,6 +186,47 @@ p95 latency = 45 ms с VPS persistent psycopg2 (25 runs). Baseline RTT = 44 мс
 
 PR: [noms-bot#75](https://github.com/sharkovvlad/noms-bot/pull/75). Daily: [[daily/2026-05-15]].
 
+### v5 — mig 230 (2026-05-16): gender-conditional carbs_min_g floor
+
+**Что починили.** До v5 углеводный floor (`carbs_min_g=50`) был universal — одинаковый для женщин и мужчин. Для женщин это слишком низко: на длительном <50 г/день при энерго-дефиците ломается T4→T3 конверсия (5'-deiodinase, van der Walt & Wiersinga 1986; Spaulding et al. 1976) и через thyroid axis затрагивается reproductive axis → функциональная гипоталамическая аменорея (Loucks 2003). v5 поднимает floor для женщин до 100 г; для мужчин остаётся 50 г (эффект слабее без cycle-axis).
+
+**Изменения:**
+
+- **app_constants:** INSERT `carbs_min_g_female=100`, `carbs_min_g_male=50`. Legacy `carbs_min_g=50` оставлен — 2-й уровень COALESCE fallback. **Не удалять** — safety net для NULL gender / неожиданных значений (defensive design).
+- **`calculate_user_targets` Step 7** — единственное изменение vs v4:
+  ```sql
+  v_carbs_min := COALESCE(
+      (SELECT value::INT FROM public.app_constants
+       WHERE key = 'carbs_min_g_' || LOWER(TRIM(COALESCE(v_user.gender, 'male')))),
+      (SELECT value::INT FROM public.app_constants WHERE key = 'carbs_min_g'),
+      50
+  );
+  ```
+  Трёхуровневый fallback. `LOWER(TRIM(COALESCE(..., 'male')))` — defensive против NULL/whitespace/регистра.
+- **COMMENT** обновлён на `v5 (mig 230)` (заодно лечит cosmetic gap v4: COMMENT там остался `'v4 (mig 217)'` из-за rebase-renumbering).
+
+**Lesson — floor cрабатывает реже, чем кажется.** Первый sentinel был F/45/170/55 strength sedentary lose+fast — ожидал floor-bite. Не сработал: формула v4 дала C=122 (выше floor 100). Алгебраическая граница: floor триггерится только при очень малом весе + старом возрасте + sedentary PAL. Realistic floor-bite кейс: **F/65/155/40 strength sedentary lose+fast** — там carbs остаток = 86 г, floor поднимает до 100. Это и есть смысл safety floor'а — он защищает edge cases, не «среднюю юзерицу».
+
+**Sentinel verification (psycopg2 на проде, BEGIN/INSERT/CALL/ROLLBACK):**
+
+| Профиль | v4 (carbs_min=50) | v5 (carbs_min=100) | Что доказывает |
+|---|---|---|---|
+| F/65/155/40 strength sed lose+fast | 952/80/32/**86** eff=20.1% | 1008/80/32/**100** eff=15.4% | floor BITES; +56 ккал/+14g C; eff_deficit -4.7pp |
+| M/30/175/70 strength sed lose+normal | 1892/140/56/207 | 1892/140/56/207 | male не задет (EXACT MATCH baseline) |
+| F/30/165/55 strength mod gain+normal | TDEE=2032 target=2238 | TDEE=2032 target=2238 | conditional clamp v4 для gain работает |
+
+**Эффект на existing prod users** (5 registered): **никаких изменений** — все 3 male C=304-440 >> 50; обе female C=149,296 >> 100. Floor — защита для будущих юзериц малого веса на агрессивном дефиците, не для текущих.
+
+**Pattern — sentinel via transactional ROLLBACK.** Чтобы пройти sentinel'ы без сайд-эффектов в проде: `BEGIN; INSERT users (telegram_id=-N, …); SELECT calculate_user_targets(-N, FALSE); ROLLBACK;`. Уникальный негативный `telegram_id` гарантирует отсутствие коллизий с реальными юзерами. Idempotent — можно гонять сколько угодно. Для прямого сравнения v4 vs v5 в той же сессии — параметризовать `UPDATE app_constants SET value=…` внутри tx, потом ROLLBACK обнуляет.
+
+**Snapshot + backfill.** `users_targets_backup_20260516` (35 строк). Drop ≥ 2026-05-23. Backfill DO-блок — те же 5 registered, цифры не меняются (verified diff vs snapshot = 0).
+
+**Latency:** p95 = **42.96 ms** (25 runs persistent psycopg2 с VPS). Чуть лучше mig 227 baseline 45 ms — extra COALESCE level не добавил издержек, оба lookup hit same PK index `app_constants(key)`.
+
+**Что НЕ покрыто v5** (отложено): age guard / беременность / `'athlete'` / Katch-McArdle / adaptive modifiers Phase 3 — те же ограничения, что в v4.
+
+PR: [noms-bot#81](https://github.com/sharkovvlad/noms-bot/pull/81). Daily: [[daily/2026-05-16]].
+
 ## Related Concepts
 
 - [[concepts/day-summary-ux]] — displays personalized targets via get_day_summary v3
@@ -200,3 +241,5 @@ PR: [noms-bot#75](https://github.com/sharkovvlad/noms-bot/pull/75). Daily: [[dai
 - [[daily/2026-04-11.md]] — Build Profile Text v4.1: trainingMap/speedMap, Training/Speed/Phenotype keyboard, cmd_edit_phenotype → coming_soon, profile.body_type translation key
 - [[daily/2026-04-15.md]] — Speed Edit flow: 4 новых ноды (Prepare/Save/Build/Send), cmd_speed_* routing, Build Ask Markup case, goal_speed в Dispatcher Prepare for 04
 - [[daily/2026-04-17.md]] — chk*() helpers расширены на goal/training/activity/gender (оба места: Response Builder + Build Ask Markup)
+- [[daily/2026-05-15.md]] — v4 mig 227: PAL fusion, 'none' coefficients, conditional clamp; digital twin верификация в Google Sheets
+- [[daily/2026-05-16.md]] — v5 mig 230: gender-conditional carbs_min_g floor (women=100, men=50); PR #81; floor-bite боундари через algebra
