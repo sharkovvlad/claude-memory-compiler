@@ -865,6 +865,64 @@ by the frame edges in any frame.
 
 **Шаблон промпта для image-to-video** (копировать и заполнить ACTION-блок): см. секцию 8.4 выше.
 
+### 8.4d Pattern «TWO INDEPENDENT LAYERS» — body-effect разделение (lesson 2026-05-15, streak_30days)
+
+> Когда стикер требует **визуального эффекта без деформации тела** (intense glow, sparks, electricity, particles, shake, color shift) — описывай тело и эффект как **независимые слои** с явными ограничениями для каждого. Без этого Veo связывает их и портит одно ради другого.
+
+**Симптом A:** просишь «squash and stretch jelly physics» для дыхания → Veo делает тело ±12% по высоте и держит plateau 2с (выглядит как «жидкое желе течёт»).
+
+**Симптом B:** убираешь жесткими негативами «no body deformation» → Veo отключает заодно и активный glow / pulsation (binary code просто светится статично, теряется milestone-эффект).
+
+**Корень:** Veo по умолчанию рассматривает «дыхание / пульсацию» и «свечение» как **одну анимационную единицу**. Если ослабляешь одно — теряешь другое.
+
+**Pattern (использовать когда нужен «эффект без деформации»):**
+
+```
+ANIMATION HAS TWO INDEPENDENT LAYERS:
+
+LAYER 1 — BODY (must stay RIGID):
+The character's silhouette outline is treated as a single rigid object 
+floating in zero gravity. Body moves ONLY by global vertical translation 
+(maximum N pixels up-down sine bounce at X Hz). NO scale change, NO 
+width pulsation, NO height pulsation, NO morphing. Silhouette must be 
+a perfect copy of the reference image's outline in EVERY frame — only 
+its vertical position differs.
+
+LAYER 2 — <EFFECT NAME> (must be INTENSE / DRAMATIC):
+<описание эффекта строго ВНУТРИ силуэта>. The <effect> rhythmically 
+<peak verb> — bright peaks at X Hz, where <vivid description>. Between 
+peaks, <dimmed state>. This is the MAIN visual focus of the animation 
+— make the contrast dramatic. <Effect> stays INSIDE the body silhouette, 
+does NOT bleed outward as a translucent halo onto the magenta background.
+```
+
+**Ключевые слова которые работают:**
+
+- В Layer 1: `RIGID object`, `zero gravity`, `single rigid silhouette`, `perfect copy of reference outline`, `only vertical position differs`.
+- В Layer 2: `INTENSE`, `DRAMATIC`, `BLAZES`, `rhythmically peaks`, `heartbeat of power`, `brilliant`, `MAIN visual focus`, `make contrast dramatic` (sass-language работает — Veo принимает её как «делай ярче»).
+- В Layer 2 boundary: `stays INSIDE the body silhouette`, `does NOT bleed outward`, `no translucent halo onto background` (без этого outer glow попадает на magenta и даёт зелёное гало в финальном webm — см. KB 7.5).
+
+**Negative prompt дополнения** (обязательно в дополнение к стандартным):
+
+```
+no body stretching, no body squashing, no balloon-inflate effect,
+no morphing, no melting, no jelly-flow, no shape distortion,
+no silhouette deformation, no body height pulsation, no body width
+pulsation, no inflate-deflate cycle, no rubber-band motion,
+no outer glow halo bleeding onto the background, no semi-transparent
+glow particles outside the body, no dull lighting, no static <effect>
+without pulsation
+```
+
+Последние два — `no dull lighting`, `no static <effect> without pulsation` — критичны: они защищают от Симптома B (Veo вырубает эффект ради rigid body).
+
+**Применимость:** любой стикер где эффект происходит **внутри** тела (matrix-glow для milestone, electricity, лава, светящаяся кровь, плазма) или **на персонаже** (sparks от короны, мерцание глаз, мигающие пиксельные надписи на теле). Для эффектов **снаружи** (пламя вокруг как в `streak_7days/14days`) этот pattern избыточен — там Veo и так нормально разделяет.
+
+**Кейс streak_30days:**
+- v1 без pattern (`squash and stretch jelly physics`) → ±12% body deformation, plateau 2с. Отказ.
+- v2 жёсткие негативы без явного разрешения glow → silhouette стабильнее, **но glow умер**. Отказ.
+- v3 с TWO LAYERS pattern → silhouette deformation ±9% но **проходящий peak** (норма → надулся → норма за 1с, читается как hover) + **glow активен 9-11% green-pixels постоянно**. Принят.
+
 ### 8.5 Тонкости и pro-tips
 
 - **Image stage variants:** Nano Banana / Imagen генерят 1–4 image per request. Запроси 4, отбери 1. Если все четыре «не те» — меняй промпт, а не выбирай «лучший из плохих».
@@ -894,6 +952,7 @@ by the frame edges in any frame.
 | 2026-05-12 | `noms_streak_3days.webm` v5 (195 KB, 24 fps, ping-pong) | scene | `--scene-tightness tightest --air-percent 2` | **Финал.** Добавлен preset `tightest` (0%/+5%/0% — minimum scene region around Noms). Subject **96% of canvas**, минимальный air 2%. Огонь сохранён на всех кадрах (с лёгким clip на point reverse t=1.5 где у Номса две руки с огнями). Это технический максимум — больше нельзя сжать без обрезки самого силуэта. SHA `c7467568...` |
 | 2026-05-14 | `noms_streak_7days.webm` (183 KB, 24 fps, окно 5–8с) | scene | `--start 5 --duration 3 --mode scene --bg-color 0xFF1493 --scene-fps 24 --scene-tightness tightest --air-percent 2` | «Стрик 7 дней» — Номс в пиксельных очках, обе руки в V-pose, окружён пульсирующим 8-bit пламенем. Окно 5–8с — пик разгорания пламени. **Первое видео, сгенерированное по обновлённому промпт-шаблону (8.4b чеклист):** без пола, без перспективы, без танца → никаких unfixable артефактов. Auto-pillarbox убрал стандартные 280px+280px Veo-bars вместе с watermark. Subject 96% canvas. SHA `b206643c...`. **Lesson:** улучшенные промпт-шаблоны 8.3/8.4/8.4b после Streak 7 первой попытки работают — провалов с reflective floor / dancing уже нет |
 | 2026-05-14 | `noms_streak_14days.webm` (221 KB, 24 fps, ping-pong 2.8-4.3 / 4.3-2.8) | scene | Pre-built ping-pong source (`ffmpeg ss=2.8 t=1.5` + `reverse` + concat) → `--start 0 --duration 3 --mode scene --bg-color 0xFF1493 --scene-fps 24 --scene-tightness tightest --air-percent 2` | «Стрик 14 дней» — расширение нарратива относительно `streak_7days`. Source изначально single-pass 4.0-7.0 (single-pass, 239 KB) → отвергнут пользователем: визуально дублировал 7days (оба стартуют с уже горящего Номса). **Pivot — захватить factor-фазу с факелом (t=2.8) и взрыв пламени (t=4.3) в одном цикле.** Single-pass с этим окном дал бы резкий loop seam (руки опущены ↔ вверх), поэтому собран ping-pong 1.5×2 = 3.0с (как в `streak_3days` v5). Семантика: «факел → разгорается → собирается обратно → факел». Subject 96%, deep purple body, scene mode сохранил пламя внутри и снаружи контура. SHA `a791a6dc...`. **Lesson:** перед выбором окна стикера в серии (streak_3/7/14/30/...) — **сверять с уже одобренными соседними стикерами**, чтобы кадры дифференцировались с первого фрейма; иначе пользователь воспринимает «то же самое». См. секцию 7.7 |
+| 2026-05-15 | `noms_streak_30days.webm` (234 KB, 24 fps, окно 1.75-4.75) | scene | `--start 1.75 --duration 3 --mode scene --bg-color 0xFF1493 --scene-fps 24 --scene-tightness tightest --air-percent 2` | «Стрик 30 дней» — Номс с **пиксельной короной** и **электрическим matrix-glow внутри тела** (зелёные молнии binary code). На пиковом кадре (t=1.5 sticker = t=3.25 source) корона выпускает sparks вокруг. **2 итерации source:** (v1) промпт другого агента содержал `subtle breathing (squash and stretch jelly physics)` → Veo интерпретировал буквально, силуэт деформировался ±10-12% по 2с плато («жидкое желе»). Отказ пользователя. (v2) Промпт-фикс — добавлено `body silhouette remains nearly constant — height and width vary by less than 3%` + негативы `no body stretching, no jelly-flow, no shape distortion`. Veo прислушался к деформации, но **убрал заодно и glow** (свечение пропало). Отказ пользователя — для milestone 30 нужно «уровень выше» чем 7/14, статус читается через свечение. (v3, финал) **Промпт с `TWO INDEPENDENT LAYERS` pattern** — body=RIGID отдельным блоком + INTERNAL LIGHT=INTENSE отдельным блоком + явное «light does NOT bleed outward». Veo выдал rigid силуэт большую часть кадров (stretch peak +9% проходящий каждые 1.8с — читается как hover, не как jelly-flow) + мощный glow (9-11% green-pixels постоянно). SHA — см. локальный файл. **Lesson 1 (KB 8.4d):** для стикеров где нужен «эффект без деформации тела» (glow, particles, shake) — использовать pattern `TWO INDEPENDENT LAYERS` в промпте, body и effect описывать **отдельными блоками** с явным разделением, иначе Veo связывает их и портит одно ради другого. **Lesson 2:** для `streak_30days` sample RGB центра тела ≠ эталонный deep purple (R~55, G~25, B~118) — binary-код забивает центр зелёным glow'ом. Это **фича** для «статусных» стикеров с активной анимацией внутри тела, не баг. Эталон применим только к спокойным стикерам |
 
 Чтобы добавить новый сценарий: запустить скрипт, проверить по чек-листу, дописать строку в эту таблицу.
 

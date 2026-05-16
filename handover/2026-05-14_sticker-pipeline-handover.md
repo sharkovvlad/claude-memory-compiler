@@ -90,6 +90,7 @@ ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate:forma
 | **`floor at non_dom_max` bug** | Despill превращал deep purple в розовый | Удалён из despill. Не возвращать. | KB 8.2 (история фикса) |
 | **Закрытие дыр в маске** | Между лапкой и огнём провал alpha | `binary_fill_holes` только для МАЛЫХ дыр (`MAX_HOLE_PX=1500`). Большие — реальный фон, заполнять ≠ ОК | KB 7.5b |
 | **Серийная схожесть** | Pipeline ОК, но пользователь говорит «выглядит как соседний стикер серии» | До выбора окна — декодировать t=0 соседних `noms_<series>_*.webm` и убедиться что новый отличается **позой/атрибутом**, не только интенсивностью | KB 7.7 |
+| **Body/effect coupling** | Veo связывает body-motion и эффект (glow/sparks/electricity): жёстко ограничишь деформацию → пропадёт эффект; разрешишь squash & stretch → желе течёт | В промпте описывать тело и эффект как `TWO INDEPENDENT LAYERS` отдельными блоками с явным разделением. Layer 1 — RIGID silhouette, Layer 2 — INTENSE effect. | KB 8.4d |
 
 ## 5. Чеклист «перед сдачей»
 
