@@ -68,36 +68,52 @@ Reusable framework для всех ситуаций, когда **формула
 └──────────────────────────────────────────────────────────┘
 ```
 
-## 3. Severity Levels — какой UX подходит для какого guard'а
+## 3. Severity Levels (5-tier) — какой UX подходит для какого guard'а
 
-| Severity | Что значит | UX-pattern | Opt-out |
-|---|---|---|---|
-| **Hard block** | Жизненная угроза | Force override + non-dismissible banner + medical disclaimer | Нет |
-| **Soft override** | Долгосрочный риск, юзер может не понимать | Force override + dismissible banner + объяснение | Только с medical confirmation |
-| **Informational** | Точность снижена, но не опасно | Banner с информацией, цель не меняется | Опционально |
+Финальная матрица согласована между нутрициологом и mig-агентом (2026-05-17).
+Никаких альтернативных синонимов («medium», «warning», «alert») как отдельных категорий — каждый guard обязан указать severity по этой таблице.
 
-| Trigger | Severity | Что меняется | Opt-out возможен? |
+| Severity | Что значит | Override юзерского намерения | Banner | Opt-out |
+|---|---|---|---|---|
+| **hard block** | Жизнь/здоровье/legal mandatory. Ребёнок не consent'ит (FTC/California). | Да | non-dismissible | **Никогда** |
+| **hard regulated** | Долгосрочный медицинский риск, требует врач'а как gate. | Да | non-dismissible | **Только врач + audit log** (не self-consent) |
+| **soft override** | Risk, юзер может не знать, но может осознанно нарушить. | Да | dismissible | Voluntary с confirmation flow |
+| **informational** | Точность снижена / контекст полезен, но цель не меняется. | Нет | dismissible | N/A (нет override формулы) |
+| **silent accuracy** | Внутренний switch формулы для точности. Юзер ничего не теряет, ничего не выбирал. | Нет | **НЕТ** | N/A |
+
+### Trigger Table (re-classified per 5-tier)
+
+| Trigger | Severity | Что меняется | Why this tier |
 |---|---|---|---|
-| `<18 + lose` | Soft override | goal_type → maintain | Нет (РПП-риск) |
-| `<18 + gain/maintain` | Informational | Только banner | Не нужен (нет override) |
-| `>75` | Informational | Только banner | Не нужен |
-| `pregnancy=TRUE + lose` (будущее) | Hard block | Force maintain + добавить +300-500 kcal | Нет (медицинский lock) |
-| `BMI<14 + любой goal` (будущее) | Hard block | Force maintain | Нет |
-| `BMI<18.5 + lose` (будущее) | Soft override | goal_type → maintain | Да (если врач одобрил) |
-| `EA < 30 kcal/kg LBM` (будущее) | Soft override | Auto-raise calories | Да |
-| `diet break > 56 days` (будущее) | Soft override | 7-14 дней forced maintain | Да (если осознанно нарушает) |
+| `<18 + lose` | **hard block** | goal_type → maintain | Ребёнок не consent'ит на дефицит (FTC/California legal-protected). РПП-риск. |
+| `<18 + gain/maintain` | **informational** | Только banner («формулы адаптированы, мы не заменяем педиатра») | Нет override; legal cover banner для disclaimer. |
+| `>75` | **informational** | Только banner («таргеты менее точны, обсуди с гериатром») | Нет override; формула в mig 234 не меняется, в mig 236+ → silent accuracy switch. |
+| `pregnancy=TRUE + lose` | **hard block** | Force maintain + добавить +300-500 kcal по триместру | Medical floor; нейротоксична для плода. Pregnancy не self-consent'ится. |
+| `BMI<14 + любой goal` | **hard block** | Force maintain + recommend medical | Extreme cachexia, выживание; не self-consent. |
+| `BMI<18.5 + lose` | **hard regulated** | goal_type → maintain | Underweight; требует врач'а как gate, не voluntary self-consent. |
+| `BMI>60 + fast` | **hard regulated** | Clamp deficit на slow (-10%) + recommend medical | Морбидное ожирение; ускоренный дефицит = риск осложнений, нужен врач. |
+| `BMI>60` (slow/normal) | **informational** | Banner «обсуди план с врачом» | Не override, telemetry. |
+| `EA < 30 kcal/kg LBM` (RED-S) | **soft override** | Auto-raise calories до EA threshold | Voluntary acknowledgment; RED-S — long-term risk. |
+| `diet break > 56 days` | **soft override** | 7-14 дней forced maintain | Voluntary nullification возможен (осознанный choice). |
+| `min_kcal < BMR` или `< 1200ж/1500м` | **soft override** | Clamp до floor + warning «ниже BMR опасно» | Floor breach часто = misinput. Opt-out возможен только с medical doc. |
+| `athlete phenotype no-op` (P1) | **informational** | Banner «athlete-specific formula coming» | Telemetry, не override. |
+| `formula switch <18 Schofield/Molnar` (mig 236) | **silent accuracy** | Внутренний BMR switch | Юзер не выбирал Mifflin; не override, banner НЕТ. |
+| `formula switch >75 Lührmann` (mig 236) | **silent accuracy** | Внутренний BMR switch | Аналогично. |
+| `Katch-McArdle при known LBM` (P2) | **silent accuracy** | Switch BMR на Katch-McArdle | Аналогично. |
+| `ABW для obese` (P1) | **silent accuracy** | Switch target_weight на Adjusted Body Weight | Аналогично. |
 
 ## 4. Decision Tree для нового guard'а
 
-Перед spawn'ом новой миграции с guard ответь на 7 вопросов:
+Перед spawn'ом новой миграции с guard ответь на 8 вопросов:
 
 1. **Что триггерит?** (e.g., age<18, BMI<14, is_pregnant=TRUE, ea<30)
-2. **Severity?** (hard/soft/informational)
-3. **Что меняем в формуле?** (force goal_type, raise calories, clamp speed)
+2. **Severity?** (hard block / hard regulated / soft override / informational / silent accuracy — по 5-tier matrix)
+3. **Что меняем в формуле?** (force goal_type, raise calories, clamp speed, internal BMR switch)
 4. **JSON-поле telemetry?** (`<trigger>_warning`, value=<enum string>)
-5. **Auto-reset condition?** (юзер стукнул 18, BMI стало >18.5, …)
-6. **Opt-out flow?** (если да — поле в `user_overrides`, audit log)
-7. **Texts на 13 языках?** (5 translation keys × 13 langs = 65 строк → copywriter agent)
+5. **Auto-reset variant?** (full release / tier softening / tier escalation — см. §5b)
+6. **Opt-out flow?** (если да — `user_overrides` table, audit log, кто confirm'ит: юзер с medical doc / только врач / N/A)
+7. **Translation pipeline tier?** (по Rule 9 cultural review — L1/L2/N/A в зависимости от severity, см. §6)
+8. **Banner показывается?** (НЕТ для silent accuracy; иначе по severity)
 
 ## 5. Translation Keys — единый naming convention
 
@@ -130,7 +146,91 @@ warning.<trigger_family>.<severity>.auto_resolved     # «У тебя смени
 
 См. [[concepts/sassy-sage-multilingual-glossary]] для tone calibration.
 
-## 6. Storage Schema
+## 6. Auto-reset variants — НЕ только full release
+
+Когда условие меняется, guard может (а) сняться полностью, (б) softened на менее жёсткий tier, (в) escalated на более жёсткий tier. Caller (Python handler + auto-reset cron) обязан обрабатывать все три.
+
+### Variant A: Full release
+
+Условие, триггерившее guard, полностью disappeared. Guard gone.
+
+Примеры:
+- `age` достигает 18 → ВСЕ age-related guards снимаются (`underage_forced_maintain`, `underage_disclaimer`)
+- `is_pregnant` flag юзер сам выключает → pregnancy guards снимаются (с health-check follow-up)
+- `BMI` растёт с 13 до 19+ → BMI-related hard block снимается
+
+**UX:** one-shot Telegram message «Защита снята. <X> сменилось. Доступны прежние цели.» + clear из `users.shown_guards`.
+
+### Variant B: Tier softening (downgrade)
+
+Условие частично resolved — guard смягчается, но НЕ снимается полностью.
+
+Примеры:
+- Юзер 14 → 15 на `<18 + gain` — ранее force maintain (если бы был жёсткий guard для 13-14), теперь только disclaimer.
+- BMI 13 → 16 → guard переходит из **hard block** в **hard regulated**.
+- Diet break: 56 → 70 дней дефицита → guard escalates (см. variant C); но если юзер берёт 7-дневный break и возвращается → soft override gone, остаётся только informational «good job, maintained your break».
+
+**UX:** notification «<X> улучшилось. Защита смягчена с <hard> на <soft>. Что изменилось: …». Banner стиль меняется (например, red → yellow).
+
+### Variant C: Tier escalation (upgrade)
+
+Условие усугубилось — guard становится более жёстким.
+
+Примеры:
+- Юзер на goal=lose ушёл > 56 дней дефицита → diet break **soft override** активируется (если не был раньше).
+- BMI 17 → 14 → guard escalates с **hard regulated** на **hard block**.
+- Pregnancy detected (юзер заполнил флаг) → активируется **hard block** даже если ранее был `<18 + disclaimer`.
+
+**UX:** stronger notification + force user через soft modal ON next interaction («Заметили изменение. Меняем план питания. Пожалуйста, прочитай…»). Banner color & wording reflect новый severity.
+
+### Implementation: auto-reset cron
+
+```
+Daily cron (03:00 UTC):
+  FOR each registered user:
+    FOR each <trigger>_warning из shown_guards:
+      Re-evaluate trigger condition (re-run calculate_user_targets):
+        IF condition gone → variant A (full release)
+        IF condition softer → variant B (tier softening)
+        IF condition harsher → variant C (tier escalation)
+      Записываем в guard_audit_log событие auto_resolved / tier_changed
+      Шлём notification если variant ≠ no_change
+```
+
+## 7. Translation pipeline (per Rule 9 coordination protocol)
+
+Translation 13 langs ≠ cultural appropriateness. Pregnancy framing в исламских странах / РПП-стигма в Индии-Японии / elderly framing в Latin vs Northern Europe — variable per culture. Жёсткий tier'инг по severity:
+
+### Two-layer model (агреемент 2026-05-17)
+
+| Layer | Кто | Что делает | Когда обязательно |
+|---|---|---|---|
+| **L1: Clinical + first-pass cultural** | Нутрициолог | Проверяет clinical correctness переводов + first-pass cultural sanity (через [[concepts/sassy-sage-multilingual-glossary]] как guide). Помечает каждый key: `cultural-clean` или `cultural-flag-<region>-<topic>` (например `cultural-flag-AR-Ramadan`). | Для **всех** guard messaging перед production deploy |
+| **L2: Native cultural reviewer** | Native speaker per language family (6 reviewers max: Romance ES/PT/IT/FR, Germanic DE/EN, Slavic RU/PL/UK, Arabic-Persian AR/FA, HI, ID) | Activates **только** для flagged keys. Проверяет тонкости register, idiom appropriateness, региональные cultural taboos. | **Только** для hard block / hard regulated. Optional для soft override. NO для informational / silent accuracy. |
+
+### Tier'инг по severity
+
+| Severity | Translation pipeline | Cultural review |
+|---|---|---|
+| **hard block** | Copywriter + Sassy Sage glossary + **L1** + **L2 for flagged** | Mandatory (L1) + Mandatory if L1-flagged (L2) |
+| **hard regulated** | Copywriter + glossary + L1 + L2 for flagged | Mandatory (L1) + Mandatory if L1-flagged (L2) |
+| **soft override** | Copywriter + glossary + L1 (optional L2) | Mandatory L1; L2 optional только если бюджет позволяет |
+| **informational** | Copywriter + glossary | L1/L2 NOT required (excess process) |
+| **silent accuracy** | N/A (нет user-facing texts) | N/A |
+
+### Anti-pattern: literal/word-for-word translation
+
+❌ **Don't:** Прогон через Google Translate / DeepL без cultural pass.
+✅ **Do:** Каждый язык получает **adapted** message с учётом:
+- Идиом и сленга (DE `loggen` → false friend, лучше `tracken`; ES `apesta` региональное)
+- Гендерной политики (passive/1st-person bot/impersonal — НЕ slash gendered formats)
+- Telegram SRE constraints (≤35 chars/line, ≤12 lines/msg, ≤18 chars/button; романские +30% → idiomatic сжатие)
+- Cultural taboos (Ramadan для AR/FA/ID, war-blackout UK, halal/vegetarian HI/AR/FA/ID, national-food protection FR/IT/ES/PT)
+- RTL/script gotchas (AR bidi LRM/RLM, FA ZWNJ, UK anti-russianism via read-aloud test)
+
+Полный glossary — [[concepts/sassy-sage-multilingual-glossary]] (8 подразделов на язык: терминология / register / гендер / Telegram SRE / идиомы / anti-patterns / cultural taboos / RTL).
+
+## 8. Storage Schema
 
 ### `user_shown_guards` (JSONB on `users` table)
 
@@ -173,7 +273,7 @@ CREATE TABLE guard_audit_log (
 
 Caller пишет event при каждом show / override / resolve. Это **критично** для будущих legal claims «бот не предупредил подростка».
 
-## 7. Implementation Contract — что должен делать Caller
+## 9. Implementation Contract — что должен делать Caller
 
 `calculate_user_targets` возвращает `calculations.<trigger>_warning`. Caller (Python handler in `handlers/`) обязан:
 
@@ -187,23 +287,32 @@ Caller пишет event при каждом show / override / resolve. Это **
    - Banner color: red для hard, yellow для soft, blue для informational.
 4. **При detected auto-reset** (например, юзеру стукнуло 18) → отправить one-shot Telegram message «защита снята» + clear из `users.shown_guards`.
 
-## 8. Reusability — будущие applications
+## 10. Reusability — будущие applications
 
-Этот pattern применяется КО ВСЕМ следующим guards:
+Этот pattern применяется КО ВСЕМ следующим guards (severity по 5-tier matrix из §3):
 
 | Guard | Trigger | Severity | Когда implement |
 |---|---|---|---|
-| Age guards | <18 / >75 | Soft / Inform | ✅ mig 234 (готова) |
-| Underweight lose | BMI<18.5 + lose | Soft override | P0.5 (next session) |
-| BMI extremes | BMI<14 / BMI>60 | Hard / Soft | P0.4 |
-| Pregnancy/lactation | is_pregnant=TRUE | Hard block | P0.6 |
-| RED-S risk | EA<30 kcal/kg LBM | Soft override | P2.5 |
-| Diet break | 56+ days deficit | Soft override | P2.6 |
-| Min kcal floor | target < BMR | Soft override | P0.3 |
+| Age guard (underage lose) | `<18 + lose` | **hard block** | ✅ mig 234 |
+| Age disclaimer | `<18 + gain/maintain` | **informational** | ✅ mig 234 |
+| Elderly disclaimer | `>75` | **informational** | ✅ mig 234 |
+| Pregnancy / lactation | `is_pregnant=TRUE` | **hard block** | P0.6 |
+| BMI extreme low | `BMI<14` | **hard block** | P0.4 (объединено с P0.3 в одной mig) |
+| Underweight lose | `BMI<18.5 + lose` | **hard regulated** | P0.4 |
+| BMI extreme high + fast | `BMI>60 + fast` | **hard regulated** | P0.4 |
+| BMI extreme high (general) | `BMI>60` | **informational** | P0.4 |
+| Min kcal floor | `target < BMR` или `< 1200ж/1500м` | **soft override** | P0.3 (объединено с P0.4) |
+| RED-S risk | `EA < 30 kcal/kg LBM` | **soft override** | P2.5 |
+| Diet break | `56+ days deficit` | **soft override** | P2.6 |
+| Athlete formula no-op | `phenotype='athlete'` | **informational** | P1 (athlete telemetry) |
+| Formula switch <18 | Internal Schofield/Molnar | **silent accuracy** | P1.5 (mig 236+) |
+| Formula switch >75 | Internal Lührmann | **silent accuracy** | P1.5 |
+| ABW для obese | Internal Adjusted Body Weight | **silent accuracy** | P1 |
+| Katch-McArdle при LBM | Internal switch | **silent accuracy** | P2.3 |
 
 **Когда любой агент будет писать новый guard — он сверяется с этим pattern**, не пишет UX с нуля.
 
-## 9. Architecture Beyond SQL — что должен сделать команда после mig
+## 11. Architecture Beyond SQL — что должен сделать команда после mig
 
 Каждый guard — это **не только миграция**. После SQL apply нужно:
 
@@ -219,7 +328,7 @@ Caller пишет event при каждом show / override / resolve. Это **
 
 **Без этих 9 пунктов мiграция — мёртвый код.** Калькулятор может быть идеальным, но юзер про guard не узнает, claims «no medical disclaimer» легитимны, retention падает.
 
-## 10. mig 234 — конкретный плановый rollout
+## 12. mig 234 — конкретный плановый rollout
 
 После apply mig 234 (текущая сессия) — **6 параллельных задач** для полной integration:
 
@@ -234,7 +343,7 @@ Caller пишет event при каждом show / override / resolve. Это **
 
 Полный list — в `claude-memory-compiler/handover/2026-05-17_mig234_post_apply_tasks.md` (будет создан после mig 234 merge).
 
-## 11. Anti-Patterns — что НЕ делать
+## 13. Anti-Patterns — что НЕ делать
 
 ❌ **Silent override без UI.** Подменили goal, юзер не видит — претензия гарантирована.
 
