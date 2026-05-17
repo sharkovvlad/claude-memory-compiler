@@ -206,6 +206,44 @@ git diff origin/main..HEAD --stat
 - Защита 1 ловит при создании / push в PR (серверный аудит).
 - Защита 3 ловит уже-существующие PR, созданные до того, как защита 1 появилась в main (backup).
 
+## Lesson 2026-05-17: smoke-test grep ловил INFO/WARNING как ERROR (run #60)
+
+**Симптом:** deploy после merge mig 241 упал (run #60, exit code 1) на строке:
+```
+WARNING: health probe FAIL 1/7: error: All connection attempts failed
+```
+Бот при этом работал нормально — это transient health-probe retry первой попытки после рестарта, через 1-2 секунды OK.
+
+**Корневая причина:** smoke-test шаг в `.github/workflows/deploy.yml` использовал:
+```bash
+grep -iE 'error|critical|traceback|exception'
+| grep -ivE 'no error|0 errors|error_workflow'
+```
+Case-insensitive grep на **слово** «error» в любой части строки. Ловил:
+- INFO про NPC юзеров: `[noms.telegram] INFO: Chat XXX not found, ... error_code:400` (штатное);
+- WARNING про health-probe retry с описанием причины «error: All connection attempts failed»;
+- любые сообщения с словом error в context-описании.
+
+Комментарий в workflow утверждал «игнорим INFO и WARNING», но реализация это не делала — grep смотрел только на текст сообщения, не на log-level marker.
+
+**Фикс:** case-sensitive grep по Python-logging level markers:
+```bash
+grep -E '(ERROR|CRITICAL): |Traceback \(most recent call last\)'
+| grep -vE 'error_workflow'
+```
+- `(ERROR|CRITICAL): ` (с пробелом после двоеточия) — стандартный формат `logging.basicConfig` префикс.
+- `Traceback (most recent call last)` — Python uncaught exception stack начало.
+- `error_workflow` оставляем как whitelist (n8n field name).
+
+**Validation на проде** (30 мин логов до фикса):
+- Старый grep: 4 false-positive (все INFO с `error_code:400` про NPC чаты).
+- Новый grep: 0 false-positive.
+- Реальные ERROR/CRITICAL продолжают ловиться — проверено по структуре уровня.
+
+**Когда применять lesson:** при любом «deploy упал на smoke-test» — сначала проверь живой бот через `curl /health` + `systemctl is-active`. Если бот живой — это false positive grep'а, не реальная ошибка. Раскачивать кнопку «Re-run jobs» без проверки бота нельзя (если что-то реально упало, re-run второй раз тоже упадёт).
+
+**PR с фиксом:** [#92](https://github.com/sharkovvlad/noms-bot/pull/92).
+
 ## Related Concepts
 
 - [[concepts/n8n-self-hosting]] — VPS infra
