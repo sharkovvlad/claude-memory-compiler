@@ -232,6 +232,8 @@ Translation 13 langs ≠ cultural appropriateness. Pregnancy framing в исла
 
 ## 8. Storage Schema
 
+> **Status: applied 2026-05-17, migration 239** ([PR #89](https://github.com/sharkovvlad/noms-bot/pull/89)). Все три объекта (`users.shown_guards`, `user_overrides`, `guard_audit_log`) живут на проде. Schemas verified through `information_schema` + `pg_indexes` + `pg_constraint`. См. также [[daily/2026-05-17]].
+
 ### `user_shown_guards` (JSONB on `users` table)
 
 ```sql
