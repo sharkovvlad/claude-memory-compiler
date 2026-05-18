@@ -58,6 +58,7 @@
 | [#100](https://github.com/sharkovvlad/noms-bot/pull/100) | merged 15:10 UTC | mig 262-265 + Python (personal_metrics fixes + template_vars + safety_guards.py) |
 | [#101](https://github.com/sharkovvlad/noms-bot/pull/101) | merged 15:37 UTC | mig 266-267 + webhook ordering (Markdown→HTML + Sassy Sage + modal-before-menu) |
 | **[#102](https://github.com/sharkovvlad/noms-bot/pull/102)** | **OPEN — нужен merge owner'ом** | mig 268 + router.py 14 callbacks (UX quick wins + women_health flow unblock) |
+| **[#103](https://github.com/sharkovvlad/noms-bot/pull/103)** | **OPEN — нужен merge owner'ом** | mig 269: 352 native translations (32 keys × 11 langs) + Markdown→HTML fix в onboarding maternal texts. Closes ES user EN-fallback bug. |
 
 **Auto-deploy:** GitHub Actions `deploy.yml` триггерится на push в main → rsync → restart services. ~40-60 секунд.
 
@@ -187,10 +188,11 @@ ES user видит EN текст — fallback. Поскольку мы (мигр
 
 ### Близкое (закрыть P0 fully)
 
-**1. Mig 269 deploy + verify** (in-flight agent)
-- Когда agent return — review SQL + sentinel check 3-5 langs
-- Apply + commit + PR
-- After merge → ES user видит «📏 Mis Métricas / Comprueba tus parámetros...»
+**1. Mig 269 deploy + verify** ✅ **DONE — PR [#103](https://github.com/sharkovvlad/noms-bot/pull/103) open, ждёт merge**
+- Translation agent applied на prod (352 entries + Markdown fix в onboarding maternal)
+- 9 langs L1 clean (ES/DE/FR/IT/PT/PL/UK/ID/HI), AR/FA L2-flagged для Fiverr review (deferred)
+- Branched off origin/main fresh — clean diff (1 file +3617 lines)
+- После merge → ES user увидит «📏 Mis Datos / Comprueba tus parámetros...»
 
 **2. bmi/min_kcal warning copy (~351 entries × 13 langs)**
 - Brief готов: [bmi_min_kcal_copywriter_brief.md](./2026-05-18_bmi_min_kcal_copywriter_brief.md)
