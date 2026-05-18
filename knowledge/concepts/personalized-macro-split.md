@@ -227,6 +227,98 @@ PR: [noms-bot#75](https://github.com/sharkovvlad/noms-bot/pull/75). Daily: [[dai
 
 PR: [noms-bot#81](https://github.com/sharkovvlad/noms-bot/pull/81) — **merged 2026-05-16**. Daily: [[daily/2026-05-16]].
 
+### v6 — mig 234 (2026-05-17): age safety guards
+
+Уже подробно описано в KB и daily/2026-05-17. Краткая ссылка для контекста v7: v6 ввёл два новых блока в формулу — Step 2 «Age + safety guards» (forced maintain при `<18+lose`, informational warning при `>75`) и трёхпольную telemetry в JSON (`age_warning`, `original_goal_type`, `effective_goal_type`). Steps 6 и 8 переключены с `v_user.goal_type` на `v_effective_goal_type = COALESCE(v_forced_goal_type, v_user.goal_type)`. PR [#86](https://github.com/sharkovvlad/noms-bot/pull/86), merged.
+
+### v7 — mig 246 (2026-05-18): safety baseline guards (min kcal floor + BMI-aware tiered)
+
+**Что починили.** До v7 формула давала любой результат, даже клинически опасный: BMI 11 с целью maintain мог получить 800 ккал, BMI 65 с lose+fast — −20% дефицит от 3267 ккал → нагрузка на сердце. v7 — atomic safety baseline через 4 новых guard под feature flags для granular rollback.
+
+**Изменения (на одной CREATE OR REPLACE):**
+
+1. **Step 1b — BMI sanity + BMI-aware guards (P0.4):**
+
+   ```sql
+   v_bmi := v_user.weight_kg / POWER(v_user.height_cm / 100.0, 2);
+
+   IF v_bmi < 14 THEN
+       v_forced_goal_type := 'maintain';
+       v_bmi_warning      := 'extreme_cachexia_recommend_medical';   -- hard block
+   ELSIF v_bmi < 18.5 AND v_user.goal_type = 'lose' THEN
+       v_forced_goal_type := 'maintain';
+       v_bmi_warning      := 'underweight_lose_override';            -- hard regulated
+   ELSIF v_bmi > 60 AND v_user.goal_type = 'lose'
+                    AND v_user.goal_speed IN ('fast','normal') THEN
+       v_user.goal_speed := 'slow';                                  -- clamp speed
+       v_bmi_warning     := 'extreme_obesity_clamp_slow';            -- hard regulated
+   ELSIF v_bmi > 60 THEN
+       v_bmi_warning := 'extreme_obesity_informational';             -- informational
+   END IF;
+   ```
+
+   Tiered policy, **не RETURN ERROR**. BMI 13.5 не ломает Profile screen, только enforces force maintain + recommends medical. BMI и age guards могут срабатывать вместе — оба пишут в `v_forced_goal_type='maintain'`, результат идентичен; telemetry полей два (`bmi_warning` + `age_warning`).
+
+2. **Step 8b — Min kcal floor (P0.3):**
+
+   ```sql
+   v_medical_floor := CASE LOWER(TRIM(v_user.gender))
+       WHEN 'female' THEN 1200
+       WHEN 'f'      THEN 1200
+       ELSE               1500
+   END;
+   v_min_kcal_floor := GREATEST(v_medical_floor, ROUND(v_bmr)::INTEGER);
+
+   IF v_target < v_min_kcal_floor THEN
+       IF ROUND(v_bmr)::INTEGER > v_medical_floor THEN
+           v_min_kcal_warning := 'bmr_floor_triggered';
+       ELSIF LOWER(TRIM(v_user.gender)) IN ('female','f') THEN
+           v_min_kcal_warning := 'medical_floor_1200_triggered';
+       ELSE
+           v_min_kcal_warning := 'medical_floor_1500_triggered';
+       END IF;
+       v_target := v_min_kcal_floor;
+   END IF;
+   ```
+
+   Compromise per agent 234 dialog: `GREATEST(actual_target, medical_floor, BMR)`. Источники: medical floor 1200ж/1500м — WHO/ACSM/EFSA industry standard; BMR — physiological floor (под BMR = подавление щитовидки + потеря мышц).
+
+3. **Step 8c — guard_audit_log INSERTs** (для FTC/legal traceability). Защищены `to_regclass`-guard'ом на случай rollback storage (defensive net). trigger_name формат `bmi_aware_<warning>` / `<min_kcal_warning>`; metadata содержит bmi/goal/target_before/after/bmr.
+
+4. **JSON return +4 полей** в `calculations`: `bmi_value`, `bmi_warning`, `min_kcal_warning`, `min_kcal_floor_applied`.
+
+5. **app_constants feature flags** (INSERT): `safety_guard_min_kcal_enabled`, `safety_guard_bmi_14_enabled`, `safety_guard_bmi_185_enabled`, `safety_guard_bmi_60_enabled` — все `true`. Каждый guard в SQL читает свой флаг через `COALESCE((SELECT ... ), TRUE)` — granular rollback без миграции.
+
+6. **COMMENT** → `'v7 (mig 246): safety baseline (min_kcal_floor + BMI-aware guards). v6 (mig 234) age guards preserved 1:1.'`
+
+**Sentinel verification** (8 кейсов через transactional ROLLBACK на проде):
+
+| # | Профиль | Expected | Actual |
+|---|---|---|---|
+| 1 | F/30/165/30 (BMI 11) maintain | extreme_cachexia, force maintain | ✅ target=1378, bmi_w=extreme_cachexia_recommend_medical |
+| 2 | F/25/165/45 (BMI 16.5) lose+normal | underweight_lose_override, force maintain | ✅ target=1613, effective_goal=maintain |
+| 3 | F/40/165/175 (BMI 64) lose+fast | clamp_slow (10% deficit) | ✅ target=2940 (TDEE=3267, eff_def=10.0%) |
+| 4 | F/40/165/175 (BMI 64) maintain | informational | ✅ target=3268, bmi_w=extreme_obesity_informational |
+| 5 | F/45/160/40 (BMI 15.6) lose+fast | underweight_lose_override | ✅ target=1370 (BMI guard takes precedence over min_kcal) |
+| 6 | M/40/170/55 (BMI 19) lose+fast | (no trigger if target ≥1500) | ✅ target=1532 — выше 1500 floor, нет trigger |
+| 7 | F/30/165/70 sed+cardio lose+slow | NULL warnings, target=1728 (v6 baseline) | ✅ v6=1728, v7=1728 — exact match |
+| 8 | M/25/180/75 mod+strength gain+normal | NULL warnings, baseline match | ✅ v6=2415, v7=2415 — exact match |
+
+**Эффект на existing prod users** (5 registered, все BMI 22-26.6, none triggers any guard): **delta=0** для всех kcal/P/F/C. Verified против snapshot `users_targets_backup_20260518_pre_v7`.
+
+**Audit log live verification**: BMI=11 maintain sentinel → 1 row в `guard_audit_log`: `trigger_name='bmi_aware_extreme_cachexia_recommend_medical'`, `event='triggered'`, `metadata={'bmi': 11.02, 'goal_type': 'maintain', 'goal_speed': 'normal'}`. ✅ INSERT работает на live storage (mig 239).
+
+**Latency:** p95 = **44.11 ms** (25 runs persistent psycopg2 с VPS). Дельта v6→v7 ≈ +0 ms — новые IF блоки + COALESCE flag lookups hit same `app_constants(key)` PK index, цена незаметна. Target <50 ms — OK.
+
+**Pattern для будущих guard'ов:** каждый новый safety guard в v7+ должен (1) иметь `<trigger>_warning` JSON поле (snake_case, NOT boolean, enum string), (2) использовать feature flag `safety_guard_<family>_enabled` (default `TRUE`), (3) писать в `guard_audit_log` через `to_regclass`-guarded INSERT, (4) preserve существующую логику 1:1 (`v_forced_goal_type` накапливается без stomp; multiple guards могут сработать одновременно). См. [[concepts/safety-guard-ux-pattern]] §3 для severity classification.
+
+**Что НЕ покрыто v7** (отложено):
+- **P0.6 pregnancy/lactation** (`is_pregnant=TRUE+lose → force maintain + +340/+452 kcal по триместру`). Заблокировано на UX-wireframe.
+- **P1.5 age-aware formulas** (Schofield-HW для healthy <18, Molnar для obese <18, Lührmann для >75). Reclassified в P1 как silent accuracy — Mifflin replaced без banner.
+- BMI cutoffs остаются strict `<14 / <18.5 / >60` (не >18.5 для underweight). Soft transitions (BMI 18.5-20 + lose с disclaimer) — backlog при появлении real users в borderline zone.
+
+PR (pending review). Daily: [[daily/2026-05-18]].
+
 **Digital twin (Google Sheets v6.3).** Pre-staging pattern — владелец заложил v5-формулы под `_proposal_vN` суффиксом ДО apply миграции, после merge mig 230 "proposals" автоматически стали ground truth без переписывания формул. Verification: твин для INPUT F/30/165/70 sed+cardio lose+slow default даёт 1728/98/56/208 — EXACT MATCH с live прод v5. **Pattern для будущих v6, v7...:** закладывать новые константы и формулы в твин под суффиксом `_proposal_vN` параллельно с написанием миграции; после merge владелец срезает суффикс. Никакого переписывания формул на стороне агента-нутрициолога не требуется.
 
 ## Related Concepts

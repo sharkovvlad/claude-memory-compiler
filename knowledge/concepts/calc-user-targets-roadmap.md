@@ -19,13 +19,18 @@ Living document. **P0 = active sprint** (focus). **P1+ = backlog** (defer until 
 
 Все задачи маркируются по [[concepts/agent-collaboration-protocol]] Rule 1 severity. Migrations apply через mig-engineer ownership (Rule 4). Клинические решения per task — clinical owner (Rule 4).
 
-## Status (на 2026-05-17)
+## Status (на 2026-05-18)
 
-- **Prod state:** mig 234 (v6) — Age guards baseline (`<18+lose` → forced maintain, `>75` → informational warning). PR [#86](https://github.com/sharkovvlad/noms-bot/pull/86) **merged**.
-- **In-flight closing artifacts mig 234:**
-  - Copywriter spawn для 156 translation entries (3 warnings × 4 surfaces × 13 langs) — brief в `handover/2026-05-17_mig234_copywriter_brief.md`
-  - Storage migration N+1 (`shown_guards JSONB` + `user_overrides` + `guard_audit_log`)
-  - Python handler updates (Profile/day_summary читают `age_warning` + `effective_goal_type` → banner)
+- **Prod state:** mig 246 (v7) — **Safety baseline guards** (min_kcal_floor + BMI-aware tiered). PR pending review. v6 (mig 234) age guards preserved 1:1.
+- **Closed P0 deliverables (2026-05-17/18):**
+  - mig 234 (v6) age guards baseline — **merged** PR [#86](https://github.com/sharkovvlad/noms-bot/pull/86)
+  - mig 239 storage infrastructure (`shown_guards JSONB` + `user_overrides` + `guard_audit_log`) — **merged** PR [#89](https://github.com/sharkovvlad/noms-bot/pull/89)
+  - mig 240/241/242 age-warning translations (13 langs × 12 keys + L2 cultural review pass 1+2) — **merged** PR #90/#91/#92
+  - mig 246 (v7) safety baseline (P0.3+P0.4) — **applied** на prod, PR pending (this session)
+- **Open closing artifacts:**
+  - Python handler updates для v6 (Profile/day_summary читают `age_warning` + `effective_goal_type` → banner) — handover в `handover/2026-05-17_age_warnings_python_handler_brief.md`
+  - Python handler updates для v7 (`bmi_warning` + `min_kcal_warning` rendering)
+  - v7 copywriter spawn (5 warning families × 5 surfaces × 13 langs = ~325 translation entries для bmi/min_kcal)
 - **Coordination protocol:** [[concepts/agent-collaboration-protocol]] (10 правил)
 - **UX-pattern:** [[concepts/safety-guard-ux-pattern]] v2 (5-tier severity + L1/L2 cultural review + auto-reset variants)
 
@@ -45,9 +50,9 @@ Focus discipline: только safety baseline. Accuracy fixes (formulas, vegan,
 | Auto-reset | full release при стуkнет 18 (см. [[concepts/safety-guard-ux-pattern]] §5b) |
 | Closing artifacts | Copywriter spawn pending, storage mig pending, Python handlers pending |
 
-## P0.3 + P0.4 → **Mono-mig: Safety baseline guards**
+## P0.3 + P0.4 ✅ DONE — Mono-mig: Safety baseline guards (mig 246)
 
-**Объединены в одну atomic migration** `<NNN>_safety_baseline_guards.sql` per agent 234 proposal (accepted). Семантически связаны — оба про «защита от опасных таргетов».
+**Объединены в одну atomic migration** `migrations/246_safety_baseline_guards.sql` per agent 234 proposal (accepted). Семантически связаны — оба про «защита от опасных таргетов». Applied на prod 2026-05-18; v6 age guards preserved 1:1; prod 5 users delta = 0; p95 = 44.1 ms (target <50).
 
 ### P0.3 sub: Min kcal floor
 
@@ -73,15 +78,15 @@ Focus discipline: только safety baseline. Accuracy fixes (formulas, vegan,
 
 ### Mono-mig артефакты
 
-| Field | Value |
-|---|---|
-| Файл | `<NNN>_safety_baseline_guards.sql` (NNN = следующий свободный, проверить через protocol Rule 7) |
-| Sentinel total | 8 кейсов в одном run |
-| COMMENT | `v7 (mig NNN): safety baseline (min_kcal_floor + BMI-aware guards). v6 (mig 234) age logic preserved.` |
-| Snapshot | `users_targets_backup_<DATE>` |
-| Backfill | Стандартный DO-блок recalc всех registered |
-| p95 target | <50 ms (current baseline 43ms + ~5ms на новые проверки) |
-| Deps | Storage migration N+1 (`shown_guards`, `user_overrides`, `guard_audit_log`) merged ПЕРЕД apply |
+| Field          | Value                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------ |
+| Файл           | `<NNN>_safety_baseline_guards.sql` (NNN = следующий свободный, проверить через protocol Rule 7)        |
+| Sentinel total | 8 кейсов в одном run                                                                                   |
+| COMMENT        | `v7 (mig NNN): safety baseline (min_kcal_floor + BMI-aware guards). v6 (mig 234) age logic preserved.` |
+| Snapshot       | `users_targets_backup_<DATE>`                                                                          |
+| Backfill       | Стандартный DO-блок recalc всех registered                                                             |
+| p95 target     | <50 ms (current baseline 43ms + ~5ms на новые проверки)                                                |
+| Deps           | Storage migration N+1 (`shown_guards`, `user_overrides`, `guard_audit_log`) merged ПЕРЕД apply         |
 
 ## P0.6 — Pregnancy / Lactation flag + защита
 
