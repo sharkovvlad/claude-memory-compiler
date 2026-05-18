@@ -68,6 +68,20 @@ Reusable framework для всех ситуаций, когда **формула
 └──────────────────────────────────────────────────────────┘
 ```
 
+## 2b. Implementation Status (2026-05-18)
+
+5 touch-points → текущее state на проде:
+
+| # | Touch-point | Status | Where |
+|---|---|---|---|
+| 1 | Onboarding inline modal | ⏳ in flight | mig 259 (in background agent — F/15-50 maternal question) |
+| 2 | Profile passive banner | ✅ implemented | mig 252 (my_plan) + mig 256 (personal_metrics + profile_main) — distributed enforcement через helper `build_safety_guard_banner_block` |
+| 3 | First-trigger card (modal_full) | ❌ NOT implemented | Требует Python hook reading `users.shown_guards` JSONB. modal_full тексты уже в `ui_translations` (mig 240/258). |
+| 4 | Retrofit cron | ❌ NOT implemented for maternal | Требует APScheduler worker filtering F/15-50 с `is_pregnant IS NULL` (partial index `idx_users_maternal_protective` готов в mig 253). |
+| 5 | Auto-reset | ❌ NOT implemented | Daily cron scan для users где warning enum cleared (age→18, BMI cleared, pregnancy ended). `auto_resolved` тексты уже в `ui_translations`. |
+
+**Distributed banner enforcement principle (touch-point #2):** banner ОБЯЗАН быть на всех screens где user видит/меняет goal_type или данные формулы. Не только `my_plan`. Cм. mig 256 — закрыл pad с `personal_metrics` + `profile_main`. Если добавляется новый профильный screen — обязательно добавить `{banner_block}` placeholder + extend business_data_rpc через helper.
+
 ## 3. Severity Levels (5-tier) — какой UX подходит для какого guard'а
 
 > **Canonical source:** [[concepts/agent-collaboration-protocol]] Rule 1. Эта секция — UX-extension с banner specifics + emoji prefix; severity vocabulary владеет protocol-документ.

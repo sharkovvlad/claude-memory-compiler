@@ -6,7 +6,19 @@
 
 ---
 
-## TL;DR — где мы (2026-05-18 13:00 UTC)
+## TL;DR — где мы (2026-05-18 14:30 UTC, updated post-PR #98)
+
+**С момента первоначального handover'а (13:00) добавлено:**
+- ✅ PR #98 open — mig 256+257+258 (banner extension + female health UI + maternal i18n) applied на prod
+- ✅ Banner injection теперь на 3 screens: `my_plan` + `personal_metrics` + `profile_main` (закрывает bug owner'а от live-test'а)
+- ✅ `🌸 Женское здоровье` Progressive Disclosure UI — F users могут установить is_pregnant/is_lactating через Profile
+- ✅ Maternal translations 13 langs applied (156 entries)
+- ✅ Pregnancy + gain clinical decision ALLOW confirmed by owner + zapisан в clinical spec §6b
+- ⏳ Onboarding maternal step для F/15-50 — agent в фоне работает (mig 259+)
+
+**Live-test verified 2026-05-18 ~13:30 UTC:** owner подтвердил banner работает на «🚀 Мой план» для 786301802 (16yo F maintain) с текстом «Считаю по подростковым формулам». Item #2 P0 officially end-to-end в продакшене.
+
+## TL;DR — где мы (2026-05-18 13:00 UTC, historical)
 
 P0 sprint roadmap'а `calculate_user_targets` **практически закрыт на SQL уровне**:
 
