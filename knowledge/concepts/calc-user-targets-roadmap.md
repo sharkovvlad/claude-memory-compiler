@@ -19,20 +19,28 @@ Living document. **P0 = active sprint** (focus). **P1+ = backlog** (defer until 
 
 Все задачи маркируются по [[concepts/agent-collaboration-protocol]] Rule 1 severity. Migrations apply через mig-engineer ownership (Rule 4). Клинические решения per task — clinical owner (Rule 4).
 
-## Status (на 2026-05-18)
+## Status (на 2026-05-18 — P0 sprint SQL-side CLOSED, готов к UX/translations finish)
 
-- **Prod state:** mig 246 (v7) — **Safety baseline guards** (min_kcal_floor + BMI-aware tiered). PR pending review. v6 (mig 234) age guards preserved 1:1.
+- **Prod state:** mig 254 (v8) — **Maternal safety guard** (pregnancy/lactation/protective). v7 BMI+min_kcal preserved. v6 age preserved. mig 252 banner injection family-agnostic для my_plan screen.
 - **Closed P0 deliverables (2026-05-17/18):**
   - mig 234 (v6) age guards baseline — **merged** PR [#86](https://github.com/sharkovvlad/noms-bot/pull/86)
   - mig 239 storage infrastructure (`shown_guards JSONB` + `user_overrides` + `guard_audit_log`) — **merged** PR [#89](https://github.com/sharkovvlad/noms-bot/pull/89)
   - mig 240/241/242 age-warning translations (13 langs × 12 keys + L2 cultural review pass 1+2) — **merged** PR #90/#91/#92
-  - mig 246 (v7) safety baseline (P0.3+P0.4) — **applied** на prod, PR pending (this session)
-- **Open closing artifacts:**
-  - Python handler updates для v6 (Profile/day_summary читают `age_warning` + `effective_goal_type` → banner) — handover в `handover/2026-05-17_age_warnings_python_handler_brief.md`
-  - Python handler updates для v7 (`bmi_warning` + `min_kcal_warning` rendering)
-  - v7 copywriter spawn (5 warning families × 5 surfaces × 13 langs = ~325 translation entries для bmi/min_kcal)
+  - mig 246 (v7) safety baseline (P0.3+P0.4) — **merged** PR [#94](https://github.com/sharkovvlad/noms-bot/pull/94)
+  - **mig 252 banner injection (P0.8 passive-banner #2)** — applied на prod, [PR #96](https://github.com/sharkovvlad/noms-bot/pull/96) open
+  - **mig 253+254 (P0.6 pregnancy/lactation v8)** — applied на prod, [PR #96](https://github.com/sharkovvlad/noms-bot/pull/96) open
+- **Open closing artifacts (next sessions):**
+  - **Live-test в боте** — see [handover/2026-05-18_nutritionist_session_close.md](../../handover/2026-05-18_nutritionist_session_close.md) §A для recipe
+  - **Translations bmi/min_kcal banner texts** (~351 entries × 13 langs) — brief: [handover/2026-05-18_bmi_min_kcal_copywriter_brief.md](../../handover/2026-05-18_bmi_min_kcal_copywriter_brief.md)
+  - **Translations maternal banner texts** (~221 entries × 13 langs) — 17 keys в [pregnancy-lactation-clinical-spec.md §5](pregnancy-lactation-clinical-spec.md)
+  - **Onboarding step + Profile toggle + retrofit cron** для maternal status (Option D approved)
+  - **Auto-reset cron** для pregnancy `due_date+30d` и lactation `started+24mo`
+  - **First-trigger modal (#3 touch-point)** — Python hook reading `shown_guards`
+- **Deferred to P2 (по design decision 2026-05-18):**
+  - **EA > 30 ккал/кг LBM (RED-S protection)** — rationale в [[concepts/energy-availability-design-decision]]. Зависит от P2.1 waist + P2.5a workout tracking.
 - **Coordination protocol:** [[concepts/agent-collaboration-protocol]] (10 правил)
 - **UX-pattern:** [[concepts/safety-guard-ux-pattern]] v2 (5-tier severity + L1/L2 cultural review + auto-reset variants)
+- **Banner injection pattern:** [[mig 252]] family-agnostic — auto-renders new families когда переводы appear под `warning.<family>.<enum>.banner_*`. No code change needed для bmi/min_kcal/maternal once copy ready.
 
 ---
 
