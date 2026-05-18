@@ -9,6 +9,37 @@
 > - Как input для AI-копирайтеров (включать соответствующую секцию в брифинг).
 > - Перед native Fiverr review — чтобы reviewer понимал tone-doc, не только литературный перевод.
 
+## 🏁 Phase 4 Applied State (2026-05-18)
+
+Все 11 не-EN языков прошли writer→critic→merge pipeline и applied в БД. **~286 культурно-адаптированных переводов, 0 auto-rejections** на оси anti-shame.
+
+| Lang | Mig | Writer | Anti-shame | Key feature |
+|---|---|---|---|---|
+| ES | 232 | (Phase 3 pilot) | 5/5 | `apuntar`, «un bajón», `coger` LatAm ловушка |
+| DE | 233 | B+/8 (80%) | 5/5 | `tracken` (not loggen), Oktoberfest |
+| FR | 235 | 4.1/5 (82%) | 5/5 | `noter`, COD-postposé, food patrimoine |
+| IT | 243 | 4.4/5 (88%) | 5/5 | `registrare`, cucina sacra, mafia removed |
+| PT-BR | 244 | 8.2/10 (82%) | 5/5 | `anotar` BR-PT, race-loaded scrubbed |
+| PL | 245 | 4.4/5 (88%) | 4.98/5 | `zapisać` (zalogować=sign-in!), polonez |
+| UK | 247 | 4.6/5 (92%) | 5.00/5 | War-blackout post-2022, anti-russianism, gopak |
+| ID | 248 | 4.3/5 (86%) | 5/5 | `catat`, halal-safe, gender-neutral grammar |
+| HI | 249 | B+/4.0 (80%) | 5/5 | 100% Hinglish-Latin, paneer/dal (not chicken) |
+| AR | 250 | B+/3.7 (74%) | 5/5 | MSA+Egyptian, LRM 15/26, religious wink fixed |
+| FA | 251 | A- (90%) | 5/5 | ZWNJ 24/26, gender-neutral grammar, apolitical |
+
+**Snapshots для rollback:** `backup_ui_translations_<lang>_pilot_2026051[78]` — 11 tables, drop ≥ 7 days post-deploy stability.
+
+**Pipeline recipe:** [[concepts/ui-translations-bulk-update-recipe]] — canonical 10-step workflow.
+
+**PR history:**
+- PR #83 (ES) — merged 17.05
+- PR #84 (DE) — merged 17.05
+- PR #85 (FR) — merged 17.05
+- PR #93 (IT/PT/PL) — merged 17.05
+- PR #95 (UK/ID/HI/AR/FA, mig 247-251 после renumber) — open 18.05
+
+**Migration collision lesson** (18.05): parallel agent занял mig 246 (`safety_baseline_guards`) пока я делал UK как 246. Resolved через reset + renumber 246-250 → 247-251 + sed-update of SQL comments + recommit с original messages + `--force-with-lease`. Live DB unaffected (snapshot tables named by `<lang>_pilot_<date>`, не by mig#).
+
 ---
 
 ## 1. Персонаж NOMS — Sassy Sage (universal)
