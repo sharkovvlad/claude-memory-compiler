@@ -6,7 +6,28 @@
 
 ---
 
-## TL;DR — где мы (2026-05-18 14:30 UTC, updated post-PR #98)
+## TL;DR — где мы (2026-05-18 15:30 UTC, FINAL post-mig 260)
+
+**Session deliverables (6 SQL migrations + 1 Python file, +3010 lines, applied на prod):**
+- mig 252 — banner injection my_plan (PR #96 merged)
+- mig 253+254 — pregnancy/lactation schema + v8 RPC (PR #96 merged)
+- **PR #98 OPEN** — содержит mig 256+257+258+259+260+router.py:
+  - mig 256 banner extension → personal_metrics + profile_main
+  - mig 257 `🌸 Женское здоровье` Progressive Disclosure UI
+  - mig 258 maternal translations 13 langs (156 entries)
+  - mig 259 onboarding maternal step F/15-50 (3 buttons + recalc)
+  - mig 260 Profile picker prefer-not cleanup
+  - dispatcher/router.py — 3 maternal statuses в BUTTON_ONLY + ONBOARDING frozensets
+
+**P0 status:**
+- ✅ Item #2 Teen <18 — end-to-end **verified live** (owner screenshot 13:30 UTC)
+- ✅ Item #1 Pregnancy/lactation — full closeout: schema + calc + UI + onboarding + i18n
+- ✅ Item #3 Kcal floor — backend ready; banner текст pending bmi/min_kcal copywriter session
+- ⏳ Item #4 EA — deferred P2 ([energy-availability-design-decision.md](../knowledge/concepts/energy-availability-design-decision.md))
+
+**После PR #98 merge auto-deploy** — router.py попадёт на VPS; новые F/15-50 юзеры начнут видеть maternal onboarding step при /start.
+
+## TL;DR — где мы (2026-05-18 14:30 UTC, historical post-PR #98 init)
 
 **С момента первоначального handover'а (13:00) добавлено:**
 - ✅ PR #98 open — mig 256+257+258 (banner extension + female health UI + maternal i18n) applied на prod
