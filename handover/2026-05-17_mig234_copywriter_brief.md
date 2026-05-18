@@ -1,5 +1,16 @@
 # Copywriter Brief — mig 234 age guards messaging (13 langs)
 
+> **STATUS: Historical (executed). Applied via mig 240/241/242 (2026-05-17/18).**
+>
+> **Для актуального copywriter playbook см. [[concepts/copywriter-playbook]] — single entry point для будущих guard translation sessions.** Этот brief сохранён как исторический пример (age warnings были first guard family migrated).
+>
+> Inline content ниже частично дублирует canonical KB (severity, tone rules, L1 process). При расхождениях — canonical KB winning. Canonical pointers:
+> - Severity vocabulary + naming: [[concepts/agent-collaboration-protocol]] Rule 1 + Rule 3
+> - Banner emoji prefix matrix: [[concepts/safety-guard-ux-pattern]] §3
+> - Sassy Sage tone: [[concepts/sassy-sage-multilingual-glossary]] Part I
+> - 10-step apply pipeline: [[concepts/ui-translations-bulk-update-recipe]]
+> - L1 review checklist: [[concepts/l1-cultural-sanity-brief]]
+
 **Trigger:** mig 234 (`calculate_user_targets` v6) merged 2026-05-17. RPC возвращает `age_warning` в одном из 4 значений (`underage_forced_maintain` | `underage_disclaimer` | `elderly_less_accurate` | NULL). UI banner показывается if not NULL. **Translation keys нужны для активации UI слоя.**
 
 Полный pattern — [[concepts/safety-guard-ux-pattern]]. Coordination protocol — [[concepts/agent-collaboration-protocol]].

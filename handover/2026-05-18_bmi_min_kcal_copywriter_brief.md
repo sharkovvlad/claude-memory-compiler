@@ -1,5 +1,14 @@
 # Brief: Copywriter — bmi / min_kcal warning переводы (13 langs)
 
+> **Read first:** [[concepts/copywriter-playbook]] — single entry point со всеми canonical references (severity, tone, pipeline, L1/L2). Этот brief — task-specific scope only.
+>
+> Canonical references (не повторяются здесь):
+> - Severity + key naming: [[concepts/agent-collaboration-protocol]] Rule 1 + Rule 3
+> - Banner emoji prefix matrix (🛡️/⚠️/💡): [[concepts/safety-guard-ux-pattern]] §3
+> - Sassy Sage tone per language: [[concepts/sassy-sage-multilingual-glossary]]
+> - 10-step apply pipeline: [[concepts/ui-translations-bulk-update-recipe]]
+> - L1 cultural review: [[concepts/l1-cultural-sanity-brief]]
+
 **Дата:** 2026-05-18
 **Trigger:** mig 252 (banner injection в my_plan) merged → ждёт переводы для bmi/min_kcal families. Mig 246 v7 на проде с 2026-05-18 утра — `bmi_warning` и `min_kcal_warning` enum'ы возвращаются из RPC, но текст не отрисовывается (banner_block для них пустой).
 **Estimated effort:** 1 сессия копирайтера + 1 сессия L1+L2 cultural review = ~1-2 дня.
@@ -74,18 +83,17 @@
 
 ### Severity → emoji prefix matrix
 
-| Severity | banner_title prefix | Visual |
-|---|---|---|
-| hard block | 🛡️ | red banner (non-dismissible) |
-| hard regulated | 🛡️ | red banner (non-dismissible) — medical gate |
-| soft override | ⚠️ | yellow (dismissible) |
-| informational | 💡 или 🌿 | blue (informational only) |
+> Matrix canonical в [[concepts/safety-guard-ux-pattern]] §3. Per-enum mapping для этой mig:
 
-`bmi.extreme_cachexia_recommend_medical` = hard block → `🛡️ ` prefix.
-`bmi.underweight_lose_override` = hard regulated → `🛡️ ` prefix.
-`bmi.extreme_obesity_clamp_slow` = hard regulated → `🛡️ ` prefix.
-`bmi.extreme_obesity_informational` = informational → `💡 ` prefix.
-`min_kcal.*` все hard regulated → `🛡️ ` prefix.
+| Enum | Severity | Prefix |
+|---|---|---|
+| `bmi.extreme_cachexia_recommend_medical` | hard block | 🛡️ |
+| `bmi.underweight_lose_override` | hard regulated | 🛡️ |
+| `bmi.extreme_obesity_clamp_slow` | hard regulated | 🛡️ |
+| `bmi.extreme_obesity_informational` | informational | 💡 |
+| `min_kcal.bmr_floor_triggered` | hard regulated | 🛡️ |
+| `min_kcal.medical_floor_1200_triggered` | hard regulated | 🛡️ |
+| `min_kcal.medical_floor_1500_triggered` | hard regulated | 🛡️ |
 
 ---
 

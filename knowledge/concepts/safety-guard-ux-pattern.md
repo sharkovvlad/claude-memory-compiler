@@ -70,16 +70,19 @@ Reusable framework для всех ситуаций, когда **формула
 
 ## 3. Severity Levels (5-tier) — какой UX подходит для какого guard'а
 
-Финальная матрица согласована между нутрициологом и mig-агентом (2026-05-17).
+> **Canonical source:** [[concepts/agent-collaboration-protocol]] Rule 1. Эта секция — UX-extension с banner specifics + emoji prefix; severity vocabulary владеет protocol-документ.
+
 Никаких альтернативных синонимов («medium», «warning», «alert») как отдельных категорий — каждый guard обязан указать severity по этой таблице.
 
-| Severity | Что значит | Override юзерского намерения | Banner | Opt-out |
-|---|---|---|---|---|
-| **hard block** | Жизнь/здоровье/legal mandatory. Ребёнок не consent'ит (FTC/California). | Да | non-dismissible | **Никогда** |
-| **hard regulated** | Долгосрочный медицинский риск, требует врач'а как gate. | Да | non-dismissible | **Только врач + audit log** (не self-consent) |
-| **soft override** | Risk, юзер может не знать, но может осознанно нарушить. | Да | dismissible | Voluntary с confirmation flow |
-| **informational** | Точность снижена / контекст полезен, но цель не меняется. | Нет | dismissible | N/A (нет override формулы) |
-| **silent accuracy** | Внутренний switch формулы для точности. Юзер ничего не теряет, ничего не выбирал. | Нет | **НЕТ** | N/A |
+| Severity | Override юзерского намерения | Banner | Banner emoji prefix | Banner color | Opt-out |
+|---|---|---|---|---|---|
+| **hard block** | Да | non-dismissible | 🛡️ | red | **Никогда** |
+| **hard regulated** | Да | non-dismissible | 🛡️ | red | **Только врач + audit log** (не self-consent) |
+| **soft override** | Да | dismissible | ⚠️ | yellow | Voluntary с confirmation flow |
+| **informational** | Нет | dismissible | 💡 (или 🌿 для elderly) | blue | N/A (нет override формулы) |
+| **silent accuracy** | Нет | **НЕТ** | N/A | N/A | N/A |
+
+**Emoji prefix rule:** `banner_title` value в `ui_translations` **обязан** начинаться с emoji prefix согласно severity. Это даёт юзеру моментальный visual cue до чтения текста. Copywriter agent проверяет в L1 review. Применено в mig 240/241/242 (age warnings) и mig 246+ (bmi/min_kcal).
 
 ### Trigger Table (re-classified per 5-tier)
 
@@ -117,15 +120,19 @@ Reusable framework для всех ситуаций, когда **формула
 
 ## 5. Translation Keys — единый naming convention
 
-Каждый guard имеет **5 translation keys** (× 13 языков = 65 строк):
+> **Canonical naming spec:** [[concepts/agent-collaboration-protocol]] Rule 3 (`warning.<family>.<severity>.<surface>` format + storage spec). Эта секция — surface details + length budgets.
+
+Каждый guard имеет до **5 surfaces** (× 13 языков = до 65 строк):
 
 ```
-warning.<trigger_family>.<severity>.banner_title      # 20-40 chars
-warning.<trigger_family>.<severity>.banner_body       # 1-2 sentences, ≤140 chars
-warning.<trigger_family>.<severity>.modal_full        # 5-10 lines детального explanation + sources
-warning.<trigger_family>.<severity>.opt_out_confirm   # «Понимаю риск, мой врач одобряет» (только для soft)
-warning.<trigger_family>.<severity>.auto_resolved     # «У тебя сменилось X — защита снята»
+warning.<family>.<severity>.banner_title      # 20-40 chars; emoji prefix obligatory (§3 matrix)
+warning.<family>.<severity>.banner_body       # 1-2 sentences, ≤140 chars
+warning.<family>.<severity>.modal_full        # 5-10 lines детального explanation + sources
+warning.<family>.<severity>.opt_out_confirm   # «Понимаю риск, мой врач одобряет» (только soft override)
+warning.<family>.<severity>.auto_resolved     # «У тебя сменилось X — защита снята» (NULL для elderly_less_accurate)
 ```
+
+**Note:** `opt_out_confirm` отсутствует для hard block / hard regulated (нет self-consent override). `auto_resolved` опционален для informational severity, где условие не имеет естественного «снятия» (например `elderly_less_accurate`).
 
 **Примеры для mig 234:**
 - `warning.age.underage_forced_maintain.banner_title`
@@ -199,36 +206,19 @@ Daily cron (03:00 UTC):
 
 ## 7. Translation pipeline (per Rule 9 coordination protocol)
 
-Translation 13 langs ≠ cultural appropriateness. Pregnancy framing в исламских странах / РПП-стигма в Индии-Японии / elderly framing в Latin vs Northern Europe — variable per culture. Жёсткий tier'инг по severity:
+> **Canonical source:** [[concepts/agent-collaboration-protocol]] Rule 9 (two-layer L1+L2 model, full tier matrix). [[concepts/l1-cultural-sanity-brief]] — operational checklist для L1 reviewer. [[concepts/sassy-sage-multilingual-glossary]] — tone reference per language.
 
-### Two-layer model (агреемент 2026-05-17)
+Скиммируемая выдержка для агентов работающих в этом документе:
 
-| Layer | Кто | Что делает | Когда обязательно |
-|---|---|---|---|
-| **L1: Clinical + first-pass cultural** | Нутрициолог | Проверяет clinical correctness переводов + first-pass cultural sanity (через [[concepts/sassy-sage-multilingual-glossary]] как guide). Помечает каждый key: `cultural-clean` или `cultural-flag-<region>-<topic>` (например `cultural-flag-AR-Ramadan`). | Для **всех** guard messaging перед production deploy |
-| **L2: Native cultural reviewer** | Native speaker per language family (6 reviewers max: Romance ES/PT/IT/FR, Germanic DE/EN, Slavic RU/PL/UK, Arabic-Persian AR/FA, HI, ID) | Activates **только** для flagged keys. Проверяет тонкости register, idiom appropriateness, региональные cultural taboos. | **Только** для hard block / hard regulated. Optional для soft override. NO для informational / silent accuracy. |
-
-### Tier'инг по severity
-
-| Severity | Translation pipeline | Cultural review |
+| Severity | L1 (нутрициолог) | L2 (native per family, 6 max) |
 |---|---|---|
-| **hard block** | Copywriter + Sassy Sage glossary + **L1** + **L2 for flagged** | Mandatory (L1) + Mandatory if L1-flagged (L2) |
-| **hard regulated** | Copywriter + glossary + L1 + L2 for flagged | Mandatory (L1) + Mandatory if L1-flagged (L2) |
-| **soft override** | Copywriter + glossary + L1 (optional L2) | Mandatory L1; L2 optional только если бюджет позволяет |
-| **informational** | Copywriter + glossary | L1/L2 NOT required (excess process) |
-| **silent accuracy** | N/A (нет user-facing texts) | N/A |
+| **hard block** | Mandatory | Mandatory if L1 flags |
+| **hard regulated** | Mandatory | Mandatory if L1 flags |
+| **soft override** | Mandatory | Optional |
+| **informational** | NOT required (glossary self-screen) | N/A |
+| **silent accuracy** | N/A | N/A |
 
-### Anti-pattern: literal/word-for-word translation
-
-❌ **Don't:** Прогон через Google Translate / DeepL без cultural pass.
-✅ **Do:** Каждый язык получает **adapted** message с учётом:
-- Идиом и сленга (DE `loggen` → false friend, лучше `tracken`; ES `apesta` региональное)
-- Гендерной политики (passive/1st-person bot/impersonal — НЕ slash gendered formats)
-- Telegram SRE constraints (≤35 chars/line, ≤12 lines/msg, ≤18 chars/button; романские +30% → idiomatic сжатие)
-- Cultural taboos (Ramadan для AR/FA/ID, war-blackout UK, halal/vegetarian HI/AR/FA/ID, national-food protection FR/IT/ES/PT)
-- RTL/script gotchas (AR bidi LRM/RLM, FA ZWNJ, UK anti-russianism via read-aloud test)
-
-Полный glossary — [[concepts/sassy-sage-multilingual-glossary]] (8 подразделов на язык: терминология / register / гендер / Telegram SRE / идиомы / anti-patterns / cultural taboos / RTL).
+**Anti-pattern:** literal/word-for-word translation (Google Translate / DeepL без cultural pass). Каждый язык получает **adapted** message — idioms, gender policy, Telegram SRE, cultural taboos, RTL/script. См. [[concepts/l1-cultural-sanity-brief]] §"Cultural Flag Categories" для что искать при review.
 
 ## 8. Storage Schema
 
