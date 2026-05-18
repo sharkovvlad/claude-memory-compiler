@@ -281,12 +281,38 @@ Plus Safety Center UI labels (если не closed в B1) = ~78 entries.
 
 ---
 
-## Open questions for owner before B1 starts
+## B1 decisions locked (owner approved 2026-05-18 evening)
 
-1. **Pill text micro-copy** — `⚠ N предупреждений активны →` vs `⚠ Тебе нужно посмотреть →` vs `⚠ Активная защита →`? RU only for now — выбор задаст pattern для остальных 12 langs.
-2. **Empty state** — нужен ли pill «🎉 Активных защит нет» (positive reinforcement) ИЛИ полное скрытие? Apple Health hides; Glow shows positive. Голос?
-3. **Click depth** — `my_plan` → pill click → Safety Center → per-guard tap → full modal. Или `my_plan` → pill → directly inline list (no Safety Center as intermediate)? Я recommend the first (cleaner separation), но open to feedback.
-4. **B2 timing** — после B1 deploy ждать неделю (regression observation) или сразу catchup'ать profile_main + personal_metrics? Я recommend wait ~3-5 days после B1.
+| Question | Decision | Rationale |
+|---|---|---|
+| **Pill micro-copy** | `🛡️ Активная защита: [N] 〉` (RU canonical) | Shield icon `🛡️` matches hub naming `🛡️ Твоя безопасность` — consistency, не пугающий `⚠`. «Защита» = забота, не ошибка системы. Pattern для 12 других langs следует тот же tone. |
+| **Empty state** | **Full hide** (no pill rendered) | "No news is good news" (Apple Health pattern). Pill появляется только когда есть что сказать. Glow positive reinforcement отвергнут — занимает ценное mobile space. |
+| **Click depth** | `my_plan` → pill → `safety_center` → per-guard card → modal_full (4-deep) | Scalable: roadmap имеет ≥6 не-implemented guards. Inline list возродил бы "простыню" текста. Separate screen более headless-friendly + matches Cronometer "Targets" tab pattern. |
+| **B2 timing** | Wait **3-5 days** after B1 deploy | Собрать первичную analytics: понимают ли pill, кликают ли, нет ли тикетов «куда пропало предупреждение». После confirmation pattern works → rollout на profile_main + personal_metrics. |
+
+### Pill text per-lang (B1 spec, B3 будет писать full Sassy Sage translations)
+
+| Lang | Pill text |
+|---|---|
+| ru | `🛡️ Активная защита: 2 〉` |
+| en | `🛡️ Active safety: 2 〉` |
+| uk | `🛡️ Активний захист: 2 〉` |
+| es | `🛡️ Protección activa: 2 〉` |
+| pt | `🛡️ Proteção ativa: 2 〉` |
+| de | `🛡️ Aktiver Schutz: 2 〉` |
+| fr | `🛡️ Protection active : 2 〉` |
+| it | `🛡️ Protezione attiva: 2 〉` |
+| pl | `🛡️ Aktywna ochrona: 2 〉` |
+| id | `🛡️ Perlindungan aktif: 2 〉` |
+| hi | `🛡️ सक्रिय सुरक्षा: 2 〉` |
+| ar | `🛡️ حماية نشطة: 2 〉` |
+| fa | `🛡️ محافظت فعال: 2 〉` |
+
+Singular vs plural handling per lang: brief требует ICU plural rules или 2 разных ключа (`pill.active_safety_singular`, `pill.active_safety_plural`). Slavic langs (ru/uk/pl) — 3-form plural (1/2-4/5+). Romance — 2-form (1/many). Arabic — 6-form. **Решение для B1:** хардкодим единое `:N 〉` format — number в конце, без word agreement. Worst case looks slightly awkward в Russian («Активная защита: 1») но универсально и не блокирует deploy.
+
+### Pre-B1 prerequisite — DONE 2026-05-18 evening
+
+**B0 (mig 271) shipped:** `my_plan` cleaned from 6 buttons → 4 buttons. Submenu `my_plan_settings` introduced. Это плацдарм для B1 pill injection — теперь my_plan имеет место для pill (между `personal_metrics` и `configure_plan` рядами, или вверху над контентом).
 
 ---
 
