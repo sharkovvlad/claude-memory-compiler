@@ -1,6 +1,6 @@
 # Architecture Registry — Python authoritative vs n8n fallback
 
-**Status:** актуально на 2026-05-04. **Source of truth для агентов:** какой target обслуживает Python authoritative, какой fallthrough'ит на legacy n8n.
+**Status:** актуально на 2026-05-19 (Stage 6 closeout — payment Python authoritative, 10_Payment деактивирован). **Source of truth для агентов:** какой target обслуживает Python authoritative, какой fallthrough'ит на legacy n8n.
 
 > **Как обновлять:** при cutover'е каждого нового target (см. [variant-b-cutover](variant-b-cutover.md)) — добавить строку в таблицу 1, удалить из таблицы 2, обновить раздел «Флаги фич».
 >
@@ -18,6 +18,8 @@
 |---|---|---|---|
 | `menu_v3` | [handlers/menu_v3.py](../../../handlers/menu_v3.py) | Profile v5 (`cmd_get_profile`, `cmd_my_plan`, `cmd_settings`, …), pickers (`cmd_select_*`, `cmd_speed_*`, `cmd_lang_*`), Shop (`cmd_buy_freeze`, `cmd_buy_mana`, `cmd_confirm_buy_*`), Payout (`cmd_start_payout`, `cmd_payout_*`), reply-keyboard синтез (`icon_profile`, `icon_myday`, `icon_progress`), free-text input в edit-статусах (`edit_weight`, `edit_age`, `edit_height`, …) | `app_constants.handler_menu_v3_use_python` (мигр. 155) / env `HANDLER_MENU_V3_USE_PYTHON` |
 | `onboarding` | [handlers/onboarding_v3.py](../../../handlers/onboarding_v3.py) | Регистрация (status=`new` / `registration_step_1..5` / `restoring:choose`), `/start`, `/start ref_NNN`, language picker, numeric input validation, photo/voice в онбординге | `app_constants.handler_onboarding_use_python` (мигр. 161) / env `HANDLER_ONBOARDING_USE_PYTHON` |
+| `location` | [handlers/location.py](../../../handlers/location.py) | Country/timezone picker (`loc_country_*`, `loc_tz_*`), geo-pin (`message.location` → reverse geocoding), Phase 6.3 closeout | `app_constants.handler_location_use_python` / env `HANDLER_LOCATION_USE_PYTHON` (2026-05-14) |
+| `payment` | [handlers/payment.py](../../../handlers/payment.py) | `cmd_premium_plans`, `cmd_pay_*` (плейн + методы Stars/Card/Crypto), Stripe Checkout open, Stars invoice, regional pricing. `pre_checkout` / `successful_payment` — безусловно в Python (без флага). | `app_constants.handler_payment_use_python` (мигр. 275) — flipped к `true` 2026-05-19 ~17:00 |
 
 **Контракт обоих handler'ов идентичен:** `(update + UserCtx + RouteDecision) → dispatch_with_render RPC → ResponseEnvelope`. Python владеет парсингом запроса и маршалингом ответа; SQL (`process_user_input` + `render_screen` через `dispatch_with_render`) владеет бизнес-логикой, FSM, отрисовкой.
 
@@ -29,10 +31,10 @@
 
 | Target | n8n workflow | Почему ещё не Python | Где решается в Python |
 |---|---|---|---|
-| `add_food` / `ai` | `03_AI_Engine` (`kjw4kkKMD0IqNALg`) | GPT-4o Vision pipeline — большой код в JS, не переписан | router.py: фото/голос/текст без edit-статуса |
-| `location` | `02.1_Location` (`7EqiiwUwlGs7dcHT`) | Country/timezone picker workflow завязан на `$('Telegram Trigger')` runtime ссылки | router.py: status=`location_setup`, `loc_*` callbacks |
-| `payment` | `10_Payment` (`T9753zO3ZyiYsgkp`) | Stripe / Stars / TON inline payments | router.py: `cmd_pay_*`, `cmd_premium_plans`, pre_checkout, successful_payment |
-| `pre_checkout` / `successful_payment` | inline в `01_Dispatcher` | Telegram Payments callback shape — обрабатывается inline в Dispatcher Code node | router.py:316-326 (short-circuit до общего пайплайна) |
+| `add_food` / `ai` | `03_AI_Engine` (`kjw4kkKMD0IqNALg`) | GPT-4o Vision pipeline — большой код в JS, не переписан (Stage 7 в roadmap) | router.py: фото/голос/текст без edit-статуса |
+| ~~`location`~~ | ~~`02.1_Location` (`7EqiiwUwlGs7dcHT`)~~ | **MIGRATED 2026-05-14 → Python `handlers/location.py`.** Workflow active=0, не вызывается в проде. Cleanup в Phase 6.4 (DELETE workflow + Route Classifier patch). | — |
+| ~~`payment`~~ | ~~`10_Payment` (`T9753zO3ZyiYsgkp`)~~ | **MIGRATED 2026-05-19 (Stage 6) → Python `handlers/payment.py`.** Workflow `active=0` через SQLite UPDATE. Stripe live setup на `https://nomsbot.com/webhooks/stripe`. Cleanup (DELETE workflow + executeWorkflow refs) — TODO. | — |
+| ~~`pre_checkout` / `successful_payment`~~ | ~~inline в `01_Dispatcher`~~ | **MIGRATED 2026-05-19 в Python безусловно (нет флага)** — Telegram Payments lifecycle нельзя терять. См. handlers/payment.py + handover `2026-05-19_stage6_payment_python.md`. | — |
 | `admin_payout` | `08.3_Friends`/payout chain | Regex match `admin_payout_(approve|reject)_*` — handled в n8n payout_handler. `_try_authoritative_path` возвращает False для этого target, fallthrough на n8n. | router.py:388-391 |
 | `error` / unknown | legacy 01_Dispatcher | sentinel — что-то непонятное, пусть n8n решает | router.py: default branch |
 
@@ -54,7 +56,7 @@
 | `JQsipPWxijse3F0b` | **04_Menu** (legacy) | 01_Dispatcher → "Go to 04_Menu" | 🟡 KEEP — обслуживает Edit Meal flow → 04.2_Edit_StatsDaily |
 | `wgY05rXde1PbszSk` | **04.2_Edit_StatsDaily** | 04_Menu → "Go to 04.2" | 🟡 KEEP — depends on 04_Menu |
 | `7EqiiwUwlGs7dcHT` | **02.1_Location** | 01_Dispatcher → "Go to 05_Location" | 🟢 KEEP — country/timezone picker |
-| `T9753zO3ZyiYsgkp` | **10_Payment** | 04_Menu + 04_Menu_v3 → "Go to 10_Payment" | 🟢 KEEP — Stripe/Stars/TON |
+| ~~`T9753zO3ZyiYsgkp`~~ | ~~**10_Payment**~~ | ~~04_Menu + 04_Menu_v3 → "Go to 10_Payment"~~ | 🟡 **DEACTIVATED 2026-05-19** (Stage 6 → Python `handlers/payment.py`). `active=0` через SQLite UPDATE. ARCHIVE 1-2 нед, потом DELETE + Route Classifier cleanup. |
 | `jQn0nTxThFal4Kpe` | **06_Indicator_Clear** | 03_AI_Engine → 3 ноды (Success/Error/Edit) | 🟢 KEEP — clear typing indicator после фото |
 
 ### Active = 0 (7 workflows, inactive)
@@ -137,6 +139,8 @@ SELECT key, value FROM app_constants WHERE key LIKE 'dispatcher_python_%' OR key
 | `dispatcher_python_authoritative_admin_only` | `HANDLER_DISPATCHER_AUTHORITATIVE_ADMIN_ONLY` | `true` | Safety gate: authoritative фактически работает только для admin `417002669`, остальные — legacy |
 | `handler_menu_v3_use_python` | `HANDLER_MENU_V3_USE_PYTHON` | `false` | Phase 2: Python владеет menu_v3 response (вместо n8n 04_Menu_v3) |
 | `handler_onboarding_use_python` | `HANDLER_ONBOARDING_USE_PYTHON` | `false` | Phase 4: Python владеет онбордингом (вместо n8n 02_Onboarding_v3) |
+| `handler_location_use_python` | `HANDLER_LOCATION_USE_PYTHON` | `true` | Phase 6.3 (2026-05-14): Python владеет country/timezone picker (вместо n8n 02.1_Location) |
+| `handler_payment_use_python` | `HANDLER_PAYMENT_USE_PYTHON` | `true` | Stage 6 (2026-05-19): Python владеет payment flow (вместо n8n 10_Payment). `pre_checkout` / `successful_payment` всегда в Python (без флага). |
 
 Hot-reload: после загрузки UserCtx читается из `ctx.constants` dictionary; если ключ отсутствует — fallback на env. Не требует рестарта `noms-webhooks`.
 

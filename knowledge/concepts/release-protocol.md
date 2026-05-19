@@ -244,6 +244,36 @@ grep -E '(ERROR|CRITICAL): |Traceback \(most recent call last\)'
 
 **PR с фиксом:** [#92](https://github.com/sharkovvlad/noms-bot/pull/92).
 
+## Lesson 2026-05-19: stale-base phantom deletions в worktree (5+ recurrence)
+
+**Сценарий:** длинная сессия (TLS + Stripe + Stage 6 + several i18n migs) в одном worktree. Между моментом создания worktree и каждым `git commit` — другие агенты мерджат свои PR в `main`. Если игнорировать — `git commit` тащит **удаления** файлов, которых только что merged migration / RPC, потому что snapshot worktree содержит **старую версию** этих файлов (== их отсутствие в worktree сразу после merge другого PR).
+
+За одну сессию 2026-05-19 ловили это **5+ раз** (PR #106, #108, #115, #121, ещё). Каждый раз diff vs main показывал большие отрицательные числа в файлах вне scope — phantom deletions.
+
+**Recipe (durable, must в любой длинной сессии):**
+
+```bash
+# ПЕРЕД commit:
+git fetch origin main
+git rebase origin/main          # подтягиваем чужие merges в свой worktree
+# Если конфликт — разрешать руками, не пропускать (signal что чужой агент трогал тот же файл).
+
+# ПЕРЕД push (особенно после rebase):
+git diff origin/main..HEAD --stat
+# Смотрим:
+# - Список файлов совпадает с scope коммитов?
+# - Большие отрицательные числа (>500 строк) в файлах не из scope? → STOP, recheck rebase.
+
+# Force-push только так:
+git push --force-with-lease origin <branch>
+# Никогда `--force` без `--with-lease`. with-lease отказывается перезаписать,
+# если remote ушёл вперёд (другой агент запушил параллельно в эту же ветку).
+```
+
+**Уже зафиксировано в global CLAUDE.md §12** — этот раздел тут для расширенного контекста (множественный recurrence в одной длинной сессии) и cross-ref из daily 2026-05-19.
+
+**Защита pre-push hook** (`.github/hooks/pre-push.sh`) теперь блокирует push, если worktree отстал от main больше чем на 50 коммитов (threshold настраивается через env `STALE_BLOCK_THRESHOLD`). Это последняя линия защиты, **не** замена ручного rebase.
+
 ## Related Concepts
 
 - [[concepts/n8n-self-hosting]] — VPS infra
