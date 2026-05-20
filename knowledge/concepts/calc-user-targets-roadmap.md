@@ -205,26 +205,53 @@ Applied to prod 2026-05-20 evening (session 9). `calculate_user_targets v9 → v
 
 # 🟡 P2 BACKLOG — Adaptive (после Phase 2 quiz расширения)
 
-### P2.1 Phase 2 quiz расширение — waist circumference
+### P2.1 + P2.2 + P2.3 ✅ DONE — RFM + Katch-McArdle + waist collection (mig 295, 2026-05-20)
 
-Чтобы перейти на RFM (Woolcott 2018) для obese — единственная sciencefull замена Брока.
+Applied to prod 2026-05-20 night (session 10). Закрыты склейкой как 3-PR P1 Accuracy sprint finale. **Брока полностью ликвидирована** (DR §LBM Proxy: «глубоко антинаучный подход»).
 
-- **Q5:** «Окружность талии» (см/inches) — optional, skippable
-- **Pattern:** [[concepts/user-data-collection-pattern]] retrofit для existing obese phenotype
-- **Severity:** new field collection (retrofit informational prompt)
+**Schema:**
+- `users.waist_circumference NUMERIC` (см, NULL OK). Validation 40-200 cm на app level через `set_user_waist_circumference(BIGINT, NUMERIC)` setter RPC.
 
-### P2.2 RFM вместо Adjusted Body Weight для obese (после P2.1)
+**RPC v10 → v11:**
+- Step 3 obese branch — Брока removed. Новая логика:
+  - `obese + waist NOT NULL` → RFM math → `target_weight = LBM_kg`
+  - `obese + waist NULL` → `target_weight = actual_weight_kg` (Mifflin path, НЕ Брока)
+- Step 4 BMR — new ELSIF branch `v_lbm_kg IS NOT NULL` → Katch-McArdle (`370 + 21.6 × LBM`).
 
-- Формула: `RFM = 64 - (20 × height/waist) + (12 × sex)` → LBM proxy
-- **Severity:** silent accuracy
-- **Deps:** P2.1 (waist data)
+**Math (Woolcott & Bergman 2018, JCEM PMC 6054651):**
 
-### P2.3 Katch-McArdle на базе LBM (после P2.2)
+| | Formula | Validation |
+|---|---|---|
+| RFM Male | `BF% = 64 − 20 × (height_cm / waist_cm)` | Male H=180 W=95 → 26.1% ✓ |
+| RFM Female | `BF% = 76 − 20 × (height_cm / waist_cm)` | Female H=170 W=100 → 42% ✓ |
+| LBM | `weight × (1 − BF%/100)` | — |
+| Katch BMR | `370 + 21.6 × LBM` | — |
 
-- BMR = 370 + 21.6 × LBM. Изолирует метаболически активную ткань.
-- Switch criteria: `phenotype_answers.q5_waist_cm IS NOT NULL` → Katch-McArdle, иначе Mifflin
-- **Severity:** silent accuracy
-- **Deps:** P2.2 (RFM даёт LBM)
+Defensive clamp: `BF% ∈ [5, 60]%` против extreme inputs.
+
+**Priority order BMR (с mig 292 интеграцией):**
+1. age < 18 → pediatric (Schofield-HW / Molnar)
+2. age > 75 → geriatric (Lührmann)
+3. **phenotype='obese' AND waist NOT NULL → Katch-McArdle** ← mig 295
+4. else → Mifflin-St Jeor
+
+Pediatric/geriatric sacrosanct над Katch — safety > accuracy boost.
+
+**UX (lighter approach, owner-approved):**
+- `edit_waist` ui_screen (pattern из `ask_weight`, input_type='text_input').
+- Entry button «📏 Уточнить талией» на `phenotype_result` screen с `visible_condition='u.phenotype=obese AND u.waist_circumference IS NULL'`. **Не правили `process_user_input` FSM** — quiz остаётся 4-step.
+
+**Retrofit cron:** `cron_get_reminder_candidates` extend с type `'waist_retrofit'` (hour=14 local, WHERE phenotype='obese' AND waist_circumference IS NULL). Anti-spam через existing `notification_log` NOT EXISTS pattern.
+
+**Telemetry:** `calculations.lbm_kg` (NULL если не Katch), `calculations.rfm_body_fat_pct`, `calculations.bmr_formula='katch_mcardle'`.
+
+**Tests:** 8 sentinel checks прошли (math drift < 1 kcal); 8 pytest integration зелёных — включая T7 multi-mig compatibility (vegan obese adult: Katch BMR + protein × 1.25).
+
+**Real-world impact:** 0 obese users в проде на момент apply (37 default, 1 monw) → нулевая регрессия. Retrofit cron активируется когда первый obese зарегистрируется через quiz.
+
+**Key lesson — single-source Брока removal каскадирует.** Все downstream Macros (Step 7) и carbs floor (Step 8) уже параметризованы через `v_target_weight` — surgical edit в Step 3 obese branch автоматически обновляет protein/fat/carbs targets для всего obese path. Headless architecture сила.
+
+**Out of scope:** Q5 в quiz pipeline FSM правка (Variant B lighter chosen); onboarding step для waist (только через retrofit + Profile entry).
 
 ### P2.4 Phase 3 Adaptive Modifiers (сон / стресс / цикл)
 
