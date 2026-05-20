@@ -68,17 +68,17 @@ Reusable framework для всех ситуаций, когда **формула
 └──────────────────────────────────────────────────────────┘
 ```
 
-## 2b. Implementation Status (2026-05-18)
+## 2b. Implementation Status (2026-05-20)
 
 5 touch-points → текущее state на проде:
 
 | # | Touch-point | Status | Where |
 |---|---|---|---|
-| 1 | Onboarding inline modal | ⏳ in flight | mig 259 (in background agent — F/15-50 maternal question) |
-| 2 | Profile passive banner | ✅ implemented | mig 252 (my_plan) + mig 256 (personal_metrics + profile_main) — distributed enforcement через helper `build_safety_guard_banner_block` |
-| 3 | First-trigger card (modal_full) | ❌ NOT implemented | Требует Python hook reading `users.shown_guards` JSONB. modal_full тексты уже в `ui_translations` (mig 240/258). |
-| 4 | Retrofit cron | ❌ NOT implemented for maternal | Требует APScheduler worker filtering F/15-50 с `is_pregnant IS NULL` (partial index `idx_users_maternal_protective` готов в mig 253). |
-| 5 | Auto-reset | ❌ NOT implemented | Daily cron scan для users где warning enum cleared (age→18, BMI cleared, pregnancy ended). `auto_resolved` тексты уже в `ui_translations`. |
+| 1 | Onboarding inline modal | ✅ implemented | mig 259 (maternal F/15-50 question + warning surfaces). |
+| 2 | Profile passive banner | ✅ implemented | mig 252 (my_plan) + mig 256 (personal_metrics + profile_main) — distributed enforcement через helper `build_safety_guard_banner_block`. |
+| 3 | First-trigger card (modal_full) | ✅ implemented | mig 264 — RPCs `get_unshown_guards` / `mark_guards_shown`, Python push в `services/safety_guards.py:fetch_and_send_first_trigger_modals`. |
+| 4 | Per-guard click-to-modal | ✅ implemented | mig 284 — 10 `gm_<family>_<enum>` screens. mig 288 — Support button + /support text cleanup. |
+| 5 | Auto-resolve cron | ✅ implemented (mig 289) | Daily 03:15 UTC `SafetyGuardResolverCron` → RPC `cron_auto_resolve_safety_guards` → re-eval через `calculate_user_targets` → family-level resolve. **Variant A только** (full release); B/C — отдельный workstream. Silent resolve для enum'ов без `auto_resolved` text. |
 
 **Distributed banner enforcement principle (touch-point #2):** banner ОБЯЗАН быть на всех screens где user видит/меняет goal_type или данные формулы. Не только `my_plan`. Cм. mig 256 — закрыл pad с `personal_metrics` + `profile_main`. Если добавляется новый профильный screen — обязательно добавить `{banner_block}` placeholder + extend business_data_rpc через helper.
 
