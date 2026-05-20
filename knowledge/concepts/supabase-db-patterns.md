@@ -302,6 +302,8 @@ PostgREST REST filters (e.g., `?expires_at=lt.now()+interval '2 days'`) do NOT e
 
 **Deep-merge правило (критично):** Использовать `jsonb_set(content, '{section,key}', '[...]'::jsonb)`, НЕ `content || '{section:{key:[...]}}'::jsonb`. Shallow merge (`||`) стирает все соседние ключи в секции.
 
+**Nested-parent gotcha (lesson mig 287, 2026-05-20):** `jsonb_set(content, '{macros,p_short}', '"Б"', create_missing=true)` **не создаёт** missing intermediate parents. Если ключа `macros` нет в content — статемент проходит без error, но изменение **не записывается**. Симптом: UPDATE возвращает rows-affected=N, но SELECT после показывает NULL. Spotted at mig 287 — 3 macros.* ключа × 13 langs = 39 silent misses, поймано через external Python verify-скрипт. **Fix:** для новых namespace'ов сначала ensure parent через `||`-merge: `UPDATE ui_translations SET content = content || jsonb_build_object('macros', COALESCE(content->'macros', '{}'::jsonb))` — затем `jsonb_set` работает. **Always** запускать external verify через psycopg2 после bulk translation updates, не полагаться на inline DO-block (PG может не raise при missing nested parent).
+
 **Self-referential UPDATE (migration 107):** Для синхронизации legacy scalar ключей с вариантами — копировать `content -> 'section' -> 'array_key' -> 0` в scalar key. Гарантирует стилевую консистентность.
 
 **Scale verification паттерн:** после apply — независимый SELECT `jsonb_array_length(content->section->key) = 3` для всех ключей × 13 langs. При 19 ключах = 247 проверок.
