@@ -72,6 +72,42 @@ source .venv/bin/activate && notebooklm login
 # → откроется браузер → залогиниться → нажать ENTER → проверить дату storage_state.json
 ```
 
+## Transient SOURCE_ID throttle (2026-05-20 incident)
+
+**Симптом:** массовый upload (50+ файлов подряд) падает с `Failed to get SOURCE_ID from registration response` на всех файлах.
+
+**НЕ путать с:**
+- Expired auth (тогда `auth check` красный + `source list` редиректит)
+- CLI breakage (тогда single `notebooklm source add` тоже падает спустя часы)
+- Upstream API change (тогда после `pip install --upgrade notebooklm-py` всё чинится — но проверь сначала, что одиночный upload работает)
+
+**Root cause:** Google NotebookLM серверный RPC `o4cbdc` (ADD_SOURCE_FILE) при серии операций периодически опускает source_id в payload. CLI это интерпретирует как failure. Transient — через ~часы отпускает.
+
+**3-level defensive layers (после 2026-05-20 fix):**
+
+| Layer | Где | Что делает |
+|---|---|---|
+| L1 | `noms-supabase-sync/SKILL.md` | `--delay 3.0` (было 2.0) |
+| L2 | venv `notebooklm-py==0.4.1` (было 0.3.4) | Per-domain cookie scoping + server-state verification on timeout |
+| L3 | `nlm.py batch_add_sources` | 3 attempts с 5s/15s backoff, маркеры: `SOURCE_ID`, `429`, `5xx`, `rate limit`, `timeout`, `temporarily` |
+
+**Recovery procedure если случилось снова:**
+
+1. Не паниковать. Не делать `notebooklm login` (auth тут не при чём).
+2. Проверить, что одиночный upload работает: `notebooklm source add tmp/<any_file>.md -n <NB_ID>`. Если работает — проблема transient, переходим к шагу 3.
+3. Если нет — подождать 30-60 минут, повторить шаг 2.
+4. Когда single upload работает, перезалить пачку через `batch-add-sources` с `--delay 3.0`. Файлы экспорта в `tmp/` обычно ещё свежие (mtime = сегодняшний), повторный экспорт не нужен.
+5. Verify: `notebooklm source list -n <NB_ID> --json | jq '.sources | length'`.
+
+## `NotebookLM+Claude` git-репо: важный нюанс
+
+Локальный git-репо в `/Users/vladislav/Documents/NotebookLM+Claude/.git/` **существует** (80+ коммитов), но **без remote**. Это значит:
+- `git pull` — не работает (no remote)
+- Обновление плагина → `pip install --upgrade notebooklm-py` в venv `.venv/`
+- Локальные правки можно (и нужно) коммитить, чтобы трекать историю
+
+⚠️ В daily/2026-05-19.md сказано «репо не git, либо нет remote — git log пустой» — это **half-true** (remote'а нет, но репо есть, git log полный).
+
 ## Ключевые файлы
 
 | Файл | Описание |
