@@ -141,13 +141,28 @@ END;
 
 **Severity:** silent accuracy (Rule 8).
 
-### P1.2 Vegan / vegetarian protein adjustment
+### P1.2 ✅ DONE — Vegan / vegetarian protein adjustment (mig 291, 2026-05-20)
 
-- Flag `diet_type` (`omnivore` DEFAULT)/`vegan`/`vegetarian` (Rule 2: gradual failure → typed default OK)
-- For vegan: `protein × 1.25` compensation для DIAAS biological value 70-80%
-- Onboarding ask «Что ешь?» + HIGH priority retrofit (per agent 234 compromise)
-- **Severity:** silent accuracy (для расчёта) + retrofit prompt (informational UX)
-- **Deps:** UX-decision для onboarding question placement
+Applied to prod 2026-05-20 evening. `calculate_user_targets v8 → v9` накладывает CASE multiplier поверх baseline + maternal_protein_bonus:
+
+| diet_type | multiplier | DIAAS justification |
+|---|---|---|
+| `omnivore` (default) | 1.00 | Reference animal protein |
+| `vegetarian` | 1.10 | ~85% DIAAS (молочка + яйца — полноценные АК) |
+| `vegan` | 1.25 | ~70-80% DIAAS, неполный аминокислотный профиль |
+
+- **Schema:** `users.diet_type` TEXT DEFAULT 'omnivore' CHECK IN (3 enum values).
+- **RPC v9 changes:** `v_diet_multiplier` declare, multiplier applied **после** maternal_protein_bonus (vegan-pregnant = (baseline + 25) × 1.25), telemetry `calculations.diet_type` + `calculations.protein_diet_multiplier`.
+- **Setter RPC:** `set_user_diet_type(BIGINT, TEXT) → JSONB` для save_via_callback паттерна; triggers recalc.
+- **UX:** `edit_diet` ui_screen (pattern из `edit_speed`) + 4 buttons + 13 langs ui_translations (Sassy Sage tone).
+- **Tests:** 5 integration зелёных через TX/ROLLBACK (omnivore baseline, vegan +25%, vegetarian +10%, vegan+pregnant order, set_user_diet_type invalid value rejected).
+- **Severity:** silent accuracy. Юзер видит только final protein number; banner не нужен.
+- **Owner decision (2026-05-20):** 3-state enum `diet_type` вместо `is_vegan` BOOLEAN из ТЗ нутрициолога — DIAAS science даёт промежуточный профиль для vegetarian.
+
+**Open follow-ups** (отдельные PR'ы, не блокируют mig 291):
+- Onboarding step `registration_step_diet` — требует правки `process_onboarding_input` (576 LOC FSM); natural way вместе с mig 293 quiz extension.
+- `profile_main` entry point + current value display — требует правки `get_profile_business_data`.
+- Retrofit cron — translation key `cron_notifications.diet_retrofit_prompt` уже на проде × 13 langs; wiring через `cron_get_reminder_candidates` отдельным PR.
 
 ### P1.3 Adjusted Body Weight для obese (промежуток до Phase 2 RFM)
 
