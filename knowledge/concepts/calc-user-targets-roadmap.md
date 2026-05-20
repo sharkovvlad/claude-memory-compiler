@@ -178,21 +178,28 @@ DR: «До развертывания Phase 2 следует применять 
 - **До перехода на Katch-McArdle:** JSON `bmr_formula='mifflin'` + `athlete_using_default_formula=TRUE`
 - UI: banner «athlete-specific formula coming soon» (soft, opt-out OK)
 
-### P1.5 Возрастные формулы Schofield/Molnar/Lührmann (бывший P0.2)
+### P1.5 ✅ DONE — Возрастные формулы Schofield/Molnar/Lührmann (mig 292, 2026-05-20)
 
-**Переведено из P0 в P1** 2026-05-17 per agent 234 reclassification: РПП-риск уже закрыт mig 234 (force maintain на `<18+lose`). Формула switch = accuracy upgrade, не safety baseline.
+Applied to prod 2026-05-20 evening (session 9). `calculate_user_targets v9 → v10`: Step 4 BMR — CASE switch по age + BMI.
 
-| Case | Formula | Source |
-|---|---|---|
-| `<18`, BMI<30 | Schofield-HW | PMC 8685418 |
-| `<18`, BMI≥30 | Molnar | accuracy 87% obese youth |
-| `>75` | Lührmann | PubMed 17583391 |
+| Case | Formula | Source | Coefficients (kcal/day) |
+|---|---|---|---|
+| `<18 + BMI<30` | **Henry 2005** Schofield-HW | PMID 16277825, SACN 2011 endorsed | Male: `15.6·W + 266·H + 299` (H=м!); Female: `9.40·W + 249·H + 462` |
+| `<18 + BMI≥30` | **Molnar 1995** | PMID 7562290; accuracy 87% per Acosta 2010 AJCN | Male: `(50.0·W + 25.3·H_cm − 50.3·A + 26.9) / 4.184`; Female: `(51.2·W + 24.5·H_cm − 207.5·A + 1629.8) / 4.184` |
+| `>75` | **Lührmann 2002** | PMID 12111047; no-height by design (elderly compression) | Male: `935.4 + 11.95·W − 3.657·A`; Female: `757.1 + 11.95·W − 3.657·A` |
+| `18..75` | Mifflin-St Jeor (unchanged) | — | preserved verbatim from v9 |
+| `age IS NULL` | Defensive fallback → Mifflin | — | pre-mig292 behaviour preserved |
 
-- **Severity:** silent accuracy (Rule 8) — формула меняется, цель не меняется, banner НЕТ
-- **JSON telemetry:** `bmr_formula` enum (`mifflin`/`schofield_hw`/`molnar`/`luhrmann`)
-- **Sentinel:** 5 кейсов (один на каждую формулу + контрольный adult Mifflin)
-- **Plus:** `<18 + goal=gain, age 13-14` → force maintain (растущий пубертат — guard severity); `<18 + goal=gain, age 15-17` разрешить + disclaimer; `>75 + lose` → clamp speed на slow max
-- **Deps:** none (orthogonal to mono-mig)
+- **Severity:** silent accuracy. Banner НЕТ, цель не меняется, формула меняется.
+- **JSON telemetry:** `calculations.bmr_formula` enum (`mifflin` / `schofield_hw` / `molnar` / `luhrmann`). Audit-ready для Digital Twin sync.
+- **Boundary discipline:** `<18` exclusive, `>75` exclusive. Age=18 → mifflin. Age=75 → mifflin. Age=76 → luhrmann.
+- **Tests:** 10 sentinel checks прошли (math drift <2 kcal); 8 pytest integration зелёных.
+
+**Surprise discovery от research subagent'а:** Henry 2005 публикует **ОДНУ** формулу для 10-18 на пол — НЕ sub-split 10-12/13-15/16-18 как roadmap изначально предполагал. Sub-split не существует ни в Henry 2005, ни в Schofield 1985 HW form (sub-split есть только в weight-only Schofield). Использован canonical single 10-18 block per gender (SACN 2011 endorsed).
+
+**Critical units lesson:** Henry в **метрах**, Molnar в **сантиметрах**. PMC review (PMC8685418) мис-labeled units; subagent dimensional analysis на boy 13yo поймал bug (Henry: 1427 kcal с метрами ✓, с см → 43,561 ✗ невозможно).
+
+**Out of scope mig 292 (явно отложено):** safety guards `<18+gain age 13-14 force maintain` (пубертат) и `>75+lose clamp slow` — оба не formula switch, отдельный workstream.
 
 ---
 
