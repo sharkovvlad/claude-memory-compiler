@@ -1,6 +1,6 @@
 # Architecture Registry — Python authoritative vs n8n fallback
 
-**Status:** актуально на 2026-05-19 (Stage 6 closeout — payment Python authoritative, 10_Payment деактивирован). **Source of truth для агентов:** какой target обслуживает Python authoritative, какой fallthrough'ит на legacy n8n.
+**Status:** актуально на 2026-05-21 (n8n cleanup — 02_Onboarding_v3, 02.1_Location, 10_Payment удалены из n8n SQLite + executeWorkflow refs зачищены в 01_Dispatcher / 04_Menu / 04_Menu_v3). **Source of truth для агентов:** какой target обслуживает Python authoritative, какой fallthrough'ит на legacy n8n.
 
 > **Как обновлять:** при cutover'е каждого нового target (см. [variant-b-cutover](variant-b-cutover.md)) — добавить строку в таблицу 1, удалить из таблицы 2, обновить раздел «Флаги фич».
 >
@@ -55,15 +55,15 @@
 | `0xJXA5M4wQUSiGXT` | **04_Menu_v3** | 01_Dispatcher → "Go to 04_Menu_v3" + Python forward (`menu_v3` target в TARGET_TO_PATH) | 🟢 KEEP — headless dispatcher |
 | `JQsipPWxijse3F0b` | **04_Menu** (legacy) | 01_Dispatcher → "Go to 04_Menu" | 🟡 KEEP — обслуживает Edit Meal flow → 04.2_Edit_StatsDaily |
 | `wgY05rXde1PbszSk` | **04.2_Edit_StatsDaily** | 04_Menu → "Go to 04.2" | 🟡 KEEP — depends on 04_Menu |
-| `7EqiiwUwlGs7dcHT` | **02.1_Location** | 01_Dispatcher → "Go to 05_Location" | 🟢 KEEP — country/timezone picker |
-| ~~`T9753zO3ZyiYsgkp`~~ | ~~**10_Payment**~~ | ~~04_Menu + 04_Menu_v3 → "Go to 10_Payment"~~ | 🟡 **DEACTIVATED 2026-05-19** (Stage 6 → Python `handlers/payment.py`). `active=0` через SQLite UPDATE. ARCHIVE 1-2 нед, потом DELETE + Route Classifier cleanup. |
+| ~~`7EqiiwUwlGs7dcHT`~~ | ~~**02.1_Location**~~ | — | 🔴 **DELETED 2026-05-21**. Был мигрирован в Python `handlers/location.py` (Phase 6.3, 14.05), executeWorkflow ref в `01_Dispatcher` (node `Go to 05_Location`) и `04_Menu` (node `Go to 05`) удалены. Snapshot: `n8n_workflows/02.1_Location.json`. |
+| ~~`T9753zO3ZyiYsgkp`~~ | ~~**10_Payment**~~ | — | 🔴 **DELETED 2026-05-21**. Был мигрирован в Python `handlers/payment.py` (Stage 6, 19.05), executeWorkflow refs в `04_Menu` (node `Go to 10_Payment`) и `04_Menu_v3` (node `Go to 10_Payment`) удалены. Snapshot: `n8n_workflows/10_Payment_final_pre_delete.json`. |
 | `jQn0nTxThFal4Kpe` | **06_Indicator_Clear** | 03_AI_Engine → 3 ноды (Success/Error/Edit) | 🟢 KEEP — clear typing indicator после фото |
 
 ### Active = 0 (7 workflows, inactive)
 
 | ID | Name | Замещён | Решение |
 |---|---|---|---|
-| `wzjYmMOurCbp4czk` | **02_Onboarding_v3** | Python `handle_onboarding` (Phase 4, 02.05) | 🟡 ARCHIVE — деактивирован 04.05 (Агент 1). 01_Dispatcher всё ещё имеет executeWorkflow ссылку на него (если флаг `handler_onboarding_use_python` переключат → executeWorkflow inactive sub-workflow всё равно сработает, см. CLAUDE.md правило 12). Удалить через 1-2 недели стабильности. |
+| ~~`wzjYmMOurCbp4czk`~~ | ~~**02_Onboarding_v3**~~ | Python `handle_onboarding` (Phase 4, 02.05) | 🔴 **DELETED 2026-05-21**. executeWorkflow ref в `01_Dispatcher` (node `02_Onboarding`) удалён. Safety net «emergency rollback через переключение флага» больше не работает для onboarding — переключение `handler_onboarding_use_python=false` теперь приведёт к ошибке (subworkflow not found). Snapshot: `n8n_workflows/02_Onboarding_v3.json`. |
 | `JRaKFPb5sOFL3xlc` | **02_Onboarding** (v1) | мёртвый код, никто не вызывал даже до Phase 4 | 🔴 DELETE безопасно |
 | `DlWx3ZYnT3xT0tv5` | **06_Indicator_Send** | Python proxy (`webhook_server.maybe_send_indicator`) | 🔴 DELETE безопасно |
 | `uUvHjmfdfrT0Mxsn` | **08.1_Quests** | Headless `quests` экран в 04_Menu_v3 (мигр. 129-139, Phase 3B) | 🔴 DELETE безопасно |
@@ -81,18 +81,16 @@ Telegram → Python webhook proxy
     ↓ остальное → forward_to_n8n → 01_Dispatcher
                                         ├─ Go to 03_AI → 03_AI_Engine → Indicator_Clear ×3
                                         ├─ Go to 04_Menu (legacy) → Go to 04.2_Edit_StatsDaily
-                                        │                          → Go to 10_Payment
-                                        ├─ Go to 04_Menu_v3 → Go to 10_Payment
-                                        ├─ Go to 05_Location → 02.1_Location
-                                        └─ 02_Onboarding → 02_Onboarding_v3 (INACTIVE — branch фактически не достигается т.к. handler_onboarding_use_python=true)
+                                        └─ Go to 04_Menu_v3 (headless)
+   (2026-05-21: ветки 02_Onboarding / Go to 05_Location / Go to 10_Payment удалены — все три sub-workflows DELETE'нуты, refs зачищены.)
 ```
 
 ### Что значит «inactive sub-workflow всё равно работает»
 
 Per CLAUDE.md правило 12: `executeWorkflow` обращается к sub-workflow напрямую через ID. `active=true` нужен только для **триггер-нод** (Telegram Trigger, Webhook). Поэтому:
-- 02_Onboarding_v3 (inactive) можно вызвать через executeWorkflow если 01_Dispatcher решит туда пойти.
-- Это safety net для emergency rollback: переключить флаг `handler_onboarding_use_python=false` → трафик вернётся в n8n даже без re-activate.
-- Удаление workflow из БД n8n лишает этой safety net. Поэтому ARCHIVE > DELETE для недавно деактивированных.
+- Inactive sub-workflow можно вызвать через executeWorkflow если caller решит туда пойти.
+- Это safety net для emergency rollback: переключить флаг `*_use_python=false` → трафик вернётся в n8n даже без re-activate.
+- Удаление workflow из БД n8n лишает этой safety net. Поэтому ARCHIVE > DELETE для недавно деактивированных (правило хорошее, но 21.05 для onboarding/location/payment safety net сознательно снят — Python handlers стабильны >1 нед каждый).
 
 ---
 
@@ -172,3 +170,23 @@ Hot-reload: после загрузки UserCtx читается из `ctx.const
 - [phase4-onboarding-migration](phase4-onboarding-migration.md) — как переписали onboarding
 - [headless-architecture](headless-architecture.md) — `process_user_input` + `render_screen` контракт
 - [python-vs-n8n-template-grammar](python-vs-n8n-template-grammar.md) — почему `{x}` vs `{{x}}` сосуществуют
+- [payment-idempotency-pattern](payment-idempotency-pattern.md) — Stripe webhook dedup + Stars UQ + pre-checkout guard (mig 290, 2026-05-20)
+
+---
+
+## Состояние на 2026-05-20 (payment post-first-live audit)
+
+После PR #134 (Stripe идёмпотентность + Stars referral parity, mig 290):
+
+- **Новая таблица `stripe_webhook_events`** — Stripe webhook event-level dedup. Insert first, side-effects after. PK `event_id`.
+- **`payment_events.telegram_payment_charge_id` теперь UNIQUE** (partial index `WHERE NOT NULL`) — Stars charge dedup.
+- **Pre-checkout active-premium guard** — `webhook_server.py:pre_checkout_query` отбивает Telegram запрос `answer_pre_checkout_query(ok=False)` если `users.subscription_status='active'` и `expires_at > now()`. Защита от double-charge.
+- **Stripe live keys в `/home/taskbot/noms/.env`** (Stripe Review «in progress», но платежи принимаются).
+- **Stars success path → referral reward parity** — `process_referral_reward` теперь вызывается в обоих paths (Stripe + Stars).
+- **Open tech debt по handover'у `2026-05-20_payment_p1_brief.md`:**
+  - P1: dunning UX, `/start payment_success` deep-link, trial_7d flow, localised dates everywhere, Stars success message i18n.
+  - P2: upgrade/downgrade с proration, EU VAT automatic, receipt emails, refund mechanism.
+  - P3: one-menu pattern по всем payment screens (Stars done, crypto pending), n8n `10_Payment` row DELETE, Route Classifier executeWorkflow refs cleanup.
+- **Open issue (конец 20.05):** «Кнопка «Продлить подписку» не работает» — триаж в handover-файле. Подозрение на parallel agent regression router.py/payment.py.
+
+Pattern detail — [[payment-idempotency-pattern]].

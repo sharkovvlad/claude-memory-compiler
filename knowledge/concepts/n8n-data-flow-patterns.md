@@ -266,3 +266,44 @@ Recipe — PUT workflow с измененённым **только одним н
 ### General rule — when to fix legacy n8n vs migrate
 
 Legacy n8n workflows которые **уже работают** — не трогать (KB n8n-self-host-migration risk). Workflows которые **100% fail** — точечный hotfix через PUT, не переписывание на Python (Phase X — большая задача). Hotfix защищает остальные команды которые legacy всё ещё обслуживает (cmd_notifications, cmd_delete_account etc) пока их не мигрируют.
+
+---
+
+## Lesson 2026-05-21: DELETE workflow blocked by `workflow_published_version` FK (RESTRICT)
+
+n8n 2.17.7 ввёл новые таблицы `workflow_published_version` + `workflow_publish_history` (для publish/versioning). FK constraint **двойной** — один CASCADE (ожидаемый), один **`ON DELETE RESTRICT`**:
+
+```sql
+CONSTRAINT "FK_5c76fb7ee939fe2530374d3f75a" FOREIGN KEY ("workflowId") REFERENCES "workflow_entity" ("id") ON DELETE CASCADE,
+CONSTRAINT "FK_5c76fb7ee939fe2530374d3f75a" FOREIGN KEY ("workflowId") REFERENCES "workflow_entity" ("id") ON DELETE RESTRICT
+```
+
+RESTRICT блокирует — API `DELETE /workflows/<id>` отвечает HTTP 500 `Internal server error`, в docker logs `SQLITE_CONSTRAINT: FOREIGN KEY constraint failed`. Юзер видит только generic 500, гадать без логов невозможно.
+
+**Симптом-к-причине mapping:** если HTTP 500 на DELETE и workflow существует / inactive, и execution_entity по нему пусто — почти наверняка `workflow_published_version`. Проверь:
+
+```bash
+DB=/home/noms/n8n/data/database.sqlite
+sqlite3 $DB "SELECT * FROM workflow_published_version WHERE workflowId = '<ID>';"
+```
+
+**Cleanup recipe:**
+
+1. Backup БД (host-side): `cp $DB $DB.bak.$(date +%Y%m%d_%H%M%S)`. Не `docker cp` — n8n работает в WAL mode, safe-to-write live.
+2. Удалить blocking rows одним TX (host-side `sqlite3`, без stop'а контейнера):
+   ```sql
+   PRAGMA foreign_keys = ON;
+   BEGIN;
+   DELETE FROM workflow_published_version WHERE workflowId IN ('A','B');
+   DELETE FROM workflow_publish_history    WHERE workflowId IN ('A','B');
+   COMMIT;
+   ```
+3. Повторить API DELETE — теперь HTTP 200. CASCADE chain зачистит остальные FK (shared_workflow / workflow_history / workflow_dependency / workflow_statistics / webhook_entity).
+4. GET `/workflows/<id>` → HTTP 404. Health probe `/health` и docker logs n8n → clean.
+
+**Что НЕ делать:**
+- `docker cp host:database.sqlite container:/...` (ownership trap, KB n8n-sqlite-docker-cp-trap).
+- Trying to mass-DELETE через `workflow_entity` SQL — миграции/триггеры n8n могут зависеть, плюс webhook_entity без CASCADE FK.
+- Touching `workflow_history` rows — CASCADE сам всё сделает.
+
+Применено 2026-05-21 для удаления `02_Onboarding_v3` (`wzjYmMOurCbp4czk`) и `02.1_Location` (`7EqiiwUwlGs7dcHT`). `10_Payment` (`T9753zO3ZyiYsgkp`) удалился без issue — он был publish'нут позже и видимо имел синхронизированное состояние; не воспроизводимо. Дешевле всегда чистить превентивно для inactive workflows старше пары дней.
