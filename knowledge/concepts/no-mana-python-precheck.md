@@ -121,6 +121,19 @@ env = render_envelope(telegram_ui_from_render_screen, ctx, screen_id='no_mana_ex
 - **n8n не трогать.** После Python hook трафик в `Send No Mana` / `Send No Mana CTA` прекращается. PUT с удалением нод откладывается на Phase 6.4. Преждевременный PUT рискует сломать parallel ветки (Build Step Reminder + Is Registered (No Mana)).
 - **Unregistered ветка**: остаётся в n8n (Send No Mana CTA с `messages.complete_profile_prompt`). Мig 236 НЕ покрывает unregistered — это сознательное сужение scope.
 
+### Followup fix'ы (mig 237 + 238, 17.05 вечер)
+
+**Mig 237 — NULL-safe mana regeneration.** `cron_regenerate_mana` WHERE содержал `(now() - mana_last_recharge_at) >= '12 hours'`. Для юзеров с `mana_last_recharge_at IS NULL` (созданных до bootstrap'а) выражение давало NULL → строка пропускалась навсегда. Fix: backfill NULL → NOW() + добавление `OR mana_last_recharge_at IS NULL` в WHERE. 1 affected юзер (tid=786301802). Паттерн: [[concepts/cron-silent-failure-alerting]] секция «Mana regeneration NULL-skip».
+
+**Mig 238 — No-mana screen UX polish** (3 проблемы обнаружены после merge PR #87):
+1. **Indicator-стикер race:** `maybe_send_indicator` fire-and-forget шлёт стикер **после** Python hook → `save_indicator_state` записывает mid ПОСЛЕ `render_screen` → `delete_and_send_new` бьёт по `last_bot_message_id` (предыдущее меню), а свежий стикер остаётся. Fix: early-return в `telegram_proxy.maybe_send_indicator` при `status='registered' AND mana_current<=0`. Устраняет race **в принципе** + улучшает UX (моментальный ответ без стикера).
+2. **Recharge кнопка → INSUFFICIENT_COINS dead-end:** юзер с 70 nomscoins (cost=300) видел unhelpful error. Fix: `visible_condition` на кнопке через `(SELECT value::int FROM app_constants WHERE key='mana_recharge_cost_coins') <= u.nomscoins`. Safe default 999999 если конфиг сломан → кнопка скрыта.
+3. **Layout:** кнопки 0/0 + 0/1 (один ряд) → 0/0 + 1/0 (вертикально, лучше читаемость).
+
+`get_indicator_context` DROP+CREATE — добавлены `mana_current` и `subscription_status` в RETURNS TABLE (CREATE OR REPLACE не меняет shape). GRANT восстановлен.
+
+**Lesson — fire-and-forget side-effects ломают delete-and-send-new:** если параллельно идёт fire-and-forget save (`save_indicator_state`), к моменту render `last_bot_message_id` устарел. Решения: (1) skip indicator для no-mana path (наш выбор); (2) explicit deleteMessage по indicator_message_id после render; (3) sync wait (теряет latency).
+
 ## Где это пригодится снова
 
 Шаблон применим для **любого** pre-check'а, который должен перехватить вход юзера ДО forward в legacy n8n:

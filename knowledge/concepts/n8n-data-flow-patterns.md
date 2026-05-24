@@ -10,8 +10,10 @@ sources:
   - "daily/2026-04-25.md"
   - "daily/2026-04-27.md"
   - "daily/2026-05-04.md"
+  - "daily/2026-05-10.md"
+  - "daily/2026-05-13.md"
 created: 2026-04-08
-updated: 2026-05-04
+updated: 2026-05-13
 ---
 
 # n8n Data Flow Patterns

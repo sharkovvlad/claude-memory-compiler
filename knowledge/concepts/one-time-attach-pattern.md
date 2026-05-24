@@ -1,3 +1,15 @@
+---
+title: "One-Time Attach Pattern (Reply-Keyboard Lifecycle)"
+aliases: [one-time-attach, reply-kb-lifecycle, carrier-text-resolution, attach-main-kb-unconditional]
+tags: [ux, telegram, reply-keyboard, headless, template-engine, onboarding]
+sources:
+  - "daily/2026-04-30.md (mig 159/160 — initial conditional re-attach)"
+  - "daily/2026-05-07.md (mig 182/183/184 — One-Time Attach + carrier_text_key + unconditional attach)"
+  - "daily/2026-05-14.md (Tech debt #7 — soft-delete targets)"
+created: 2026-05-07
+updated: 2026-05-14
+---
+
 # One-Time Attach Pattern (Reply-Keyboard Lifecycle)
 
 **Внедрено:** Migrations 182/183/184 + Python patches (handlers/onboarding_v3.py + services/template_engine.py), 07.05.2026.

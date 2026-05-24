@@ -1,13 +1,14 @@
 ---
 title: "Nav Stack — Иерархическая навигация Назад (Bug 6)"
-aliases: [nav-stack, hierarchical-back, cmd-back, push-nav, pop-nav, back-nav, reset-nav-to, bug-6]
+aliases: [nav-stack, hierarchical-back, cmd-back, push-nav, pop-nav, back-nav, reset-nav-to, bug-6, i-came-from]
 tags: [n8n, architecture, navigation, ux, migrations, refactor]
 sources:
   - "daily/2026-04-17.md"
   - "daily/2026-04-22.md"
   - "daily/2026-04-27.md"
+  - "daily/2026-04-29.md"
 created: 2026-04-17
-updated: 2026-04-27
+updated: 2026-04-29
 ---
 
 # Nav Stack — Иерархическая навигация Назад (Bug 6)
@@ -16,11 +17,11 @@ updated: 2026-04-27
 
 ## Key Points
 
-- **3 миграции (076–078):** `users.nav_stack JSONB DEFAULT '[]'::jsonb` + 6 RPCs: `push_nav` (дедуп + cap 10), `pop_nav`, `peek_nav`, `clear_nav`, `back_nav` (атомарный pop+peek), `reset_nav_to` (clear+push для top-level)
-- **Семантика:** top-level reply-кнопки → `reset_nav_to` (атомарно чистит стек + пушит screen); sub-screens → `push_nav` с дедупом; inline Back `cmd_back` → `back_nav` (pop current + return parent)
-- **Back Target Router (Switch):** 5 правил — `profile`, `sub_screen`, `edit_picker`, `progress`, `shop` + fallback `Send Main Menu (Back)`. Каждый новый screen добавляет rule, не требует переделки pipeline
+- **3 базовые миграции (076–078):** `users.nav_stack JSONB DEFAULT '[]'::jsonb` + 6 RPCs: `push_nav` (дедуп + cap), `pop_nav`, `peek_nav`, `clear_nav`, `back_nav` (атомарный pop+peek), `reset_nav_to` (clear+push для top-level)
+- **Migration 146 (29.04):** `push_nav` cap 10→7, `back_nav` absolute fallback → `stats_main` (было `profile_main`), RAISE WARNING при каждом срабатывании fallback для observability
+- **Migration 147 (29.04) — I-came-from path-walk:** `push_nav` truncate-on-existing (дубли в стеке невозможны), `process_user_input` input-source-aware через `is_inline` в `p_cb_context` (Reply KB wipe vs Inline push), Priority 1/2 инвертированы (сначала stack pop, потом tree fallback), `pg_advisory_xact_lock` для защиты от concurrent agents
+- **Семантика (после 147):** Reply KB → wipe stack (юзер «пришёл домой»); Inline KB → push destination (I-came-from history до 7 уровней); `cmd_back` → Priority 1 stack pop → Priority 2 `back_screen_id_default` → Priority 3 `stats_main` absolute root
 - **Push Nav (*)** ноды всегда fire-and-forget **параллельно с Build * Text** (до HTTP Request). Если подключить после HTTP Request — `$json` уже clobbered, `menu_route` = undefined (n8n Data Flow Rule #1)
-- **04_Menu 109→123 ноды**, 02_Onboarding_v3 15→17, 02.1_Location 44→46, 10_Payment 34→35, 08.4_Shop modified
 
 ## Details
 
@@ -285,6 +286,54 @@ nav_stack покрывает **логическую навигацию** (отк
 | Миграций | 3 (076, 077, 078) |
 | 04_Menu node count | 109 → 123 |
 
+### Migration 146 — back fallback → stats_main + push_nav cap 7 (2026-04-29)
+
+**Bug:** «Назад иногда уводит в Профиль вместо Прогресса». Root cause — hardcoded `profile_main` в Priority 3 fallback `process_user_input` (когда stack пуст и `back_screen_id_default` = NULL).
+
+**Аудит surface:** из 44 ui_screens, 41 имеют `back_screen_id_default` ✓. 3 без (profile_main / progress_main / stats_main) — root-screens, у которых нет cmd_back кнопок. **Real bug surface = 0 в current config**, но theoretical risk для future screens.
+
+**UX-директива тимлида:** «Кнопка Назад должна работать всегда. До 7 подуровней. Stay-put нельзя.» → fallback = `stats_main` (безопасный дашборд, минимум побочных эффектов).
+
+**Изменения:**
+
+1. **`push_nav` cap 10 → 7:** полный rewrite через `CREATE OR REPLACE`. Loop drops oldest пока stack >= cap (защита на случай уменьшения cap).
+2. **`back_nav` absolute root fallback:** 2 места (Path 1 после pop + Path 2 stack пустой) — оба `parent='stats_main'` с `source='absolute_root_fallback'`. RAISE WARNING при каждом срабатывании для observability.
+3. **`process_user_input` Priority 3:** `profile_main` → `stats_main` + RAISE WARNING.
+
+### Migration 147 — I-came-from path-walk navigation (2026-04-29)
+
+**Проблема:** migration 146 закрыл fallback, но глубина истории = 1: fastpath callbacks вытирали `nav_stack='[]'` до `push_nav` (L325). Нет реальной I-came-from навигации при Inline-переходах.
+
+**Архитектурный pivot:** переход от tree-walk (`back_screen_id_default` first) к **path-walk** (`nav_stack` as real history first).
+
+**4 изменения:**
+
+1. **`push_nav` — truncate-on-existing:** если pushing screen уже в стеке, обрезает до его индекса (включительно). Закрывает циклы A→B→C→B → push B truncate to [A, B]. Закрывает save-and-return (Settings → edit_lang → save → push Settings → truncate to [Profile, Settings]).
+
+2. **`process_user_input` fastpath — input-source-aware (БЕЗ хардкода имён):**
+   - Reads `(p_cb_context->>'is_inline')::boolean` (default TRUE для backward compat).
+   - TRUE (Inline KB): keep stack → push destination → I-came-from history.
+   - FALSE (Reply KB synth): wipe stack → новый корень. SQL не знает имена callbacks.
+
+3. **`process_user_input` cmd_back — Priority 1/2 инвертированы:**
+   - **Priority 1 NEW:** nav_stack pop через back_nav (path-walk, I-came-from).
+   - **Priority 2 NEW:** `back_screen_id_default` (tree fallback когда стек пуст).
+   - **Priority 3:** `stats_main` absolute root + WARNING (146 preserved).
+
+4. **Advisory lock + Read-after-Lock:** `pg_advisory_xact_lock(147147147)` ПЕРЕД `pg_get_functiondef`. Защита от concurrent execution другими агентами.
+
+**До/После поведения:**
+
+| Сценарий | До 147 | После 147 |
+|---|---|---|
+| profile → progress → friends → shop, 3× Back | shop → progress (back_default) → profile (back_default) → stats_main fallback | shop → friends → progress → profile (stack pop'ы — реальный путь) |
+| Reply KB «Профиль» в середине пути (после Python deploy) | push profile_main → стек растёт | wipe stack → стек = [profile_main] → Назад = stats_main (Priority 3) |
+| Save-and-return (Settings → Edit Lang → Save) | возможен дубликат в стеке | truncate-on-existing → стек правильный |
+
+**Verify (9 сценариев):** push_nav truncate ✅, linear I-came-from path ✅, cmd_back walks back 4 levels ✅, Priority 2 tree fallback ✅, Priority 3 absolute root ✅, Reply KB wipe ✅, backward compat (no is_inline = inline behavior) ✅.
+
+**Python handover (commit `eb3c93d`):** `dispatcher/router.py` получил поле `cb_context` в `RouteDecision`. В 3 synth_callback ветках (profile/stats/progress reply-text) ставится `{"is_inline": False}`. Direct inline callbacks оставляют `cb_context=None` (default TRUE подхватит). 135/135 тестов.
+
 ## Related Concepts
 
 - [[concepts/one-menu-ux]] — физический слой (deleteMessage/save_bot_message) vs логический (nav_stack); known gap sub-screens не tracked
@@ -294,9 +343,11 @@ nav_stack покрывает **логическую навигацию** (отк
 - [[concepts/edit-picker-dual-render]] — 9 edit cases в Build Ask Markup; Phase 2 мигрировала все на cmd_back
 - [[concepts/payment-integration]] — Phase 5 убрала subscription_source hack; pre-existing JSON.stringify bug fix
 - [[concepts/n8n-subworkflow-contract]] — D5 push_nav в v3 через _push_nav_screen; Phase 4 After-Lang Builder
+- [[concepts/variant-b-cutover]] — is_inline handover для Python Dispatcher Phase 0.5+1
 
 ## Sources
 
 - [[daily/2026-04-17.md]] — Bug 6 полный цикл (Phase 0-8 + R1): migrations 076-078, 26 кнопок на cmd_back, 13 Push Nav нод, Back Target Router 5 rules, Phase 3 paired items hotfix, Phase 3.5 edit_speed→edit_goal fix, D5 unified save confirmation + backInlineKB в v3, Phase 4 Language→Settings + stale keyboard 2-msg fix, Phase 5 subscription_source removal + JSON.stringify 404 fix, Phase 6 Shop/Friends/League/Quests, Phase 7 08.4_Shop, Phase 8 cleanup, R1 newcomer welcome
 - [[daily/2026-04-22.md]] — Migration 121: back_nav anchor fallback (new signature + p_current_screen hint), 3-priority fallback chain, source debug field, 7-scenario E2E verification, process_user_input 2-line patch; migration 116: picker callbacks → menu_v3 без status guard; migration 117: cmd_back priority = back_screen_id_default FIRST (hierarchy), nav_stack fallback second
 - [[daily/2026-04-27.md]] — Deployment confirmation: Phases 5-8 + R1 задеплоены и smoke-tested. Phase 5 (Payment): subscription_source hack заменён на cmd_back + nav_stack + BTR Rule[3] progress. Phase 6: 8 замен + 5 Push Nav нод + BTR Rule[4] shop. Phase 7: 08.4_Shop. Phase 8: Profile Sub-Screen cleanup. R1: newcomer Language → Back → Welcome через regKB() в Onboarding Engine
+- [[daily/2026-04-29.md]] — Migration 146: back fallback stats_main + push_nav cap 7, 6-scenario verify. Migration 147: I-came-from path-walk (truncate-on-existing, is_inline source-aware, Priority 1/2 invert, advisory lock), 9-scenario verify, Python handover commit eb3c93d (cb_context + is_inline=False для reply-kb synth)

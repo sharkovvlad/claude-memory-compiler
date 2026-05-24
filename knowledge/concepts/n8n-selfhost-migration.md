@@ -2,7 +2,7 @@
 
 **Когда применимо:** уход с n8n Cloud на self-hosted Community Edition в Docker. Цель — убрать cold-start (n8n.cloud worker засыпает после ~30 сек простоя, тратит 1.3-1.5 сек на пробуждение), сэкономить подписку, перевести инфру под свой контроль.
 
-**Источник:** Шаг 0 миграции NOMS, выполнен 26-27 апреля 2026 (`daily/2026-04-26.md`, `daily/2026-04-27.md`).
+**Источник:** Шаг 0 миграции NOMS, выполнен 26-28 апреля 2026 (`daily/2026-04-26.md`, `daily/2026-04-27.md`, `daily/2026-04-28.md`).
 
 **Связанные:** [[concepts/noms-architecture]], [[concepts/n8n-data-flow-patterns]], [[concepts/n8n-subworkflow-contract]].
 

@@ -134,7 +134,7 @@ SELECT key, value FROM app_constants WHERE key LIKE 'dispatcher_python_%' OR key
 |---|---|---|---|
 | `dispatcher_python_shadow_mode` | `HANDLER_DISPATCHER_USE_PYTHON` | `false` | Phase 1: observation. Логирует match/mismatch, ничего не шлёт юзеру |
 | `dispatcher_python_authoritative` | `HANDLER_DISPATCHER_AUTHORITATIVE` | `false` | Phase B-3: Python authoritative SoT, шлёт в per-target n8n webhook (или Python handler) |
-| `dispatcher_python_authoritative_admin_only` | `HANDLER_DISPATCHER_AUTHORITATIVE_ADMIN_ONLY` | `true` | Safety gate: authoritative фактически работает только для admin `417002669`, остальные — legacy |
+| `dispatcher_python_authoritative_admin_only` | ~~`HANDLER_DISPATCHER_AUTHORITATIVE_ADMIN_ONLY`~~ | **REMOVED** (PR #60, 13.05) | ~~Safety gate~~. Канарейка снята 2026-05-13: DB-ключ остаётся, Python-код удалён (`app_flags.py` + `webhook_server.py` gate). Все юзеры через Python authoritative. DB-cleanup отложен до Phase 6.4. |
 | `handler_menu_v3_use_python` | `HANDLER_MENU_V3_USE_PYTHON` | `false` | Phase 2: Python владеет menu_v3 response (вместо n8n 04_Menu_v3) |
 | `handler_onboarding_use_python` | `HANDLER_ONBOARDING_USE_PYTHON` | `false` | Phase 4: Python владеет онбордингом (вместо n8n 02_Onboarding_v3) |
 | `handler_location_use_python` | `HANDLER_LOCATION_USE_PYTHON` | `true` | Phase 6.3 (2026-05-14): Python владеет country/timezone picker (вместо n8n 02.1_Location) |

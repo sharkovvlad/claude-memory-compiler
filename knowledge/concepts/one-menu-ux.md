@@ -1,12 +1,13 @@
 ---
 title: "One Menu UX"
-aliases: [one-menu, last-bot-message-id, save-bot-message, delete-old-menu]
+aliases: [one-menu, last-bot-message-id, save-bot-message, delete-old-menu, one-menu-promotion]
 tags: [n8n, ui, telegram, patterns, ux]
 sources:
   - "daily/2026-04-11.md"
   - "daily/2026-04-17.md"
+  - "daily/2026-05-06.md"
 created: 2026-04-11
-updated: 2026-04-17
+updated: 2026-05-06
 ---
 
 # One Menu UX
@@ -109,13 +110,45 @@ The following message types must never call `save_bot_message`:
 
 Tracking these would cause the next navigation tap to delete a food log entry — permanently losing user data.
 
+## One Menu Promotion Pattern (mig 180, 2026-05-06)
+
+Автоматическое продвижение `send_new → replace_existing` в `services/template_engine.py`, когда callback path предоставляет `callback_message_id`. Закрывает целый класс «двойных сообщений» в headless-экранах.
+
+### Проблема
+
+Headless-экраны имеют статическую `render_strategy` в `ui_screens` (задаётся при сидировании). `onboarding_welcome`, `stats_main` и другие — `send_new`. Когда юзер попадает на такой экран через **inline callback** (например, `cmd_lang_uk` → re-render welcome после смены языка), `callback_message_id` доступен. Но `template_engine` для `send_new` его игнорирует → создаёт новое сообщение → **два сообщения в чате** (старое + новое) вместо одного.
+
+### Решение
+
+В `template_engine._dispatch_render`:
+
+```python
+if strategy == 'send_new' and callback_message_id is not None:
+    strategy = 'replace_existing'  # promote
+```
+
+Callback path (inline button) **всегда** правит существующее сообщение. Text path (`/start`, числовой ввод) создаёт новое (`callback_message_id=None` → promotion не срабатывает).
+
+### Архитектурный смысл
+
+До mig 180 приходилось задавать `replace_existing` каждому screen'у, который может быть достигнут через callback. С promotion — достаточно `send_new` в БД, транспортный слой Python сам решает на основании наличия `callback_message_id`. Убирает необходимость думать о render_strategy при сидировании headless-экранов.
+
+### Ограничения
+
+- **Не применять к стикерам** — `send_sticker` стратегия не editMessageText.
+- **Не применять к `attach_reply_kb`** — carrier-сообщение с reply-keyboard не должно перезаписывать inline-экран.
+- **Text path остаётся `send_new`** — `callback_message_id=None` → promotion не срабатывает. Это правильно: text message (числовой ввод, `/start`) не имеет target'а для editMessageText.
+
 ## Related Concepts
 
 - [[concepts/save-bot-message-contract]] — **обязательство** для всех воркфлоу вызывать `save_bot_message` после финального user-visible сообщения. Без этого One Menu UX ломается на следующей навигации. Lesson 14.05 (Tech debt #7 smoke): legacy n8n `02.1_AI_Engine` нарушает контракт → orphaned bubbles в чате.
 - [[concepts/n8n-stateful-ui]] — editMessageText, callback_message_id, inline nav patterns
 - [[concepts/n8n-data-flow-patterns]] — fire-and-forget parallel branch rule
 - [[concepts/supabase-db-patterns]] — migration 056, DROP+CREATE VIEW pattern
+- [[concepts/headless-architecture]] — render_screen pipeline, render_strategy contract
+- [[concepts/phase4-onboarding-migration]] — Gotcha #24: One Menu promotion первая мотивация (mig 180)
 
 ## Sources
 
 - [[daily/2026-04-11.md]] — Full implementation: migration 056 (v_user_context + last_bot_message_id), Dispatcher "Prepare for 04" field 31, 04_Menu 9 new nodes (80→89), Delete/Extract/Save chains for Stats/Profile/Progress
+- [[daily/2026-05-06.md]] — Mig 180: One Menu promotion pattern в template_engine (send_new + callback_message_id → replace_existing); architectural choice Вариант D vs A; action='start' headless cleanup

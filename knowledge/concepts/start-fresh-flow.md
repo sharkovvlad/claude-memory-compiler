@@ -1,5 +1,17 @@
 # cmd_start_fresh — как работает в текущей системе
 
+> ⚠️ **OUTDATED (2026-04-29 vintage).** Этот файл описывает _текущее_ поведение `reset_to_onboarding` (mig 079), но в нём **обнаружены 4 production gap'а** (см. [[concepts/start-fresh-gaps-2026-05-11]]):
+> 1. `status='registration_step_1'` пропускает welcome screen + welcome-стикер. Должно быть `'new'`.
+> 2. `level=1` конфликтует с `finalize_onboarding_location.already_completed` → success-стикер + поздравительное сообщение не доходят до юзера.
+> 3. Неполный сброс полей (~12 пропущенных: body_type, phenotype_answers, location funnel, freeze ghost, и др).
+> 4. Food logs остаются привязаны к telegram_id (TODO Опция 2).
+>
+> **Для рабочего test reset** используй [[concepts/test-user-reset-recipe]] (verified против live schema, mig 198/201-aware).
+>
+> Этот файл сохраняется как историческая привязка к Phase 4 миграции. Новые правки `reset_to_onboarding` идут через миграцию (см. план в gaps file).
+>
+> ---
+
 > Подготовлено chip разведки для chip #2-execute (миграция онбординга).
 > Дата: 2026-04-29. Источники: GET 01_Dispatcher (`7jVRdAvVlzOqIMEi`), dispatcher/router.py, SQL к Supabase.
 

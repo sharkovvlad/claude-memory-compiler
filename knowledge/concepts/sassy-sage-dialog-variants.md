@@ -4,8 +4,9 @@ aliases: [dialog-variants, array-translations, sassy-sage-variants, variadic-res
 tags: [translations, ux, patterns, supabase, i18n]
 sources:
   - "daily/2026-04-21.md"
+  - "daily/2026-05-13.md"
 created: 2026-04-21
-updated: 2026-04-21
+updated: 2026-05-13
 ---
 
 # Sassy Sage Dialog Variants System

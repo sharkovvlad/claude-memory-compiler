@@ -1,6 +1,6 @@
 # 01_Dispatcher Route Classifier — edit-location reply-back early branch (patch v9, 08.05.2026)
 
-**Контекст:** временный fix между Phase 4 (онбординг в Python) и Phase 5 (location migration в Python). Будет removed после Phase 5.
+**Контекст:** временный fix между Phase 4 (онбординг в Python) и Phase 6.2 (location edit-flow migration в Python). **✅ REMOVED в PR #59 (2026-05-13) — секция Phase 6.2 ниже.**
 
 ## Проблема, которую решает
 
@@ -92,6 +92,63 @@ Prepare for 05.fields.values += {
 1. Удалить early branch из Route Classifier (искать `LOC_EDIT_STATUSES` или `edit_loc_reply_back`).
 2. Удалить `callback_message_id` из Prepare for 05 (если 02.1_Location workflow совсем удаляется).
 3. Удалить TD-#15 / TD-D из watchlist'а.
+
+## n8n PUT v13 (12.05.2026, 14:17 UTC) — band-aid resolve text_key
+
+**Triggered by:** live UAT 786301802 в 13:57 UTC показал что `IF: Onboarding Just Completed` теперь корректно идёт по true-branch (v12 fix сработал), но `Telegram: Send onboarding_success` падает с Telegram API 400 `Bad Request: message text is empty`. SQLite `execution_entity[id=1290] status=error`.
+
+**Root cause:** `render_screen` (Phase 4 headless contract) возвращает `telegram_ui` с `text_key='onboarding.finished'` + `template_vars={xp,mana,name,...}` БЕЗ `text` ключа. Python `template_engine.render_envelope` resolve'ит это автоматически. **n8n** просто читал `$json.ui.text` (undefined) → пустой text → 400.
+
+**Конкретные ноды поправлены (Phase 4 headless mismatch):**
+- `Telegram: Send onboarding_success` text expression
+- `Telegram: Send onboarding_success_menu` text expression
+
+Новый inline expression:
+```javascript
+={{ (function() {
+  const ui = $json.ui || {};
+  const tr = $('Init & Templates').first().json.translations || {};
+  let raw = ui.text;
+  if (!raw && ui.text_key) {
+    let cur = tr;
+    for (const k of ui.text_key.split('.')) { cur = cur && cur[k]; }
+    raw = typeof cur === 'string' ? cur : (Array.isArray(cur) ? cur[Math.floor(Math.random()*cur.length)] : '');
+  }
+  if (!raw) return ui.carrier_text || '';
+  const vars = ui.template_vars || {};
+  return String(raw).replace(/\{(\w+)\}/g, (m, k) => vars[k] !== undefined ? vars[k] : m);
+})() }}
+```
+
+**Что НЕ покрывает band-aid:** `sticker_category` поле. `mig 198/201` Channel A sticker emission работает только через Python `template_engine.render_envelope`. n8n `02.1_Location` НЕ имеет `sendSticker` ноды для `onboarding_success` — стикер не показывается, только текст. Полный fix sticker delivery — **Phase 6**.
+
+**Важная коррекция предыдущего утверждения**: «onboarding_success никогда не показывался». Stickers_shown.onboarding_success set в БД (mig 201 атомарно в render_screen) — но это **не означает доставку юзеру**. У 32 юзеров (на 12.05) marker в БД, но execution_entity показывает что 100% этих executions падали с 400 «message text is empty». **Сообщение действительно никогда не доходило**, БД marker — false positive.
+
+**Файлы patch v13:** workflow `7EqiiwUwlGs7dcHT` updatedAt `2026-05-12T14:17:32Z`, 55 nodes preserved.
+
+---
+
+## Дополнительный n8n PUT v12 (12.05.2026)
+
+Live UAT 12.05 показал что **`IF: Onboarding Just Completed`** в 02.1_Location всегда шла по false-branch потому что `Postgres: Finalize Onboarding` (`typeVersion 2.4`) возвращает column-wrapped `{finalize_onboarding_location: {...}}`, а IF проверяла `$json.success` (undefined). Юзер видел «Сохранено» вместо onboarding_success-стикера + поздравительного сообщения.
+
+**Patch v12** (10:10 UTC):
+- `IF: Onboarding Just Completed` leftValue: `{{ $json.success }}` → `{{ $json.finalize_onboarding_location.success }}`.
+- `02_Continue Onboarding` workflowId: `JRaKFPb5sOFL3xlc` (deleted, blocked PUT) → `0xJXA5M4wQUSiGXT` (04_Menu_v3 active, safe pointer — нода никогда не достигается через legacy dead `If`-ветки).
+
+Полный анализ — [[concepts/start-fresh-gaps-2026-05-11]] секция «Gap 5».
+
+Phase 6 cleanup: удалить весь dead-code path (`If`, `If Auto Continue`, `Prepare for 02 Continue`, `02_Continue Onboarding`) — после переноса 02.1_Location в Python.
+
+## ✅ REMOVED — Phase 6.2 (PR #59, 2026-05-13)
+
+**Patch v9 удалён** из `dispatcher/router.py` в PR #59 (Phase 6.2 location edit-flow → Python). Секция `4e-pre` (`LOC_EDIT_STATUSES` early branch) заменена пояснительным комментарием со ссылкой на Python handler `handlers/location.py`.
+
+**Причина удаления:** Phase 6.2 перенёс обработку `edit_country`/`edit_timezone` loc_* callbacks в Python authoritative handler. Reply-text «🔙» в edit-context больше не маршрутизируется руками — после Phase 6.2 handler сам строит envelope без reply-kb, и back обрабатывается SQL FSM через стандартный `cmd_back` meta dispatch.
+
+**NLM-сюрприз:** Phase 6.2 не потребовала SQL миграции. NLM-консультация выявила что `loc_country_<CC>` и `loc_tz_<TZ>` — динамические callbacks (генерируются Python handler'ом на лету), их физически нет в `ui_screen_buttons`. `process_user_input` их не обрабатывает. Вся логика — в Python через раздельные сеттеры `set_user_country` + `set_user_timezone` + `clear_editing_state`.
+
+Полный architectural rationale — [[concepts/headless-fsm-vs-dynamic-handler-separation]].
 
 ## Связанные миграции / patches
 

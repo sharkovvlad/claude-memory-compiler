@@ -8,8 +8,9 @@ sources:
   - "daily/2026-04-11.md"
   - "daily/2026-04-13.md"
   - "daily/2026-04-14.md"
+  - "daily/2026-05-18.md"
 created: 2026-04-08
-updated: 2026-04-14
+updated: 2026-05-18
 ---
 
 # n8n Stateful UI Patterns
@@ -145,6 +146,20 @@ Build [Screen] Text → Is Callback? → [true]  editMessageText                
 
 **Общее правило:** При инлайнировании sub-workflow (вставке логики из 08_Progress в 04_Menu) — проверять совместимость `parse_mode` между нодой, генерирующей текст, и нодой, его отправляющей. Они должны совпадать.
 
+### sendChatAction typing indicator — NOT cancelled by editMessageText (2026-05-18)
+
+**Проблема:** После Python cutover'а (Phase 2+) большинство callback-ответов рендерится через `editMessageText` (~200ms). Telegram typing indicator (`sendChatAction(typing)`) живёт **5 секунд** и отменяется **только** через `sendMessage` (новое сообщение). `editMessageText` **НЕ отменяет** typing. Юзер видел «бот печатает...» ещё 5 секунд после мгновенного inline-update.
+
+**Root cause:** 10 нод `sendChatAction(typing)` в 3 n8n workflows (01_Dispatcher, 04_Menu_v3, 04_Menu legacy) были оправданы при медленном n8n-only пути (5-6 сек ответ). После Python cutover'ов половина path'ов ускорилась до ~200ms — typing-индикатор стал **визуально мешать**.
+
+**Fix (2026-05-18):** disabled=true на 10 нодах через Safe PUT × 3 workflows. Все 10 были fire-and-forget dead-end (нет outgoing connections) — отключение не разрывает никакой flow.
+
+**Правило:** `editMessageText` НЕ отменяет typing-индикатор Telegram — только `sendMessage`. При cutover legacy n8n → Python (где render_strategy='replace_existing' использует editMessageText) — audit'ить `sendChatAction` ноды, которые теряют смысл при быстрой Python-латентности.
+
+**Чек-лист после каждого cutover'а экрана:**
+- `grep sendChatAction` в n8n workflow JSON — если callback path теперь идёт через Python editMessageText, typing-нода = визуальный мусор.
+- Предпочтительный UX для slow paths (voice/photo AI): стикер «думающий Номс» через `telegram_proxy.maybe_send_indicator` (Channel D).
+
 ## Related Concepts
 
 - [[concepts/one-menu-ux]]
@@ -152,6 +167,7 @@ Build [Screen] Text → Is Callback? → [true]  editMessageText                
 - [[concepts/n8n-performance-optimization]]
 - [[concepts/noms-architecture]]
 - [[concepts/access-credentials]]
+- [[concepts/telegram-proxy-indicator]] — Channel D sticker indicator (правильный UX для slow paths после typing disable)
 
 ## Sources
 
@@ -160,3 +176,4 @@ Build [Screen] Text → Is Callback? → [true]  editMessageText                
 - [[daily/2026-04-11.md]] — "One Menu" implementation (9 new nodes: Delete/Extract/Save chains × 3 screens); callback_query_id added to Dispatcher Prepare for 04; Answer Callback Query node added to 04_Menu
 - [[daily/2026-04-13.md]] — One Menu extended to invoice sends (Delete Old Menu before Send Invoice in 10_Payment); Back button Progress: parse_mode Markdown → HTML fix for underscore names; onError continueRegularOutput
 - [[daily/2026-04-14.md]] — Delete Old Menu race condition fix: теперь срабатывает ТОЛЬКО из Is Callback?[false] ветки (Stats, Profile, Progress); Send Progress parse_mode Markdown → HTML (несовместимость с HTML-генерацией Build Progress Text)
+- [[daily/2026-05-18.md]] — sendChatAction typing indicator disable (10 нод × 3 workflows). editMessageText НЕ отменяет Telegram typing — только sendMessage. После Python cutover'а typing стал визуальным мусором.

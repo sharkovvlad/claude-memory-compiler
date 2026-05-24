@@ -7,8 +7,10 @@ sources:
   - "migrations/081-093"
   - ".claude/plans/buzzing-dreaming-brooks.md"
   - "daily/2026-04-25.md"
+  - "daily/2026-05-06.md"
+  - "daily/2026-05-13.md"
 created: 2026-04-19
-updated: 2026-04-29
+updated: 2026-05-13
 status: "Phase 3A — progress_main + 4 children DEPLOYED (migrations 129-139); Migration 124 — lang refresh; Migration 142 — Quests headless; 143 — League info; 144 — Shop full headless (buy_freeze + buy_mana + 8 screens); 145 — Ambassador Payout flow (9 screens, FSM, anti-spoofing, balance reservation); 146 — back fallback → stats_main + nav_stack cap=7; 147 — back i-came-from path-walk + advisory_xact_lock + is_inline"
 ---
 
@@ -310,6 +312,46 @@ if (!callback && message && PROFILE_V5_STATUSES.has(user.status)) {
 - [[concepts/n8n-switch-duplicate-outputkey-bug]] — original driver of this migration
 - [[concepts/nav-stack-architecture]] — reused as-is
 - [[concepts/n8n-template-engine]] — stays in JS (TMA architectural decision)
+
+---
+
+## Update 2026-05-06 (mig 180) — action='start' headless cleanup + meta contract
+
+Два архитектурных дополнения к headless-контракту закреплены после Live QA 06.05.
+
+### action='start' для registered юзера → render_screen, не forward
+
+**Проблема:** `process_user_input` имел legacy-блок `IF p_action_type='start' THEN RETURN {status:'forward', forward_to:'02_Onboarding_v3'}`. Workflow `02_Onboarding_v3` деактивирован 04.05 (Phase 4 cutover). Любой `/start` от registered юзера → Python `_envelope_from_rpc_result` не знает `status='forward'` → generic ошибка «⚠️ Something went wrong». **Баг существовал с 04.05**, но триггерился только при осознанном `/start` от registered (rare path).
+
+**Выбор Варианта D (headless-first)** вместо Варианта A (расширить gate в dispatch_with_render):
+- A раздувал `process_onboarding_input` ещё одной веткой для `(registered, start)`, противоречил плану TODO #1 (слияние двух FSM-функций).
+- A фиксил только один статус; ещё 5 не-онбординг статусов (`editing_meal`, `edit_*`, `entering_promo`, `payout_*`) имели тот же forward → тот же баг.
+- D — одна строка в `process_user_input` (`RETURN render_screen(tid, 'stats_main')`) закрывает весь класс.
+
+**Правило для будущих агентов:** при обнаружении `{status:'forward', forward_to:'<deactivated_workflow>'}` в process_user_input — **заменять на `render_screen(tid, '<headless_screen>')`**, не расширять gate и не reactivating workflow.
+
+### Headless contract: `language_code` в `meta`, не в `telegram_ui`
+
+`render_screen()` возвращает структуру:
+```jsonb
+{
+  "meta": {
+    "language_code": "es",   ← identity-поля здесь
+    "back_screen_id": null
+  },
+  "telegram_ui": {
+    "text_key": "...",
+    "language_code": null,   ← чистый UI, без identity
+    ...
+  }
+}
+```
+
+`telegram_ui` — **чистый UI** (Dumb Renderer контракт): text_key, keyboard, render_strategy. Без identity-полей. `meta` — **контекст для Python handler'а**: language_code, permissions, back hints.
+
+**Последствие:** Python handler, которому нужен текущий язык юзера после save RPC (например после `set_user_language`), обязан читать `result.meta.language_code`, НЕ `result.telegram_ui.language_code` (всегда null). Если `meta.language_code != ctx.language_code` — требуется ctx refresh через `get_user_context()` перед `render_envelope()` (cost: +44ms RTT, только при реальной смене языка).
+
+Lesson 06.05: агент читал `telegram_ui.language_code` → Language Lag (юзер менял ES→UK, следующий экран рендерился на старом ES).
 
 ---
 

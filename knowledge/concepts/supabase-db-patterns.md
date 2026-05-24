@@ -15,8 +15,9 @@ sources:
   - "daily/2026-04-22.md"
   - "daily/2026-04-24.md"
   - "daily/2026-04-25.md"
+  - "daily/2026-05-13.md"
 created: 2026-04-08
-updated: 2026-04-25
+updated: 2026-05-13
 ---
 
 # Supabase DB Patterns

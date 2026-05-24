@@ -6,6 +6,8 @@
 
 **Цель:** заменить ~1.8s end-to-end latency через n8n на ~60-90ms через нативный Python.
 
+**Compiled from:** `daily/2026-04-30.md`, `handover/2026-05-01_variant_b_phase1_complete.md`.
+
 ---
 
 ## 1. Архитектура

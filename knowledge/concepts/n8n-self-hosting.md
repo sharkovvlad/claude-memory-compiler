@@ -4,8 +4,10 @@ aliases: [n8n-docker, self-hosted-n8n, vps-n8n]
 tags: [n8n, infrastructure, docker, performance]
 sources:
   - "daily/2026-04-26.md"
+  - "daily/2026-04-27.md"
+  - "daily/2026-04-28.md"
 created: 2026-04-26
-updated: 2026-04-27
+updated: 2026-04-28
 ---
 
 # n8n Self-Hosting on VPS

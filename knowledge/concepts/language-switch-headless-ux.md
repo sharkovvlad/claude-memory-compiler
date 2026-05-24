@@ -4,8 +4,9 @@ aliases: [language-switch, lang-refresh, translations-override, reply-keyboard-r
 tags: [headless, n8n, ux, language, dumb-renderer, process-user-input]
 sources:
   - "daily/2026-04-25.md"
+  - "daily/2026-05-15.md"
 created: 2026-04-25
-updated: 2026-04-25
+updated: 2026-05-15
 ---
 
 # Language Switch UX in Headless Architecture
@@ -132,6 +133,34 @@ Changes to `04_Menu_v3` JS (Session 15 PUT):
 2. **Reply keyboard refresh:** when `data.reply_keyboard_refresh === true`, prepend `sendMessage` item with `mainMenuKB(translations)` built from fresh translations
 3. **Both items via `send_new`:** all items when `reply_keyboard_refresh` go through a single `send_new` branch for sequential ordering (avoids Switch output-index ordering issue where output_index=1 executes before output_index=2)
 
+## Bug 7 — Python handler не обрабатывал `reply_keyboard_refresh` (2026-05-15)
+
+**Symptom:** после смены языка через Settings → Lang picker нижняя reply-keyboard оставалась на старом языке. SQL-сторона корректно возвращала `reply_keyboard_refresh: true` + `translations_override` (mig 124), но Python никогда не читал эти поля.
+
+**Root cause:** при миграции рендеринга с n8n Dumb Renderer на Python `handlers/menu_v3.py` (Phase 2, 28.04) сигналы `reply_keyboard_refresh` и `translations_override` **не были портированы**. `grep reply_keyboard_refresh --include='*.py'` — ноль ссылок. SQL-работа шла «в пустоту».
+
+**Диагностика (последовательность проверок):**
+1. SQL `build_main_reply_keyboard()` — headless OK, отдаёт `text_key + icon_const_key`.
+2. `ui_translations` buttons.* — 13 языков заполнены ✓.
+3. `v_user_context` для admin (lang=en) — правильные переводы ✓.
+4. Python `_build_main_reply_keyboard_markup` — live test: вернул правильный EN keyboard ✓.
+5. `process_user_input` (pg_get_functiondef) — возвращает `reply_keyboard_refresh=true` ✓.
+6. **`grep reply_keyboard_refresh *.py` — 0 результатов** ← gap найден.
+
+**Fix (PR #79):**
+
+Новая функция `_maybe_build_reply_kb_refresh(ctx, result, rpc_caller)` в `handlers/menu_v3.py`:
+- Проверяет `result.reply_keyboard_refresh == true`.
+- Вызывает `build_main_reply_keyboard()` RPC.
+- Резолвит кнопки через `translations_override` (свежий dict, потому что `ctx.translations` устарел — UserCtx собирается одноразово в начале запроса).
+- Carrier text — `messages.saved` на новом языке (тот же UX-pattern что `_maybe_build_save_toast`).
+- Создаёт SimpleNamespace mock ctx для `resolve_translation_text`.
+- Append `OutboundItem(strategy='attach_reply_kb')` в конец envelope.
+
+**Lesson (KB-кандидат):** SQL `process_user_input` отдаёт ряд post-action сигналов (`reply_keyboard_refresh`, `translations_override`, `language_code_new`, `success_reaction`, etc.) на верхнем уровне результата. **Эти сигналы НЕ доходят до `render_envelope` автоматически** — она получает только `telegram_ui` блок. Для signal-обработки нужен пост-процессор в handler'е (как `_maybe_build_save_toast` или `_maybe_build_reply_kb_refresh`). Иначе SQL-работа идёт «в пустоту».
+
+**Тесты:** 3 unit-теста (full flow ru→es, no-flag path, defensive fallback при missing override).
+
 ## Related Concepts
 
 - [[concepts/headless-architecture]] — `process_user_input` RPC response contract
@@ -139,7 +168,9 @@ Changes to `04_Menu_v3` JS (Session 15 PUT):
 - [[concepts/n8n-data-flow-patterns]] — `continueOnFail` pattern on deleteMessage nodes
 - [[concepts/headless-picker-pattern]] — other pickers that follow the same save_rpc pattern
 - [[concepts/dispatcher-callback-pipeline]] — Route Classifier modification for `cmd_back` + `registered` status
+- [[concepts/phase2-python-menu-v3]] — Python handler architecture where signal gap lived
 
 ## Sources
 
 - [[daily/2026-04-25.md]] — Session 15: 6 language switch UX bugs diagnosed and fixed; Bug 1 (missing text_key translations), Bug 2 (stale translations after language change), Bug 3 (cmd_back → welcome screen), Bug 4 (reply keyboard stale), Bug 5 (debounce race), Bug 6 (deleteMessage blocking)
+- [[daily/2026-05-15.md]] — Bug 7: Python handler не обрабатывал `reply_keyboard_refresh` сигнал из SQL; fix в `_maybe_build_reply_kb_refresh`; lesson про SQL→Python signal gap

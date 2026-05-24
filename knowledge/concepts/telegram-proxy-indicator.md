@@ -6,8 +6,9 @@ sources:
   - "daily/2026-04-21.md"
   - "daily/2026-04-22.md"
   - "daily/2026-04-25.md"
+  - "daily/2026-04-28.md"
 created: 2026-04-21
-updated: 2026-04-25
+updated: 2026-04-28
 ---
 
 # Telegram Proxy для мгновенного Typing Indicator
@@ -20,7 +21,7 @@ Python FastAPI proxy между Telegram и n8n для мгновенной до
 - **Self-signed SSL:** `/etc/ssl/noms/` cert, Telegram `setWebhook` с `certificate` file — Telegram принимает self-signed при upload
 - **Whitelist** определяет когда шлём indicator: menu-emoji / команды / флаги языков / callback_query / edit_* статусы
 - **Sticker rotation:** 3 видеостикера + текстовый fallback (1 раз в день); выбор через `last_indicator_index` в БД
-- **WebhookHealthCron:** каждую минуту проверяет `/telegram/health`, 3 фейла подряд → auto-fallback на n8n URL + admin alert
+- **WebhookHealthCron:** каждую минуту проверяет `/telegram/health`. **С 2026-04-28 — alert-only mode** (threshold 7 fails, без auto-setWebhook fallback). Ранее: 3 фейла → auto-fallback на n8n URL (удалено — split-brain risk после big-bang switch на self-hosted)
 - **Migration 109:** `get_indicator_context()` + `save_indicator_state()` RPCs — атомарное управление состоянием индикатора
 - **Phase 2:** удалены 4 ноды из 01_Dispatcher (Quick Status Check, Needs Indicator?, Send Indicator?, Send Early Indicator) — 57→53 нод
 
@@ -126,25 +127,35 @@ if sticker_today:
 
 **Совокупная экономия ~85%** vs baseline.
 
-### WebhookHealthCron (auto-fallback)
+### WebhookHealthCron (alert-only mode с 2026-04-28)
+
+**До 28.04:** auto-fallback на n8n URL при 3 fails. **С 28.04:** pure alert-only.
 
 ```python
 class WebhookHealthCron(BaseCron):
     fail_count = 0
+    fallback_active = False  # anti-spam: одно уведомление до recovery
 
     async def run(self):
         ok = await self._check_health()
         if not ok:
             self.fail_count += 1
-            if self.fail_count >= 3:
-                await self._fallback_to_n8n()
-                await self._alert_admin()
-                self.fail_count = 0
+            if self.fail_count >= 7 and not self.fallback_active:  # было 3
+                await self._alert_admin()  # только alert, НЕ setWebhook
+                self.fallback_active = True
         else:
             self.fail_count = 0
+            self.fallback_active = False
 ```
 
-Нет auto-flip-back (предотвращает flapping). Возврат на Python proxy — только ручной через rollback скрипт.
+**Почему alert-only (решение 28.04):**
+1. **Split-brain risk:** после big-bang switch `N8N_WEBHOOK_URL=localhost:5678`. Старый cron использовал ту же переменную для `setWebhook` fallback → Telegram отвергает `localhost` → `CRITICAL: unable to restore`.
+2. **Auto-recovery через systemd:** `noms-webhooks` имеет `Restart=always RestartSec=5` → Python proxy поднимается сам без setWebhook.
+3. **Network blips Hetzner** (15-30 минут DNS failure) не требуют action — Telegram буферизует updates 24h.
+
+**Threshold 3→7:** короткие network blips (≤5 минут) больше не вызывают alert. Реальный простой ловится за 7 минут.
+
+**Урок localhost trap:** `N8N_WEBHOOK_URL` использовалась двумя потребителями: (1) `forward_to_n8n` (localhost OK после big-bang), (2) `_switch_webhook_to_n8n` (нужен public HTTPS). После big-bang роли разошлись → тихая ловушка до первого network blip. **Правило:** при изменении семантики env-переменной — `grep` по всем потребителям, не только обновлять значение.
 
 ### Инцидент: параллельный агент переключил webhook (2026-04-21)
 

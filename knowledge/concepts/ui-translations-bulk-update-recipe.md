@@ -1,3 +1,15 @@
+---
+title: "UI Translations Bulk Update Recipe"
+aliases: [bulk-update-recipe, translations-pipeline, writer-critic-pipeline]
+tags: [translations, ux, pipeline, copywriter, multilingual]
+sources:
+  - "daily/2026-05-16.md"
+  - "daily/2026-05-17.md"
+  - "daily/2026-05-18.md"
+created: 2026-05-16
+updated: 2026-05-18
+---
+
 # UI Translations Bulk Update Recipe
 
 > **Канонический pipeline** для массовых правок `ui_translations` (терминология RU + культурная локализация 12 не-EN языков). Прошёл через RU (mig 231), ES Phase 3 pilot (mig 232), Phase 4 stream 10 миграций (DE/FR/IT/PT/PL/UK/ID/HI/AR/FA). **~286 культурно-адаптированных Sassy Sage переводов**, 0 auto-rejections.

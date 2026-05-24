@@ -3,6 +3,7 @@ title: "Release Protocol — Auto-deploy через GitHub Actions, manual fallb
 aliases: [deploy, ci-cd, release, deploy.sh, github-actions]
 tags: [deploy, ops, multi-agent, ci-cd]
 sources:
+  - "daily/2026-05-05.md"
   - "CLAUDE.md cleanup 2026-05-05"
   - "CI/CD setup 2026-05-08 (Parts 1-3)"
 created: 2026-05-05
@@ -152,6 +153,38 @@ git diff origin/main..origin/<pr-branch> --stat
 - Перед стартом проверь свежие [handover'ы](../handover/) и [daily logs](../daily/) — другой агент мог сегодня тронуть тот же файл.
 - **rsync `deploy.sh` на VPS может откатить файлы**, если две ветки трогали одно — координация через тимлида обязательна.
 - SQL-миграции обычно не пересекаются с Python другого агента. Но Python-handlers, `webhook_server.py`, `dispatcher/forward.py` — высокая вероятность конфликта, требует ребейза перед merge.
+
+## Lesson 2026-05-05: 3 параллельных команды + race condition при deploy из веток
+
+### Что произошло
+
+За один день (5.05) три агента работали параллельно на разных задачах, каждый в своей ветке/worktree:
+1. **Онбординг fix** (`claude/fix-onboarding-comprehensive`) — миграции 171-175 + Python handler fixes.
+2. **URL buttons** (`claude/brave-nobel-0ae50d`) — мигр. 176 (meta.url) + template_engine fix. Uncommitted на момент деплоя.
+3. **Payment isolation** (`claude/romantic-allen-27194c`) — мигр. 177 (PAYMENT_PREFIXES guard) + router.py fix.
+
+Каждая команда индивидуально деплоила `./deploy.sh` со своей ветки, чтобы «проверить в проде». В результате:
+- Команда 2 деплоила ~21:00 → rsync **перетёр** handler-фиксы Команды 1 (онбординг).
+- Команда 3 деплоила только `router.py` через SCP (точечно).
+- VPS оказался в рассогласованном Frankenstein-состоянии: `template_engine` от Команды 2, `router` от Команды 3, всё остальное — от main (без онбординга fix).
+- Юзер `786301802` видел «полную тишину» на `/start` — `get_user_context` 404 (фикс Команды 1 был откачен Командой 2).
+- 4 часа на расследование + reconciliation.
+
+### Как починили (unified release)
+
+1. **Backup** uncommitted работы из `brave-nobel-0ae50d` (git add + commit + push).
+2. **Cherry-pick** URL buttons в основную ветку `fix-onboarding-comprehensive` (auto-merge чистый — разные функции).
+3. **Merge** payment isolation ветки — конфликт в `router.py` разрешён вручную (оба guard'а сохранены).
+4. **PR #12** → merge в main → deploy из чистого main через worktree: `git worktree add /tmp/main-deploy origin/main && cd /tmp/main-deploy && ./deploy.sh`.
+5. **Verify** 4 фиксов на VPS через grep/sha256 + live smoke test.
+
+### Корневая причина
+
+`./deploy.sh` = rsync **локального дерева** на VPS. Rsync не знает про git, не проверяет ветку, не смотрит какие файлы «ваши». Три агента rsync'нули три разных дерева → каждый следующий стирал работу предыдущего.
+
+### Правило (закреплено в CLAUDE.md после инцидента)
+
+**Запрет N в конце файла:** `./deploy.sh` из feature-веток или worktrees. Единственный путь = merge в main → deploy из main. SCP одного файла — emergency only. Подробности в секции «Запрещено» в начале этого документа.
 
 ## Lesson 2026-05-08: stale worktree + git commit -a → catastrophic откат
 

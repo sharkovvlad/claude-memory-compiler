@@ -265,6 +265,73 @@ Pediatric/geriatric sacrosanct над Katch — safety > accuracy boost.
 - **Deps:** Daily/event-driven check-in patterns ([[concepts/user-data-collection-pattern]]) + новые поля + messaging
 - **Spec:** `.claude/specs/adaptive_modifiers_spec.md` (обновить с low-GI pivot)
 
+**Phase 3a — Foundation ✅ DONE 2026-05-21 (mig 301, PR pending)**
+
+Заложен фундамент для всех 3 sub-phases:
+
+- **Physical table `daily_modifiers`** — append-only immutable journal с superseded pattern. Partial UQ `(tid, date, type) WHERE NOT superseded AND applied=TRUE`. RLS включён.
+- **`apply_daily_modifier(tid, type, value)` RPC** — writer + 4 clinical safety gates:
+  - 3a. РПП/Cachexia: stress=high + `bmi_warning ∈ (extreme_cachexia, underweight_lose_override)` или `min_kcal_warning` → suppressed, audit guard_audit_log, show_modal=TRUE.
+  - 3b. **Stress+Teen Block+Escalate** (age<18) — suppression_reason='teen_stress_escalate', metadata.escalate_to='trusted_adult_resource'.
+  - 3c. Maternal exclusion для luteal — silent skip (НЕ модалку показывать).
+  - 3d. Opt-in respect — luteal требует `cycle_tracking_enabled=TRUE`.
+- **`compute_daily_modifier_stack(tid, date)`** — engine: SUM active deltas, clamp ±500 kcal / ±25% per macro.
+- **`compute_cycle_day_for_user(tid)`** — helper для будущего luteal auto-detect cron.
+- **`get_day_summary` surgical edit** — добавляет `adjusted_targets` / `active_modifiers` / `modifier_caps_triggered`. Legacy keys preserved (backward-compat).
+
+**Age-aware sleep deltas (per tech-lead):**
+- Adult (≥18) sleep='short': protein +15%, carbs -15%.
+- Teen (<18) sleep='short': protein +25%, carbs -20% (1.67× magnitude — growth + GH во время deep sleep).
+
+**Headless reason** (CLAUDE.md rule #2):
+- `reason_i18n_key` = e.g. `'modifier.stress_low_gi'` → mig 302 заполнит `ui_translations` × 13 langs.
+- `metadata.products` = `['oatmeal','buckwheat','quinoa']` → per-locale replacement позже (Турция → bulgur, Япония → гречневая лапша).
+
+**Tests:** 16/16 PASS (включая T16 multi-mig compat vegan teen + Schofield BMR + DIAAS + sleep teen delta).
+
+**Sub-phases status (post mig 310):**
+- ✅ **Phase 3b — DONE 2026-05-23 (mig 310)** — Sleep check-in screen + reminder cron + Premium teaser pattern + maternal supportive banner + waist_retrofit cron fix + i18n × 13 langs (15 keys). 12/12 tests PASS, 57/57 regression.
+- Phase 3c (mig 311+) — Stress UX + **РПП modal escalation вызов** + **teen modal escalation вызов** + ui_translations для `modifier.stress_*` + maternal supportive для stress.
+- Phase 3d (mig 312+) — Luteal opt-in flow + privacy disclaimer + cron auto-detect luteal phase. (Note: mig 312 уже занят Sage food_log — следующий free номер для 3d уточнить через git fetch.)
+
+### Phase 3 product debts (от PM 2026-05-21 после mig 301 merge)
+
+Эти три долга **обязательны** к реализации в Phase 3b/c/d. Не закрыты в mig 301 (foundation), но enforce ДО включения adaptive UX в продакшен:
+
+#### 1. 🔒 Premium gating — adaptive modifiers как paid feature (**CRITICAL — value leak**)
+
+**Status:** mig 301 не проверяет `users.subscription_status`. Если включить UX без gating — все free-юзеры получат adaptive modifiers даром.
+
+**Where to enforce:** в `compute_daily_modifier_stack` или `get_day_summary` — если `subscription_status NOT IN ('active','trial')` → return zero deltas (legacy targets unchanged). Frontend показывает плашку «Adaptive modifiers — Premium feature».
+
+**Recommended location:** `compute_daily_modifier_stack` early-return — самое раннее место в data path. RPC writer `apply_daily_modifier` тоже должен check + save attempt в `daily_modifiers` с `applied=FALSE, suppressed=TRUE, suppression_reason='premium_required'` для conversion analytics (видим кто хотел использовать).
+
+**Schema delta required:** add `'premium_required'` к suppression_reason CHECK constraint (mig 302).
+
+#### 2. ⚡ Index optimization для роста таблицы `daily_modifiers`
+
+**Status:** Mig 301 имеет:
+- `daily_modifiers_active_uq` (UNIQUE partial, `(tid, date, type) WHERE NOT superseded AND applied=TRUE`)
+- `idx_daily_modifiers_tid_date` (non-partial, full-table)
+
+**Current behavior:** Partial UNIQUE покрывает `compute_daily_modifier_stack` query (telegram_id + date + WHERE matches). Postgres should index-scan. Verify через `EXPLAIN ANALYZE` после ~10K rows.
+
+**Если рост > 100K rows на одного юзера (вряд ли но возможный edge):** добавить отдельный non-unique partial: `CREATE INDEX idx_daily_modifiers_active_lookup ON daily_modifiers (telegram_id, date) WHERE NOT superseded AND applied=TRUE`.
+
+**Monitor:** p95 `get_day_summary`. Baseline post-mig 301 = 116ms. Если уйдёт >200ms — добавить index.
+
+#### 3. 💬 Maternal supportive message (НЕ silent skip в UX)
+
+**Status:** `apply_daily_modifier` для maternal exclusion возвращает `show_modal=FALSE` + `metadata.modal_required=FALSE`. Это **технически silent skip** — UI ничего не показывает. PM flagged: беременная нажимает «спала плохо» → бот молчит → юзер думает что бот сломан.
+
+**Fix в mig 302+:** изменить semantic — для maternal exclusion `show_supportive_banner=TRUE` + добавить в `metadata.banner_type='maternal_protective'`. UI показывает positive banner: «Вижу что сон был плохим. Твой план защищён протоколом беременности — нутриенты под медицинским контролем».
+
+**i18n keys to add (mig 302+):** `modifier.maternal_protective_banner.{sleep_short,stress_high}` × 13 langs.
+
+**Также применить к teen_stress_escalate:** не «жёсткий блок», а supportive «давай поговорим о другом способе справиться со стрессом». Tone — anti-shame (mig 264 pattern).
+
+См. [[concepts/adaptive-modifiers-architecture]] для design details + текущий signature `apply_daily_modifier`.
+
 ### P2.5a Workout tracking infrastructure (prerequisite для P2.5b)
 
 - Source: Apple Health / Strava / manual log в боте

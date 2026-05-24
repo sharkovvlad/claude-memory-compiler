@@ -7,8 +7,10 @@ sources:
   - "daily/2026-04-11.md"
   - "daily/2026-04-15.md"
   - "daily/2026-04-17.md"
+  - "daily/2026-05-15.md"
+  - "daily/2026-05-16.md"
 created: 2026-04-10
-updated: 2026-04-17
+updated: 2026-05-16
 ---
 
 # Personalized Macro Split
@@ -185,6 +187,14 @@ A new translation key `profile.body_type` was added for all 13 languages to labe
 p95 latency = 45 ms с VPS persistent psycopg2 (25 runs). Baseline RTT = 44 мс → RPC ≈1 мс.
 
 PR: [noms-bot#75](https://github.com/sharkovvlad/noms-bot/pull/75). Daily: [[daily/2026-05-15]].
+
+### Mig 228 (2026-05-15): скрыть «⏭ Пропустить» на edit_training (follow-up v4)
+
+На экране `edit_training` в онбординге было 5 опций: strength / cardio / mixed / none / training_skip. Кнопка `cmd_select_training_skip` маппилась через RPC `set_user_training_type` в `training_type='mixed'` (mig 119 policy). С v4-формулой это означает: юзер думает «отказываюсь отвечать», получает Mixed-tier макро (PAL bonus, 1.6 г/кг белка) — **UX-обман**. Реально сидячему юзеру подходит честная опция «Не тренируюсь» (training_type=`'none'`, v4: PAL +0, 1.2 г/кг, 30% fat).
+
+**Fix:** `UPDATE ui_screen_buttons SET visible_condition='false' WHERE screen_id='edit_training' AND callback_data='cmd_select_training_skip'`. Кнопка перестала рендериться в онбординге и профиле. Backend-ветка `cmd_select_training_skip → 'mixed'` оставлена (для in-flight inline-клавиатур у юзеров с недоставленными обновлениями).
+
+**Итог UX:** 4 опции везде (strength / cardio / mixed / none), без Skip.
 
 ### v5 — mig 230 (2026-05-16): gender-conditional carbs_min_g floor
 
