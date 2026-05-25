@@ -289,10 +289,22 @@ Pediatric/geriatric sacrosanct над Katch — safety > accuracy boost.
 
 **Tests:** 16/16 PASS (включая T16 multi-mig compat vegan teen + Schofield BMR + DIAAS + sleep teen delta).
 
-**Sub-phases status (post mig 310):**
-- ✅ **Phase 3b — DONE 2026-05-23 (mig 310)** — Sleep check-in screen + reminder cron + Premium teaser pattern + maternal supportive banner + waist_retrofit cron fix + i18n × 13 langs (15 keys). 12/12 tests PASS, 57/57 regression.
-- Phase 3c (mig 311+) — Stress UX + **РПП modal escalation вызов** + **teen modal escalation вызов** + ui_translations для `modifier.stress_*` + maternal supportive для stress.
-- Phase 3d (mig 312+) — Luteal opt-in flow + privacy disclaimer + cron auto-detect luteal phase. (Note: mig 312 уже занят Sage food_log — следующий free номер для 3d уточнить через git fetch.)
+**Sub-phases status — Phase 3 ALL DONE 2026-05-25:**
+
+| Sub-phase | Mig | Closed | Что закрыто |
+|---|---|---|---|
+| 3a Foundation | 301 | 2026-05-21 | daily_modifiers table + apply_daily_modifier RPC + 4 clinical gates + compute_cycle_day_for_user + age-aware deltas |
+| 3b Sleep UX | 310 | 2026-05-23 | sleep_checkin screen + reminder cron 09 local + Premium teaser pattern + maternal supportive banner + waist_retrofit fix + i18n × 13 langs |
+| 3c Stress UX | 317 | 2026-05-24 | stress_checkin screen + reminder cron 18 local + hybrid modal routing (РПП/teen gate clinical modal) + i18n × 13 langs |
+| **3d Luteal** | **334 + 335** | **2026-05-25** | **`phase_from_cycle_day` SQL helper + auto-disable cycle on maternal flag + save_user_cycle_data single-callback + 2 screens (intro+setup) + populate upsell + wire-up cmd_cycle_premium (Premium/locked split) + cron luteal_morning @ 08:00 local + widget via business_data_rpc=get_day_summary reuse + i18n × 13 langs (anti-РПП reframe critic 5/5)** |
+
+**Sprint stabilization closed parallel 2026-05-25** (4 PRs):
+- mig 330 — cron Premium-filter `COALESCE(subscription_status,'free')<>'free'` + soft mutex sleep>meal_morning
+- mig 331 — stats_main `[🧬 Самочувствие]` entry + hub `wellbeing_today` + teaser
+- mig 332 — Номсова правка EN+RU placeholders (😤→🌀, anti-Jira-spec tone)
+- mig 333 — wellbeing × 11 new langs + **CRITICAL fix `cron_notifications.reminder_sleep_checkin`** (был NULL × 13 langs — sleep cron payload bug) + 😤→🌀 swap × 39 strings + RU/UK gender-leak fix + AR title bidi swap
+
+**Roadmap §P2.4 — Phase 3 Adaptive Modifiers — DONE 2026-05-25.** Все 4 sub-phases live в проде × 13 langs.
 
 ### Phase 3 product debts (от PM 2026-05-21 после mig 301 merge)
 
