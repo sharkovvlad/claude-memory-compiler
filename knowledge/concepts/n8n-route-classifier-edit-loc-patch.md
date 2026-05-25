@@ -1,5 +1,7 @@
 # 01_Dispatcher Route Classifier — edit-location reply-back early branch (patch v9, 08.05.2026)
 
+> ⚠️ **status: legacy-n8n** — описывает n8n-механику. Соответствующая фича/target мигрирована в Python (Variant B cutover, 2026-04...05). Документ полезен для понимания n8n-эры; новые правки идут в Python handlers.
+
 **Контекст:** временный fix между Phase 4 (онбординг в Python) и Phase 6.2 (location edit-flow migration в Python). **✅ REMOVED в PR #59 (2026-05-13) — секция Phase 6.2 ниже.**
 
 ## Проблема, которую решает

@@ -11,6 +11,8 @@ updated: 2026-04-19
 
 # n8n Switch v3.4 Duplicate outputKey Bug
 
+> ⚠️ **status: legacy-n8n** — описывает n8n-механику. Соответствующая фича/target мигрирована в Python (Variant B cutover, 2026-04...05). Документ полезен для понимания n8n-эры; новые правки идут в Python handlers.
+
 Критический gotcha n8n Switch node `typeVersion 3.4`: если два rule имеют одинаковый `outputKey`, Switch создаёт только **один физический output slot** для них. Это сдвигает индексы всех последующих rules и ломает маршрутизацию — items уходят в соседние output slots.
 
 ## Key Points

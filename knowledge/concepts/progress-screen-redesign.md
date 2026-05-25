@@ -10,6 +10,8 @@ updated: 2026-04-14
 
 # Progress Screen Redesign
 
+> ⚠️ **status: superseded** — заменён [[progress-hub-headless]] (2026-05-20). Документ оставлен для исторического контекста. **Актуальное: [[progress-hub-headless]]**.
+
 Редизайн экрана Progress (inline) в рамках обновления геймификации: новые иконки, Premium-маркер, формат отображения стрика и маны, личность Sassy Sage в инсайтах. Standalone workflow `08_Progress` деактивирован — Progress теперь встроен исключительно в `04_Menu`.
 
 ## Key Points

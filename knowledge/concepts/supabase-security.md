@@ -10,6 +10,8 @@ updated: 2026-04-13
 
 # Supabase Security — RLS and Access Control
 
+> ⚠️ **status: stale** — нет упоминаний в `daily/`/`handover/` за последние 30 дней (last activity mtime 2026-04-14). Тема, возможно, заморожена или решена. Перепроверить актуальность перед использованием.
+
 Security hardening for Supabase tables and views in NOMS: Row-Level Security (RLS), REVOKE on sensitive views, and the service_role-only access pattern.
 
 ## Key Points

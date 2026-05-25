@@ -11,6 +11,8 @@ updated: 2026-04-21
 
 # n8n Performance Optimization
 
+> ⚠️ **status: legacy-n8n** — описывает n8n-механику. Соответствующая фича/target мигрирована в Python (Variant B cutover, 2026-04...05). Документ полезен для понимания n8n-эры; новые правки идут в Python handlers.
+
 Techniques applied to reduce reply-button latency from ~400-800ms to under 300ms, and eliminate the perception of lag via immediate user feedback.
 
 ## Key Points

@@ -11,6 +11,8 @@ updated: 2026-04-16
 
 # League FOMO Push and Rich League Notifications
 
+> ⚠️ **status: stale** — нет упоминаний в `daily/`/`handover/` за последние 30 дней (last activity mtime 2026-04-16). Тема, возможно, заморожена или решена. Перепроверить актуальность перед использованием.
+
 Sunday FOMO push notifications for league competition, and enriched weekly league result messages with XP and rank data. Implemented via migration 060, a new cron job, and updated league result translations.
 
 ## Key Points

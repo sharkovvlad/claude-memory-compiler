@@ -11,6 +11,8 @@ updated: 2026-04-17
 
 # Profile Redesign v5.0 — Agent Dossier
 
+> ⚠️ **status: superseded** — заменён [[profile-v5-screens-specs]] (2026-05-05). Документ оставлен для исторического контекста. **Актуальное: [[profile-v5-screens-specs]]**.
+
 Полный редизайн экрана Профиля (миграции 068–070): новый "Agent Dossier" layout с 4 новыми под-экранами (Мой план, Личные метрики, Настройки, Помощь), условный рендеринг для Free/Premium, back-навигация из Location workflow в Settings.
 
 ## Key Points

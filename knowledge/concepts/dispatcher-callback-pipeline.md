@@ -10,6 +10,8 @@ updated: 2026-04-15
 
 # Dispatcher Callback Pipeline
 
+> ⚠️ **status: stale** — нет упоминаний в `daily/`/`handover/` за последние 30 дней (last activity mtime 2026-04-15). Тема, возможно, заморожена или решена. Перепроверить актуальность перед использованием.
+
 Система передачи данных callback_query через Dispatcher (01_Dispatcher) в 04_Menu. После цепочки нод с IF и HTTP Request референсы на `$('Telegram Trigger')` ломаются из-за n8n paired items. Template Engine Phase 4 фиксирует это, сохраняя callback data в pipeline `$json`.
 
 ## Key Points

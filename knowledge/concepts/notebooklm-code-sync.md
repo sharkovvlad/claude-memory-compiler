@@ -10,6 +10,8 @@ updated: 2026-04-14
 
 # NotebookLM Code Sync (code_to_nlm.py)
 
+> ⚠️ **status: superseded** — заменён [[nlm-sync-infrastructure]] (2026-05-20). Документ оставлен для исторического контекста. **Актуальное: [[nlm-sync-infrastructure]]**.
+
 Скрипт для инкрементального синка кодовой базы NOMS в блокнот NotebookLM "NOMS Supabase Data". Загружает Python/JS файлы и CLAUDE.md как Markdown-источники, чтобы NotebookLM мог отвечать на вопросы по коду.
 
 ## Key Points

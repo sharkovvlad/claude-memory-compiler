@@ -10,6 +10,8 @@ updated: 2026-04-09
 
 # n8n Template Engine
 
+> ⚠️ **status: superseded** — заменён [[headless-template-substitution]] (2026-04-20) (legacy n8n-эры). Документ оставлен для исторического контекста. **Актуальное: [[headless-template-substitution]]**.
+
 The Dispatcher-level substitution system that replaces `{{icon_xxx}}` and `{name}` placeholders in `ui_translations` strings before they reach sub-workflows.
 
 ## Key Points

@@ -10,6 +10,8 @@ updated: 2026-05-10
 
 # n8n Legacy Node Strip Recipe
 
+> ⚠️ **status: legacy-n8n** — описывает n8n-механику. Соответствующая фича/target мигрирована в Python (Variant B cutover, 2026-04...05). Документ полезен для понимания n8n-эры; новые правки идут в Python handlers.
+
 Операционный recipe для хирургического удаления feature-specific нод из live n8n workflow после переноса фичи в Python headless. Впервые применён 2026-05-10 при strip'е 6 phenotype-quiz нод из `04_Menu` (PR #39). Шаблон переиспользуется для будущих strip'ов (Add food / AI Engine / Payment legacy).
 
 ## Key Points

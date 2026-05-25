@@ -10,6 +10,8 @@ updated: 2026-04-18
 
 # Action Router Pattern
 
+> ⚠️ **status: legacy-n8n** — описывает n8n-механику. Соответствующая фича/target мигрирована в Python (Variant B cutover, 2026-04...05). Документ полезен для понимания n8n-эры; новые правки идут в Python handlers.
+
 Стандартный паттерн роутинга в NOMS: **Code node (1 output) классифицирует запрос → Switch node (≤11 outputs) физически разделяет поток**. Применяется в 3 ключевых местах проекта: `Route Classifier` в 01_Dispatcher, `Onboarding Engine` в 02_Onboarding_v3, `Menu Engine` в 04_Menu (с 2026-04-18). Этот паттерн избегает багов больших Switch'ей (>15 outputs, duplicate outputKey) и предоставляет самодокументируемый граф.
 
 ## Key Points

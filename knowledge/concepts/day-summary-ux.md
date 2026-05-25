@@ -11,6 +11,8 @@ updated: 2026-04-10
 
 # Day Summary UX (☀️ Мой день)
 
+> ⚠️ **status: superseded** — заменён [[stats-main-headless]] (2026-04-23). Документ оставлен для исторического контекста. **Актуальное: [[stats-main-headless]]**.
+
 The main stats screen showing daily nutrition progress, XP, streak, and meal history. Accessed via the "☀️ Мой день" reply keyboard button.
 
 ## Key Points

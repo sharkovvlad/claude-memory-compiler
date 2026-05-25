@@ -1,5 +1,7 @@
 # ADR 0001: Sticker Architecture — 4 Channels with Single Source of Truth
 
+> ⚠️ **status: duplicate** — содержание полностью покрыто [[ui-stickers-headless]]. Документ оставлен для истории/back-link'ов. **Канонический источник: [[ui-stickers-headless]]**.
+
 - **Status:** Accepted (Stage 1 + 1.1 live; Stage 2 in review; Stage 3 backlog)
 - **Date:** 2026-05-11
 - **Migrations:** `198_stickers_unified_foundation.sql` + `201_sticker_one_time_semantics.sql` (initially numbered 200, renamed to 201 after collision with parallel phenotype-quiz mig 200)

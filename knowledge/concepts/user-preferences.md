@@ -10,6 +10,8 @@ updated: 2026-04-14
 
 # User Preferences
 
+> ⚠️ **status: stale** — нет упоминаний в `daily/`/`handover/` за последние 30 дней (last activity mtime 2026-04-14). Тема, возможно, заморожена или решена. Перепроверить актуальность перед использованием.
+
 Working style and conventions for the NOMS project owner.
 
 ## Key Points

@@ -10,6 +10,8 @@ updated: 2026-04-13
 
 # Fasting / Skip Meal Feature
 
+> ⚠️ **status: stale** — нет упоминаний в `daily/`/`handover/` за последние 30 дней (last activity mtime 2026-04-14). Тема, возможно, заморожена или решена. Перепроверить актуальность перед использованием.
+
 The "Skip Meal / Fasting" feature allows users to explicitly mark a period as intentional fasting rather than forgetting to log food. Implemented via a dedicated RPC, inline button on the Add Food prompt, and 4 translation keys.
 
 ## Key Points

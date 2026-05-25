@@ -12,6 +12,8 @@ updated: 2026-04-28
 
 # n8n Self-Hosting on VPS
 
+> ⚠️ **status: duplicate** — содержание полностью покрыто [[n8n-selfhost-migration]]. Документ оставлен для истории/back-link'ов. **Канонический источник: [[n8n-selfhost-migration]]**.
+
 Migration from n8n Cloud to self-hosted n8n CE in Docker on the NOMS VPS (Hetzner CX21, `89.167.86.20`). Primary motivation: eliminate cold-start latency ~1.3-1.5s on first user click after cloud scheduler idle.
 
 ## Status

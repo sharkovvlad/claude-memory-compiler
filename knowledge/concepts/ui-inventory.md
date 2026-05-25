@@ -12,6 +12,8 @@ status: approved (partial) — user verified 2026-04-19; details on my discretio
 
 # UI Inventory — NOMS Bot
 
+> ⚠️ **status: superseded** — заменён [[ui-screens-map]] (2026-05-04). Документ оставлен для исторического контекста. **Актуальное: [[ui-screens-map]]**.
+
 **Статус:** `approved (partial)`. User верифицировал общую полноту списка callbacks и workflow_states (2026-04-19). Детальные решения по каждому экрану — на моё усмотрение при реализации. **Когда понадобится approval конкретного экрана — презентация целиком (схема + текст + визуальный preview keyboard)**, не в табличном формате.
 
 **Future management:** после Phase 2, правки в `ui_screens`/`ui_screen_buttons` делаются через Supabase Studio (table editor) или Retool (custom admin UI для маркетологов). Никаких SQL миграций для операционных UI changes — только для структурных.

@@ -15,6 +15,8 @@ updated: 2026-05-18
 
 # n8n Stateful UI Patterns
 
+> ⚠️ **status: legacy-n8n** — описывает n8n-механику. Соответствующая фича/target мигрирована в Python (Variant B cutover, 2026-04...05). Документ полезен для понимания n8n-эры; новые правки идут в Python handlers.
+
 The bot behaves like a Mini App inside Telegram chat. Messages are edited in-place rather than creating new ones, keeping the chat clean and stateful. Every tap gets immediate visual feedback.
 
 ## Key Points

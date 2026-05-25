@@ -10,6 +10,8 @@ updated: 2026-05-19
 
 # n8n SQLite + `docker cp` ownership trap
 
+> ⚠️ **status: legacy-n8n** — описывает n8n-механику. Соответствующая фича/target мигрирована в Python (Variant B cutover, 2026-04...05). Документ полезен для понимания n8n-эры; новые правки идут в Python handlers.
+
 **TL;DR:** `docker cp <host>:file <container>:/path/database.sqlite` копирует файл с ownership хост-юзера (`root:root` если делаешь как root). Внутри контейнера n8n работает как `node:node`. Файл становится unwritable → SQLite возвращает `SQLITE_READONLY` → n8n уходит в crash loop каждые ~30 сек. Все workflows встают. Молчаливо.
 
 ## Симптомы
