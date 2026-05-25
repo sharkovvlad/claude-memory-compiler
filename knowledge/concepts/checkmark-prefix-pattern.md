@@ -189,6 +189,23 @@ Button может быть hidden (через `visible_condition` — see traini
 
 Dynamic list checkmark требует ещё одну логику — сравнение user.country_code с option's iso в list_rpc result. Not in scope Session 10.
 
+## Mig 347 (2026-05-25) — non-users-table sources
+
+Added optional `meta.current_value_source` field on `ui_screens.meta`:
+
+- **missing / `'users'`** (default) — existing behaviour, `render_screen` does `EXECUTE format('SELECT ($1.%I)::text', col) USING v_user` where `v_user users%ROWTYPE`. Back-compat for all Session 10 screens.
+- **`'daily_metrics'`** — `render_screen` does `EXECUTE format('SELECT (%I)::text FROM public.daily_metrics WHERE telegram_id=$1 AND date=CURRENT_DATE LIMIT 1', col) USING p_telegram_id`. NULL row → no checkmark (graceful).
+
+Why needed: sleep & stress check-in screens live off `daily_metrics`, not `users`. Extending `v_user_context` is NOT a solution — `render_screen` reads `v_user` from `public.users` directly (line 38), not the view.
+
+Date semantic (`CURRENT_DATE` server UTC) matches `apply_daily_modifier` write side (mig 310 / 317). Read/write are symmetric.
+
+**Screens added:**
+- `sleep_checkin` (current_value_col=`sleep_quality_qualitative`, source=`daily_metrics`)
+- `stress_checkin` (current_value_col=`stress_label_qualitative`, source=`daily_metrics`)
+
+PR #195. Latency unchanged (p95 ~70–90 ms vs ~46–66 ms baseline; well under 200 ms gate).
+
 ## Связанные KB концепты
 
 - [[headless-picker-pattern]] — полный recipe для picker creation
