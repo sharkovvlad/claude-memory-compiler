@@ -44,7 +44,7 @@
 
 - **🛡 Safety & Clinical Guards** — 8 files · 121 refs/30d
 - **🎨 UX Patterns & Screens** — 30 files · 108 refs/30d (1 hub, 8 archived)
-- **🔧 Migration & Headless Patterns** — 16 files · 79 refs/30d (2 hub)
+- **🔧 Migration & Headless Patterns** — 17 files · 79 refs/30d (2 hub)
 - **🐍 Python Handlers (cutover targets)** — 7 files · 61 refs/30d
 - **✍️ Copywriter & i18n (13 langs)** — 5 files · 54 refs/30d
 - **🏛 Architecture & Infrastructure** — 8 files · 53 refs/30d (1 archived)
@@ -118,6 +118,7 @@ _16 files · 79 incoming refs (30d)_
 - [[headless-picker-pattern]] — Headless Picker Pattern — полный recipe для inline-kb pickers
 - [[headless-template-substitution]] — Pure Headless: разделение слоёв + template substitution
 - [[language-switch-headless-ux]] — Language Switch UX in Headless Architecture
+- [[premium-hide-line-pattern]] — Pre-resolved SQL line с leading/trailing `\n` для conditional-hide строк в template без orphan blank line (mig 343/348/353/354/355)
 - [[migration-collision-guard]] — SQL-миграции в NOMS — последовательные: `migrations/NNN_<slug>.sql`, NNN растёт монотонно. Агенты обычно берут «следующий номер» через `ls migrations/ | tail -1` в момент старта...
 - [[migration-deploy-ordering]] — Migration Deploy Ordering — split additive vs breaking schema changes
 - [[progress-hub-headless]] — Progress Hub Headless Migration (Phase 3A Iterations 2-4)
