@@ -232,3 +232,65 @@ find /home/noms/n8n/backups -name "database_*.sqlite.gz" -mtime +30 -delete
 - Скрипт миграции: `scripts/n8n_migrate.py`
 - Backup script: `scripts/n8n_backup.py` (daily cron из cloud — продолжает работать до отмены подписки)
 - Daily logs: `claude-memory-compiler/daily/2026-04-26.md` (setup), `2026-04-27.md` (миграция + big-bang)
+
+---
+
+## Ongoing operations (от [[n8n-self-hosting]])
+
+> Перенесено 2026-05-25 при KB consolidation.
+
+### VPS Resource Baseline (Hetzner CX21, 2 vCPU + 3.7 GB RAM)
+
+| Resource | Before (2026-04-26) | After n8n container |
+|---|---|---|
+| RAM | 717 MB used / 3.7 GB | 1.0 GB used / 3.7 GB |
+| Disk | 5.8 GB / 38 GB | unchanged |
+| Ports (new) | — | `127.0.0.1:5678` (n8n, localhost only) |
+| n8n container RAM | — | 236 MB (limit 1.5 GB) |
+
+Existing services (`noms-webhooks`, `noms-cron`, `tasktracker-bot`) not touched.
+
+### systemd Unit
+
+```
+/etc/systemd/system/noms-n8n.service
+
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=docker compose -f /home/noms/n8n/compose/docker-compose.yml up -d
+ExecStop=docker compose -f /home/noms/n8n/compose/docker-compose.yml down
+```
+
+`Type=oneshot RemainAfterExit` is the correct pattern for systemd wrapping `docker compose up -d` — the process exits immediately after starting detached containers, but the unit stays `active`.
+
+### Deprecated Config Removed (reference)
+
+| What was tried | Why removed |
+|---|---|
+| `N8N_BASIC_AUTH_*` | Deprecated since n8n 1.0+; owner created at `/setup` instead |
+| `N8N_USER_FOLDER` + `DB_SQLITE_DATABASE` overrides | Caused double-nested path `/home/node/.n8n/.n8n` + EACCES |
+| `N8N_RUNNERS_ENABLED=true` | Deprecated in 2.x — runners enabled by default |
+| `user: "1001:1001"` in compose | Image has `/home/node` owned by UID 1000 mode 700; UID override broke access |
+
+`chown -R 1000:1000 /home/noms/n8n/data` is required because Docker image runs as UID 1000 (`node`), not UID 1001 (`n8n` host user).
+
+### Production env tuning (28.04 update)
+
+После пары инцидентов OOM на CX21 (2 vCPU + 3.7 GB RAM) — добавлены защитные параметры:
+
+| Parameter | Value | Why |
+|---|---|---|
+| Host swap | `/swapfile` 2 GB, `vm.swappiness=10`, persistent в `/etc/fstab` | Защита **OS**, НЕ контейнера. `memswap_limit=mem_limit=1500m` оставлен (fail-fast: Docker убивает n8n при OOM, не уходит в swap) |
+| Pruning | `EXECUTIONS_DATA_MAX_AGE=48` (часов), `PRUNE_MAX_COUNT=5000`, `PRUNE_HARD_DELETE_BUFFER=24` | Не разрастается БД executions |
+| V8 heap cap | `NODE_OPTIONS=--max-old-space-size=1024` | Видимая ошибка OOM вместо kernel OOM kill |
+| Visibility | `SAVE_ON_SUCCESS=all`, `SAVE_ON_ERROR=all` | Все executions в БД для дебага |
+
+### Multi-agent safety
+
+**НЕ работать на prod VPS** через долгие интерактивные SSH-сессии. Если несколько агентов одновременно делают `ripgrep` через всю кодовую базу или массовый `grep -r` — VPS уходит в OOM, бот молчит, SSH не отвечает (инцидент 28.04 17:30 MSK).
+
+**Правило:** worktree живут на маке. Agents используют SSH к VPS только для коротких read-only проверок (`curl healthz`, `cat .env`, `journalctl --since`). Любая долгая операция (grep по большой кодбазе, `du -h`, `find /`) — на маке после `scp -r`.
+
+### Historical: n8n Cloud cancellation (2026-04-30)
+
+n8n Cloud (`vlad1.app.n8n.cloud`) **отменён**. Self-hosted на VPS — единственный источник истины. Cleanup [release 2026-05-05]: убран cloud-fallback из `scripts/n8n_backup.py`, KB-упоминания почищены.

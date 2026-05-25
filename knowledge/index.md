@@ -23,6 +23,23 @@
 | 💤 stale | 8 | 0 refs за 30 дней, тема возможно заморожена |
 | **Total** | **119** | |
 
+## Start here for common tasks
+
+| Если задача про... | Сначала прочитай (🔥 = foundational hub) |
+|---|---|
+| **Новый screen / inline UX** | 🔥 `headless-architecture`, `one-menu-ux`, `ui-screens-map`, `headless-button-creation-gotchas` |
+| **SQL миграция / RPC** | 🔥 `pre-migration-discovery-recipe`, `migration-collision-guard`, `migration-deploy-ordering`, `safe-create-or-replace-recipe` |
+| **n8n workflow правка** | 🔥 `n8n-data-flow-patterns`, `n8n-subworkflow-contract`, `n8n-selfhost-migration` |
+| **Payment / Stripe / Stars** | `payment-idempotency-pattern`, `payment-integration`, `subscription-management-headless`, `claim-vs-check-idempotency-anti-pattern` |
+| **Перевод / 13 langs / Sage** | `copywriter-playbook`, `ui-translations-bulk-update-recipe`, `sassy-sage-multilingual-glossary` |
+| **Adaptive modifiers (sleep/stress/luteal)** | `adaptive-modifiers-architecture`, `safety-guard-ux-pattern` |
+| **Cron / scheduled jobs** | `cron-silent-failure-alerting` |
+| **Deploy / TLS / Caddy issue** | `release-protocol`, `tls-caddy-nomsbot` |
+| **Python handler (cutover)** | `phase2-python-menu-v3`, `phase4-onboarding-migration`, `webhook-server-async-patterns` |
+| **Day-summary / Stats / Mood** | 🔥 `profile-v5-screens-specs`, `stats-main-headless`, `personalized-macro-split` |
+| **Bug идемпотентности / дубль event** | `claim-vs-check-idempotency-anti-pattern`, `payment-idempotency-pattern` |
+| **Test-user reset / fresh start** | `test-user-reset-recipe` (НЕ `start-fresh-flow` — outdated) |
+
 ## Quick navigation
 
 - **🛡 Safety & Clinical Guards** — 8 files · 121 refs/30d
@@ -85,7 +102,7 @@ _30 files · 108 incoming refs (30d)_
 - [[edit-picker-dual-render]] **`🏛 superseded`** → [[headless-picker-pattern]] — Edit Picker Dual Render Pattern
 - [[profile-redesign-v5]] **`🏛 superseded`** → [[profile-v5-screens-specs]] — Profile Redesign v5.0 — Agent Dossier
 - [[start-fresh-flow]] **`🏛 outdated`** — cmd_start_fresh — как работает в текущей системе
-- [[sticker-architecture-adr]] **`🏛 duplicate`** → [[ui-stickers-headless]] — ADR 0001: Sticker Architecture — 4 Channels with Single Source of Truth
+- [[sticker-architecture-adr]] **`🏛 merged-stub`** → [[ui-stickers-headless]] — ADR rationale (Context / Alternatives / Consequences) перенесён в winner как раздел «ADR rationale»; этот файл = 5-line stub
 - [[ui-inventory]] **`🏛 superseded`** → [[ui-screens-map]] — UI Inventory — All Screens, Callbacks, Menus
 - [[progress-screen-redesign]] **`💤 stale`** — Редизайн экрана Progress (inline) в рамках обновления геймификации: новые иконки, Premium-маркер, формат отображения стрика и маны, личность Sassy Sage в инсайтах. Standalone wo...
 - [[user-preferences]] **`💤 stale`** — Working style and conventions for the NOMS project owner.
@@ -164,7 +181,7 @@ _13 files · 40 incoming refs (30d)_
 - [[n8n-multi-agent-workflow-editing]] **`🏛 legacy-n8n`** — Multi-Agent n8n Workflow Editing Protocol
 - [[n8n-performance-optimization]] **`🏛 legacy-n8n`** — Techniques applied to reduce reply-button latency from ~400-800ms to under 300ms, and eliminate the perception of lag via immediate user feedback.
 - [[n8n-route-classifier-edit-loc-patch]] **`🏛 legacy-n8n`** — 01_Dispatcher Route Classifier — edit-location reply-back early branch (patch v9, 08.05.2026)
-- [[n8n-self-hosting]] **`🏛 duplicate`** → [[n8n-selfhost-migration]] — Migration from n8n Cloud to self-hosted n8n CE in Docker on the NOMS VPS (Hetzner CX21, `89.167.86.20`). Primary motivation: eliminate cold-start latency ~1.3-1.5s on first user...
+- [[n8n-self-hosting]] **`🏛 merged-stub`** → [[n8n-selfhost-migration]] — Operational env-tuning + multi-agent SSH safety + n8n Cloud cancellation history перенесены в winner как раздел «Ongoing operations»; этот файл = 5-line stub
 - [[n8n-sqlite-docker-cp-trap]] **`🏛 legacy-n8n`** — n8n SQLite + `docker cp` ownership trap
 - [[n8n-stateful-ui]] **`🏛 legacy-n8n`** — The bot behaves like a Mini App inside Telegram chat. Messages are edited in-place rather than creating new ones, keeping the chat clean and stateful. Every tap gets immediate v...
 - [[n8n-switch-duplicate-outputkey-bug]] **`🏛 legacy-n8n`** — n8n Switch v3.4 Duplicate outputKey Bug
