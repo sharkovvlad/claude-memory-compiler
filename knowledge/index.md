@@ -28,16 +28,18 @@
 | Если задача про... | Сначала прочитай (🔥 = foundational hub) |
 |---|---|
 | **Новый screen / inline UX** | 🔥 `headless-architecture`, `one-menu-ux`, `ui-screens-map`, `headless-button-creation-gotchas` |
-| **SQL миграция / RPC** | 🔥 `pre-migration-discovery-recipe`, `migration-collision-guard`, `migration-deploy-ordering`, `safe-create-or-replace-recipe` |
+| **SQL миграция / RPC** | 🔥 `pre-migration-discovery-recipe`, `migration-collision-guard`, `migration-deploy-ordering`, `safe-create-or-replace-recipe`, `jsonb-shallow-merge-antipattern` |
 | **n8n workflow правка** | 🔥 `n8n-data-flow-patterns`, `n8n-subworkflow-contract`, `n8n-selfhost-migration` |
 | **Payment / Stripe / Stars** | `payment-idempotency-pattern`, `payment-integration`, `subscription-management-headless`, `claim-vs-check-idempotency-anti-pattern` |
-| **Перевод / 13 langs / Sage** | `copywriter-playbook`, `ui-translations-bulk-update-recipe`, `sassy-sage-multilingual-glossary` |
+| **Перевод / 13 langs / Sage** | `copywriter-playbook`, `ui-translations-bulk-update-recipe`, `sassy-sage-multilingual-glossary`, `double-emoji-button-anti-pattern` |
 | **Adaptive modifiers (sleep/stress/luteal)** | `adaptive-modifiers-architecture`, `safety-guard-ux-pattern` |
 | **Cron / scheduled jobs** | `cron-silent-failure-alerting` |
 | **Deploy / TLS / Caddy issue** | `release-protocol`, `tls-caddy-nomsbot` |
 | **Python handler (cutover)** | `phase2-python-menu-v3`, `phase4-onboarding-migration`, `webhook-server-async-patterns` |
 | **Day-summary / Stats / Mood** | 🔥 `profile-v5-screens-specs`, `stats-main-headless`, `personalized-macro-split` |
 | **Bug идемпотентности / дубль event** | `claim-vs-check-idempotency-anti-pattern`, `payment-idempotency-pattern` |
+| **Subagent → LIVE apply (orchestrator hat)** | `subagent-live-apply-review-rule`, `agent-collaboration-protocol`, `pre-migration-discovery-recipe` |
+| **`content \|\| payload` JSONB safety** | `jsonb-shallow-merge-antipattern` (P0 2026-05-26), `ui-translations-bulk-update-recipe` |
 | **Test-user reset / fresh start** | `test-user-reset-recipe` (НЕ `start-fresh-flow` — outdated) |
 
 ## Quick navigation
@@ -119,6 +121,7 @@ _16 files · 79 incoming refs (30d)_
 - [[headless-template-substitution]] — Pure Headless: разделение слоёв + template substitution
 - [[language-switch-headless-ux]] — Language Switch UX in Headless Architecture
 - [[premium-hide-line-pattern]] — Pre-resolved SQL line с leading/trailing `\n` для conditional-hide строк в template без orphan blank line (mig 343/348/353/354/355)
+- [[jsonb-shallow-merge-antipattern]] — `content \|\| payload` wipes nested namespaces (P0 incident 2026-05-26, mig 359 → mig 360 recovery). 3 safe alternatives documented.
 - [[migration-collision-guard]] — SQL-миграции в NOMS — последовательные: `migrations/NNN_<slug>.sql`, NNN растёт монотонно. Агенты обычно берут «следующий номер» через `ls migrations/ | tail -1` в момент старта...
 - [[migration-deploy-ordering]] — Migration Deploy Ordering — split additive vs breaking schema changes
 - [[progress-hub-headless]] — Progress Hub Headless Migration (Phase 3A Iterations 2-4)
@@ -146,6 +149,7 @@ _7 files · 61 incoming refs (30d)_
 _5 files · 54 incoming refs (30d)_
 
 - [[copywriter-playbook]] — Copywriter Playbook — single entry point для translation sessions
+- [[double-emoji-button-anti-pattern]] — `icon_const_key` + emoji prefix в i18n value → двойной рендер (CLAUDE.md rule 2 + KB concept; 19 keys fixed 2026-05-26)
 - [[l1-cultural-sanity-brief]] — L1 Cultural Sanity Brief — Чек-лист для нутрициолога
 - [[sassy-sage-dialog-variants]] — Sassy Sage Dialog Variants System
 - [[sassy-sage-multilingual-glossary]] — Sassy Sage Multilingual Glossary
@@ -202,6 +206,7 @@ _13 files · 31 incoming refs (30d)_
 - [[nlm-sync-infrastructure]] — NLM Sync Infrastructure — NOMS
 - [[router-prefix-collision]] — Router prefix collision — exclusion guard pattern
 - [[specs-vs-reality-ground-truth]] — Specs vs Reality — Ground Truth Protocol
+- [[subagent-live-apply-review-rule]] — Subagent LIVE-apply: orchestrator МUST review SQL before authorize. TaskStop ≠ rollback (P0 lesson 2026-05-26)
 - [[systemd-dropin-override-pattern]] — systemd drop-in override pattern для persistent service config changes
 - [[test-user-reset-recipe]] — Test User Reset Recipe — обнуление для повторного онбординга
 
