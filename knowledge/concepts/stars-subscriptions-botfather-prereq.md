@@ -52,7 +52,9 @@ same `prices`, same `payload`) for quarterly/yearly one-time Stars
 **works** on the same bot, same accounts. The ONLY new parameter
 between working and broken: `subscription_period=2592000`.
 
-## Root cause hypothesis
+## Root cause — TWO plausible hypotheses
+
+### H1: undocumented BotFather setup prerequisite
 
 Telegram treats `subscription_period` as a separate capability that
 requires the bot to be **explicitly enabled for Star Subscriptions** by
@@ -60,6 +62,21 @@ its owner via BotFather. The path is **not in Telegram's public docs**
 as of Bot API 8.0 (Nov 2024) — neither the changelog
 ([core.telegram.org/bots/api-changelog](https://core.telegram.org/bots/api-changelog))
 nor `/bots/payments-stars` mentions a setup step.
+
+### H2: regional limitation (user-side `stars_purchase_blocked`)
+
+Per [Bot API docs](https://core.telegram.org/bots/api), Telegram has a
+`stars_purchase_blocked` field — Stars features (including Subscriptions)
+can be **regionally restricted on the USER side**, not bot side. Owner
+in incident report tested from EU (Spain). Stars Subscriptions might
+not be enabled in EU yet (first-rollout regions are typically US / GCC /
+SE Asia / LATAM).
+
+**Cheap discriminator test:** before going through full BotFather
+investigation, have ONE user from a likely-supported region (US, SA,
+UAE, India) click the same invoice URL. If it works there → it's H2
+(regional); NOMS just needs to detect blocked region per-user and fall
+back to one-time Stars. If it ALSO fails → it's H1 (BotFather setup).
 
 Likely location in BotFather (unverified — owner has to dig):
 ```
