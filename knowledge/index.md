@@ -14,14 +14,14 @@
 
 | Status | Count | Что значит |
 |---|---|---|
-| ✅ active | 89 | Живой код / упомянуты в недавних daily |
-| 🔥 HUB | 5 | Foundational, ≥5 refs/30d, читать первыми |
+| ✅ active | 91 | Живой код / упомянуты в недавних daily |
+| 🔥 HUB | 7 | Foundational, ≥5 refs/30d, читать первыми |
 | 🏛 legacy-n8n | 9 | n8n-механика, фича мигрирована в Python |
 | 🏛 superseded | 5 | Заменён более новым файлом, см. → pointer |
 | 🏛 duplicate | 2 | Содержание полностью покрыто canonical файлом |
 | 🏛 outdated | 1 | Автор сам пометил OUTDATED |
 | 💤 stale | 8 | 0 refs за 30 дней, тема возможно заморожена |
-| **Total** | **119** | |
+| **Total** | **121** | |
 
 ## Start here for common tasks
 
@@ -30,8 +30,8 @@
 | **Новый screen / inline UX** | 🔥 `headless-architecture`, `one-menu-ux`, `ui-screens-map`, `headless-button-creation-gotchas` |
 | **SQL миграция / RPC** | 🔥 `pre-migration-discovery-recipe`, `migration-collision-guard`, `migration-deploy-ordering`, `safe-create-or-replace-recipe`, `jsonb-shallow-merge-antipattern` |
 | **n8n workflow правка** | 🔥 `n8n-data-flow-patterns`, `n8n-subworkflow-contract`, `n8n-selfhost-migration` |
-| **Payment / Stripe / Stars** | `payment-idempotency-pattern`, `payment-integration`, `subscription-management-headless`, `claim-vs-check-idempotency-anti-pattern` |
-| **Перевод / 13 langs / Sage** | `copywriter-playbook`, `ui-translations-bulk-update-recipe`, `sassy-sage-multilingual-glossary`, `double-emoji-button-anti-pattern` |
+| **Payment / Stripe / Stars** | `payment-idempotency-pattern`, `payment-integration`, `subscription-management-headless`, `claim-vs-check-idempotency-anti-pattern`, 🔥 `stars-subscriptions-botfather-prereq` (P0 2026-05-28) |
+| **Перевод / 13 langs / Sage** | `copywriter-playbook`, `ui-translations-bulk-update-recipe`, `sassy-sage-multilingual-glossary`, `double-emoji-button-anti-pattern`, `i18n-rpc-audit-pattern` |
 | **Adaptive modifiers (sleep/stress/luteal)** | `adaptive-modifiers-architecture`, `safety-guard-ux-pattern` |
 | **Cron / scheduled jobs** | `cron-silent-failure-alerting` |
 | **Deploy / TLS / Caddy issue** | `release-protocol`, `tls-caddy-nomsbot` |
@@ -40,6 +40,8 @@
 | **Bug идемпотентности / дубль event** | `claim-vs-check-idempotency-anti-pattern`, `payment-idempotency-pattern` |
 | **Subagent → LIVE apply (orchestrator hat)** | `subagent-live-apply-review-rule`, `agent-collaboration-protocol`, `pre-migration-discovery-recipe` |
 | **`content \|\| payload` JSONB safety** | `jsonb-shallow-merge-antipattern` (P0 2026-05-26), `ui-translations-bulk-update-recipe` |
+| **Multi-stage PRs / stacked merges** | 🔥 `stacked-pr-base-change-gotcha` (P0 2026-05-28), `migration-collision-guard`, `release-protocol` |
+| **Stars subscriptions (recurring) — setup гoтча** | 🔥 `stars-subscriptions-botfather-prereq` — `provider_token` omit, BotFather prereq, re-enable checklist |
 | **Test-user reset / fresh start** | `test-user-reset-recipe` (НЕ `start-fresh-flow` — outdated) |
 
 ## Quick navigation
@@ -51,9 +53,9 @@
 - **✍️ Copywriter & i18n (13 langs)** — 5 files · 54 refs/30d
 - **🏛 Architecture & Infrastructure** — 8 files · 53 refs/30d (1 archived)
 - **⚙️ n8n Legacy (active during cutover)** — 13 files · 40 refs/30d (1 hub, 10 archived)
-- **📘 Engineering Lessons & Tooling** — 13 files · 31 refs/30d (1 archived)
+- **📘 Engineering Lessons & Tooling** — 14 files · 31 refs/30d (1 archived, 1 new HUB)
 - **🗄 Data Layer & RPCs** — 4 files · 28 refs/30d (1 hub, 1 archived)
-- **💳 Payment & Subscriptions** — 6 files · 14 refs/30d
+- **💳 Payment & Subscriptions** — 7 files · 14 refs/30d (1 new HUB)
 - **🎮 Gamification (XP / mana / leagues)** — 9 files · 7 refs/30d (4 archived)
 
 ---
@@ -143,6 +145,7 @@ _7 files · 61 incoming refs (30d)_
 - [[phase6-location-migration-plan]] — Phase 6 — миграция 02.1_Location в Python (план)
 - [[python-telegram-adapter]] — Python Telegram Adapter — Replacing Telegram Trigger in n8n
 - [[webhook-server-async-patterns]] — Webhook Server Async Patterns — concurrency + performance
+- [[food-log-python-cutover]] — Stage 7a — food log confirmation rendering migration from n8n to Python (4 PRs, 5 n8n iterations, first callback endpoint)
 
 ## ✍️ Copywriter & i18n (13 langs)
 
@@ -194,8 +197,9 @@ _13 files · 40 incoming refs (30d)_
 
 ## 📘 Engineering Lessons & Tooling
 
-_13 files · 31 incoming refs (30d)_
+_14 files · 31 incoming refs (30d)_
 
+- [[stacked-pr-base-change-gotcha]] **`🔥 HUB`** — Stacked-PR base-change gotcha — `gh api PATCH base=feature-branch` redirects «Merge pull request» button into the intermediate branch, NOT main (P0 2026-05-28).
 - [[adversarial-review-protocol]] — Adversarial Review Protocol — pre-apply critical pass
 - [[agent-collaboration-protocol]] — Agent Collaboration Protocol — Shared rules для всех NOMS-агентов
 - [[anti-spam-debounce]] — Anti-Spam / Debounce — защита от повторных нажатий
@@ -208,6 +212,7 @@ _13 files · 31 incoming refs (30d)_
 - [[specs-vs-reality-ground-truth]] — Specs vs Reality — Ground Truth Protocol
 - [[subagent-live-apply-review-rule]] — Subagent LIVE-apply: orchestrator МUST review SQL before authorize. TaskStop ≠ rollback (P0 lesson 2026-05-26)
 - [[systemd-dropin-override-pattern]] — systemd drop-in override pattern для persistent service config changes
+- [[i18n-rpc-audit-pattern]] — i18n RPC Audit: scan pg_proc for hardcoded localized strings separately from ui_translations JSONB (mig 285/286 lesson)
 - [[test-user-reset-recipe]] — Test User Reset Recipe — обнуление для повторного онбординга
 
 ### 🏛 Archived / legacy / stale
@@ -228,8 +233,9 @@ _4 files · 28 incoming refs (30d)_
 
 ## 💳 Payment & Subscriptions
 
-_6 files · 14 incoming refs (30d)_
+_7 files · 14 incoming refs (30d)_
 
+- [[stars-subscriptions-botfather-prereq]] **`🔥 HUB`** — Telegram Stars Subscriptions require BotFather setup before `subscription_period` works. Without setup → client error `PROVIDER_ACCOUNT_INVALID` (P0 2026-05-28). Currently disabled in NOMS; re-enable checklist inside.
 - [[ambassador-payout-system]] — Squad/Банда UX v2 — расширение реферальной программы до полноценной ambassador-программы с RevShare (25%+5%), системой вывода средств и ручным одобрением CEO. Разбито на 7 незав...
 - [[payment-idempotency-pattern]] — Status:** captured 2026-05-20 после PR #134 (post-first-live-payment audit). Покрывает три ортогональные idempotency-проблемы которые открылись после первого live Stripe платежа.
 - [[payment-integration]] — Three payment methods (Telegram Stars, Stripe card, TON/USDT) integrated without a dedicated "Payments" menu. Entry points are the Profile screen and Shop screen.
