@@ -52,31 +52,68 @@ same `prices`, same `payload`) for quarterly/yearly one-time Stars
 **works** on the same bot, same accounts. The ONLY new parameter
 between working and broken: `subscription_period=2592000`.
 
-## Root cause — TWO plausible hypotheses
+## Root cause analysis — 4 hypotheses considered
 
-### H1: undocumented BotFather setup prerequisite
+### H1: undocumented BotFather setup ❌ DISPROVEN (2026-05-28)
 
-Telegram treats `subscription_period` as a separate capability that
-requires the bot to be **explicitly enabled for Star Subscriptions** by
-its owner via BotFather. The path is **not in Telegram's public docs**
-as of Bot API 8.0 (Nov 2024) — neither the changelog
-([core.telegram.org/bots/api-changelog](https://core.telegram.org/bots/api-changelog))
-nor `/bots/payments-stars` mentions a setup step.
+Owner-verified via screenshots from `@BotFather → /mybots → @nomsaibot`:
+* **Bot Settings → Payments** — lists only fiat providers (Redsys,
+  ЮKassa, PayMaster, ECOMMPAY, Bank 131, Robokassa, PayBox.money).
+  No mention of Stars subscriptions.
+* **Bot Settings → Telegram Stars** — placeholder text + «Learn More»
+  button only. No subscription configuration UI.
+* **Monetization section** — two entries: Payments + Telegram Stars.
+  No separate «Subscriptions» item.
 
-### H2: regional limitation (user-side `stars_purchase_blocked`)
+Conclusion: **BotFather UI does not expose any subscription setup
+toggle** for @nomsaibot. H1 ruled out.
+
+### H2: regional limitation (user-side) — POSSIBLE
 
 Per [Bot API docs](https://core.telegram.org/bots/api), Telegram has a
-`stars_purchase_blocked` field — Stars features (including Subscriptions)
-can be **regionally restricted on the USER side**, not bot side. Owner
-in incident report tested from EU (Spain). Stars Subscriptions might
-not be enabled in EU yet (first-rollout regions are typically US / GCC /
-SE Asia / LATAM).
+`stars_purchase_blocked` field — Stars features can be **regionally
+restricted on the USER side**. Owner tested from EU (Spain). Stars
+Subscriptions may not be fully rolled out to EU yet (first-rollout
+regions are typically US / GCC / SE Asia / LATAM).
 
-**Cheap discriminator test:** before going through full BotFather
-investigation, have ONE user from a likely-supported region (US, SA,
-UAE, India) click the same invoice URL. If it works there → it's H2
-(regional); NOMS just needs to detect blocked region per-user and fall
-back to one-time Stars. If it ALSO fails → it's H1 (BotFather setup).
+**Discriminator:** have one tester from US/SA/UAE/India click the same
+invoice URL. If it works → confirmed regional; NOMS adds per-user region
+detection and falls back to one-time Stars for restricted users.
+
+### H3: Telegram-internal whitelist (most likely — owner-side action required)
+
+Telegram operates many features behind internal gating. Stars
+Subscriptions was launched in Bot API 8.0 (Nov 2024) but may still
+be on a gated/whitelist rollout for bots, not exposed via BotFather.
+Activation only via `@BotSupport` request.
+
+**Escalation:** owner contacts `@BotSupport` (template in tracking
+issue #218). Wait 1-7 days for Telegram response.
+
+### H4: bot account has stale fiat provider that conflicts
+
+@nomsaibot has 7 fiat payment providers listed in BotFather (Redsys/
+ЮKassa/etc) — these were likely added during n8n-era experiments and
+NOT cleaned up. For Stars ONE-TIME, Telegram bypasses provider entirely
+(direct XTR). For Stars SUBSCRIPTIONS with `subscription_period`,
+Telegram may attempt to route recurring billing through the bot's
+configured payment provider — finds an invalid/test-only one — fails
+with `PROVIDER_ACCOUNT_INVALID`.
+
+**Discriminator:** owner removes ALL fiat providers from BotFather
+(`Payments → Redsys → Delete`, repeat). Test Stars subscription again.
+If now works → H4 confirmed. **Caveat:** this removes Stripe etc.
+NOMS uses Stripe (PR #134 era), so this would break fiat too. Don't do
+H4-test without first verifying Stripe is wired through a DIFFERENT
+mechanism (Stripe webhook, not BotFather provider).
+
+### Best path: H2 cheap-test first, then H3 escalation
+
+Cost ladder:
+1. **H2** — 5 min — ask non-EU tester to click URL (no permanent change)
+2. **H3** — 30 sec write to @BotSupport, then 1-7 day wait
+3. **H4** — destructive (removes fiat providers); LAST resort after
+   verifying Stripe doesn't depend on BotFather payment list
 
 Likely location in BotFather (unverified — owner has to dig):
 ```
