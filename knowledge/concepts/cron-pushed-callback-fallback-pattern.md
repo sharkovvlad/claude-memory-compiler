@@ -63,17 +63,56 @@ WHERE screen_id = '_global_floating_actions'  -- mig 211 virtual screen
 2. Полный flow работает (save + toast + navigate)
 3. F3 mutex наконец срабатывает (daily_modifiers пишется)
 
+## 3 mechanisms — decision flow (extension 2026-05-29)
+
+Audit subagent установил: callback safe для cron-push если **минимум 1** из 3 механизмов покрывает:
+
+1. **Dispatcher-level whitelist** (`dispatcher/router.py`) — `PAYMENT_EXACT`, `PROFILE_EXACT`, `ADMIN_PAYOUT_RE`, `PAYMENT_PREFIXES`. Handler runs directly, **без вообще PUI lookup'а** (e.g. `cmd_premium_plans` push'ится из `subscription_lifecycle.py` без проблем). **Самый strong** — bypass'ит и screen-mismatch и render_screen вообще.
+
+2. **PUI top-level fast-path** — `IF v_callback IN (...)` block в `process_user_input` body, hardcoded screen mapping без `ui_screen_buttons` lookup. Покрывает `cmd_quests`, `cmd_progress`, `cmd_my_plan`, `cmd_settings`, `cmd_get_stats`, `cmd_help` и ~20 других. См. `migrations/343_phase3_toast_and_strip.sql:168-200` для актуального списка.
+
+3. **`_global_floating_actions` virtual screen** (mig 211) — explicit fallback в PUI когда `users.nav_stack[top]` lookup misses. Самый cheap fix (data-only INSERT, без RPC rewrites).
+
+## Decision flow для нового cron-pushed callback
+
+```
+Before adding cron-push inline button → check ≥1 mechanism covers:
+
+1. grep dispatcher/router.py for EXACT/PREFIX whitelist
+   → Yes → ok, callback routed напрямую к handler. Done.
+   → No → ↓
+
+2. grep latest process_user_input migration (e.g. mig 343) for `'cmd_X' AND'`
+   → Yes → ok, fast-path hardcoded. Done.
+   → No → ↓
+
+3. INSERT row в _global_floating_actions с meta скопированной с source button.
+   → ok, fallback покрывает.
+```
+
+**Audit candidates 29.05** (current cron-pushed callbacks, все safe):
+
+| Callback | Source cron | Safety mechanism |
+|---|---|---|
+| cmd_quests | reminders.py:194 | PUI fast-path |
+| cmd_progress | streak_checker.py:48 | PUI fast-path |
+| cmd_premium_plans | subscription_lifecycle.py:78,134 | Dispatcher PAYMENT_EXACT |
+| cmd_edit_last / cmd_delete_last | food_log.py:1024 | `_global_floating_actions` |
+| cmd_sleep_* / cmd_stress_* | reminders.py:199 (mig 366 dynamic kb) | `_global_floating_actions` (mig 372) |
+
+⚠️ **Не over-add `_global` rows** — если callback уже covered mechanism 1 или 2, добавление в `_global` harmless но confusing. См. audit log 2026-05-29.
+
 ## Rule for future agents — checklist
 
 **Если добавляешь cron-pushed inline button**, после mig:
 
 1. ✅ Button row на «real» screen (для in-app flow когда юзер открывает screen вручную)
-2. ✅ **DUPLICATE row в `_global_floating_actions`** с тем же meta — для cron-push case
-3. ✅ Если callback has `save_rpc` — meta должна быть identical (saving работает уже из обеих entry-points)
+2. ✅ Проверить decision flow выше — если ни (1) ни (2) не cover → **DUPLICATE row в `_global_floating_actions`** с тем же meta
+3. ✅ Если callback has `save_rpc` — meta должна быть identical (saving работает из обеих entry-points)
 4. ✅ Verify через query:
    ```sql
    SELECT screen_id FROM ui_screen_buttons WHERE callback_data='cmd_X';
-   -- Должно вернуть ≥2 строки: real screen + _global_floating_actions
+   -- Должно вернуть ≥1 строку на real screen + (опционально) _global_floating_actions
    ```
 
 **Если есть Python intercept** для callback (например `_handle_stress_high` для РПП safety modal):
