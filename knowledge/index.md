@@ -14,14 +14,14 @@
 
 | Status | Count | Что значит |
 |---|---|---|
-| ✅ active | 91 | Живой код / упомянуты в недавних daily |
+| ✅ active | 94 | Живой код / упомянуты в недавних daily |
 | 🔥 HUB | 7 | Foundational, ≥5 refs/30d, читать первыми |
 | 🏛 legacy-n8n | 9 | n8n-механика, фича мигрирована в Python |
 | 🏛 superseded | 5 | Заменён более новым файлом, см. → pointer |
 | 🏛 duplicate | 2 | Содержание полностью покрыто canonical файлом |
 | 🏛 outdated | 1 | Автор сам пометил OUTDATED |
 | 💤 stale | 8 | 0 refs за 30 дней, тема возможно заморожена |
-| **Total** | **121** | |
+| **Total** | **124** | |
 
 ## Start here for common tasks
 
@@ -33,10 +33,10 @@
 | **Payment / Stripe / Stars** | `payment-idempotency-pattern`, `payment-integration`, `subscription-management-headless`, `claim-vs-check-idempotency-anti-pattern`, 🔥 `stars-subscriptions-botfather-prereq` (P0 2026-05-28) |
 | **Перевод / 13 langs / Sage** | `copywriter-playbook`, `ui-translations-bulk-update-recipe`, `sassy-sage-multilingual-glossary`, `double-emoji-button-anti-pattern`, `i18n-rpc-audit-pattern` |
 | **Adaptive modifiers (sleep/stress/luteal)** | `adaptive-modifiers-architecture`, `safety-guard-ux-pattern` |
-| **Cron / scheduled jobs** | `cron-silent-failure-alerting`, `cron-reminder-suppression-tunables` |
+| **Cron / scheduled jobs** | `cron-silent-failure-alerting`, `cron-reminder-suppression-tunables`, `cron-pushed-callback-fallback-pattern` |
 | **Deploy / TLS / Caddy issue** | `release-protocol`, `tls-caddy-nomsbot` |
 | **Python handler (cutover)** | `phase2-python-menu-v3`, `phase4-onboarding-migration`, `webhook-server-async-patterns` |
-| **Day-summary / Stats / Mood** | 🔥 `profile-v5-screens-specs`, `stats-main-headless`, `personalized-macro-split` |
+| **Day-summary / Stats / Mood** | 🔥 `profile-v5-screens-specs`, `stats-main-headless`, `personalized-macro-split`, `my-day-llm-insight`, `meals-picker-two-stage` |
 | **Bug идемпотентности / дубль event** | `claim-vs-check-idempotency-anti-pattern`, `payment-idempotency-pattern` |
 | **Subagent → LIVE apply (orchestrator hat)** | `subagent-live-apply-review-rule`, `agent-collaboration-protocol`, `pre-migration-discovery-recipe` |
 | **`content \|\| payload` JSONB safety** | `jsonb-shallow-merge-antipattern` (P0 2026-05-26), `ui-translations-bulk-update-recipe` |
@@ -47,9 +47,9 @@
 ## Quick navigation
 
 - **🛡 Safety & Clinical Guards** — 8 files · 121 refs/30d
-- **🎨 UX Patterns & Screens** — 30 files · 108 refs/30d (1 hub, 8 archived)
+- **🎨 UX Patterns & Screens** — 31 files · 108 refs/30d (1 hub, 8 archived)
 - **🔧 Migration & Headless Patterns** — 17 files · 79 refs/30d (2 hub)
-- **🐍 Python Handlers (cutover targets)** — 7 files · 61 refs/30d
+- **🐍 Python Handlers (cutover targets)** — 11 files · 61 refs/30d
 - **✍️ Copywriter & i18n (13 langs)** — 5 files · 54 refs/30d
 - **🏛 Architecture & Infrastructure** — 8 files · 53 refs/30d (1 archived)
 - **⚙️ n8n Legacy (active during cutover)** — 13 files · 40 refs/30d (1 hub, 10 archived)
@@ -75,7 +75,7 @@ _8 files · 121 incoming refs (30d)_
 
 ## 🎨 UX Patterns & Screens
 
-_30 files · 108 incoming refs (30d)_
+_31 files · 108 incoming refs (30d)_
 
 - [[profile-v5-screens-specs]] **`🔥 HUB`** — Profile v5 — Источник Истины (UX каталог всего бота)
 - [[checkmark-prefix-pattern]] — Checkmark Prefix Pattern — ✅ на текущем выборе
@@ -99,6 +99,7 @@ _30 files · 108 incoming refs (30d)_
 - [[user-profile-personalization]] — System for keeping user names current and injecting them into notifications and UI. Built across migrations 043–044.
 - [[ux-crosscutting-principles]] — UX Cross-Cutting Principles (NOMS Bot)
 - [[visible-condition-business-data-gotcha]] — visible_condition gotcha — пишет только из public.users
+- [[ux-mobile-compact-redesign-sweep]] — UX Mobile Compact Redesign (mig 347-355): stats/progress/profile mobile layout, ±10% macro corridor, premium-hide line, checkmark daily_metrics extension
 
 ### 🏛 Archived / legacy / stale
 
@@ -136,7 +137,7 @@ _16 files · 79 incoming refs (30d)_
 
 ## 🐍 Python Handlers (cutover targets)
 
-_7 files · 61 incoming refs (30d)_
+_11 files · 61 incoming refs (30d)_
 
 - [[canonical-hybrid-location-picker]] — Canonical Hybrid Location Picker — reply-kb prompt + inline list
 - [[dumb-renderer-interpolation-gotchas]] — Dumb Renderer Interpolation — Gotchas
@@ -146,6 +147,9 @@ _7 files · 61 incoming refs (30d)_
 - [[python-telegram-adapter]] — Python Telegram Adapter — Replacing Telegram Trigger in n8n
 - [[webhook-server-async-patterns]] — Webhook Server Async Patterns — concurrency + performance
 - [[food-log-python-cutover]] — Stage 7a — food log confirmation rendering migration from n8n to Python (4 PRs, 5 n8n iterations, first callback endpoint)
+- [[sage-food-log-llm-integration]] — Sassy Sage LLM one-liner (gpt-4o-mini) после каждого food log. Первый OpenAI call в NOMS. 5 safety paths, pre-baked fallback, asyncio parallel + timeout. PR #156, mig 312. **v2 (23.05):** JSON mode, emotion→tg-emoji, macros focus, fallback × 13 langs (mig 314-315). **v3 (24.05):** timeout 5s, always-fallback, emoji rollback unicode, persist_as_menu fix.
+- [[my-day-llm-insight]] — My Day LLM Insight — cache-on-write gpt-4o-mini insight для stats_main. 10-enum `day_status` tone anchor, prompt guardrails (4 rules), normaliser shape fix. PR #164 mig 319-320, PR #166 mig 322, PR #167 mig 323.
+- [[meals-picker-two-stage]] — 2-stage meal edit/delete flow (meals_picker → meal_action). Dynamic per-meal buttons, parametric `cmd_select_meal_<uuid>`, 4 RPCs. PR #168 mig 324.
 
 ## ✍️ Copywriter & i18n (13 langs)
 
@@ -166,6 +170,7 @@ _8 files · 53 incoming refs (30d)_
 - [[architecture-registry]] — Architecture Registry — Python authoritative vs n8n fallback
 - [[cron-silent-failure-alerting]] — Cron Silent Failure Pattern + Centralized BaseCron Alerting
 - [[cron-reminder-suppression-tunables]] — Tunables для cron reminder suppression (mute-windows, hour cutoffs) живут в `app_constants`, не в RPC body
+- [[cron-pushed-callback-fallback-pattern]] — Любая cron-pushed inline button MUST иметь row в `_global_floating_actions` virtual screen (mig 372 P0 lesson — без fallback callback fails molча, F3 mutex не срабатывает)
 - [[noms-architecture]] — Telegram nutrition tracking bot with AI food recognition, gamification (XP, leagues, quests, NomsCoins), 13-language support, and subscriptions. Character: "Sassy Sage" — helpfu...
 - [[project-structure]] — Project Structure & Tech Stack
 - [[release-protocol]] — Release Protocol — Auto-deploy через GitHub Actions, manual fallback

@@ -136,3 +136,45 @@ def _coerce_translation_value(value, text_key):
 - Если ключ изначально string и потом меняется на array — Python continue работать (helper handles both).
 - APPEND ≠ REPLACE rule сохраняется для UPDATE через jsonb_set (`(content->'section'->'key') || jsonb_build_array(<new>)`) — random pick из расширенного массива.
 - **Hand-off case** — Python `_resolve_text` подгружается из ctx.translations (per-user lang), random.choice идёт на per-request basis → каждый клик даёт новый вариант (живой character Noms).
+
+## Update 2026-05-29 — cron_notifications.reminder_* (mig 370)
+
+**Extension:** variant array pattern теперь применяется и для **cron reminder push'ей** (`crons/reminders.py`). До mig 370 все 11 reminder типов использовали scalar string. После mig 370 — `reminder_sleep_checkin` и `reminder_stress_checkin` × 13 langs стали array(3) (Sage v2: научный/relatable/sassy angles).
+
+**Python pattern (`crons/reminders.py:_load_translations`):**
+
+```python
+async def _load_translations(self, key: str) -> dict[str, list[str]]:
+    """Returns dict[lang -> list[variant]]. Scalar wrapped in 1-elem list для uniform handling."""
+    rows = await supabase.query(
+        "ui_translations",
+        select=f"lang_code,content->cron_notifications->{key}",  # → not ->>
+    )
+    result: dict[str, list[str]] = {}
+    for row in rows or []:
+        value = row.get(key)
+        if isinstance(value, list):
+            variants = [v for v in value if isinstance(v, str) and v.strip()]
+            if variants:
+                result[row["lang_code"]] = variants
+        elif isinstance(value, str) and value.strip():
+            result[row["lang_code"]] = [value]  # scalar wrap
+    return result
+```
+
+**Key insight — `->` vs `->>`:**
+- `->` (single arrow) — PostgREST возвращает native JSONB type (str | list | dict)
+- `->>` (double arrow) — всегда text. Если value=array, получите `'["v1","v2","v3"]'` literal string → bug.
+- Для variant-aware code — use `->` + isinstance проверка.
+
+**Caller pattern (per-user pick, не за tick):**
+```python
+variants = translations.get(lang) or translations.get("en", [])
+if not variants:
+    continue
+tpl = random.choice(variants)
+```
+
+**Backward-compat:** 9 reminder типов остаются scalar (meal_*, day_close, etc.), wrapped в 1-elem list, `random.choice` возвращает ту же строку.
+
+**Future:** если хочется Sage rotation для других reminder'ов (например `reminder_meal_morning`) — просто converted scalar → array(3) в migration, Python код не меняется.
