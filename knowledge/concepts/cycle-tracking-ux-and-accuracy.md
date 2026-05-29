@@ -1,21 +1,54 @@
 ---
 title: "Cycle Tracking UX matrix + nutritional accuracy risks (Phase 3d)"
 aliases: [cycle-tracking, luteal-accuracy, cycle-tracking-setup, period-tracking-ux]
-tags: [nutrition, safety, ux, adaptive-modifiers, phase-3d, design-decisions-pending]
+tags: [nutrition, safety, ux, adaptive-modifiers, phase-3d, decisions-implemented]
 sources:
   - "migrations/334-360 (Phase 3d cycle UX + luteal foundation)"
   - "RPC save_user_cycle_data (mig 355) — period_choice ENUM"
   - "RPC compute_cycle_day_for_user — modular arithmetic"
   - "RPC set_user_cycle_disabled — opt-out preserves history"
-  - "daily/2026-05-29.md (Nutritionist 10 UAT)"
+  - "migrations/375 (Phase 3d polish — 4 risks closed)"
+  - "daily/2026-05-29.md (Nutritionist 10 UAT + полный рефактор)"
 created: 2026-05-29
+updated: 2026-05-29
 status: active
 severity: clinical-safety
 ---
 
 # Cycle Tracking — UX Matrix + Nutritional Accuracy
 
-> **TL;DR.** Phase 3d добавила opt-in tracking менструального цикла с прибавкой +175 kcal, +5-10% fat в лютеальной фазе. **Точность критически важна**: 7-day error в дате старта = до 50% wrong-phase classification. Текущий UX имеет 4 design risks: (1) default `'7d_ago'` в онбординге, (2) static checkmark не сдвигается со временем, (3) нет menopause-гейта, (4) длина цикла hardcoded 28. Все 4 — open questions ждут owner-decision.
+> **TL;DR.** Phase 3d добавила opt-in tracking менструального цикла с прибавкой +175 kcal в лютеальной фазе (Premium-only). **Точность критически важна**: 7-day error в дате старта = до 50% wrong-phase classification. UAT 2026-05-29 обнаружил 4 design risks — **закрыты mig 375** (см. секцию «Decisions implemented»).
+
+## ✅ Decisions implemented (mig 375 — Phase 3d Polish, 2026-05-29)
+
+Все 4 risks закрыты в одной миграции после согласования с owner + 2 external AI reviews:
+
+| Risk | Решение | Реализация |
+|---|---|---|
+| **Default `'7d_ago'` с pre-selected ✅** | «Не помню точно» → silent skip | Новая кнопка `cmd_save_cycle_unknown` → existing `set_user_cycle_disabled` (enabled=FALSE, start_date NULL). Toast «✓ Понятно. Пропущу подстройку тихо.» × 13 langs. `compute_cycle_day_for_user` уже возвращает NULL когда start_date=NULL → modifier silent skip. |
+| **Static checkmark drift** | Убрать ✅ в setup, dynamic dates | `current_value_col` удалён из `ui_screens.cycle_tracking_setup.meta`. `get_cycle_setup_context` расширен — возвращает `date_today`, `date_7d_ago`, `date_14d_ago` (DD.MM). Кнопки получили `{date_*}` template placeholders × 13 langs. |
+| **Нет menopause guard** | Hard cut-off age ≥ 55 в backend | `compute_cycle_day_for_user`: `WHEN birth_date IS NOT NULL AND EXTRACT(YEAR FROM AGE(...)) >= 55 THEN NULL`. FSM-обоснование: cycle question идёт ДО age step, UI-гейт невозможен — backend = единственный реальный защитный слой. |
+| **Cycle length 28 hardcoded** | Inline кнопка + medical range | `buttons.edit_cycle_length` теперь `⚙️ Длина: 28 дн.` через `{cycle_length}` interpolation × 13 langs. `set_user_cycle_length` validation 21-45→21-35 (medical normal; 36+ irregular требует врача). UI presets уже только 21/25/28/30/35. |
+
+**Drift protection (60-day soft alert)** — deferred в backlog per owner-decision (over-engineering для текущего scale ~5-12 active users).
+
+**PR:** #231 (cycle_tracking_refactor mig 375).
+
+**Verification (8/8 checks PASSED):**
+1. set_user_cycle_length RPC exists
+2. compute_cycle_day_for_user содержит birth_date + 55
+3. get_cycle_setup_context returns date_today
+4. current_value_col removed
+5. cycle_tracking_setup = 7 buttons
+6. button_dont_remember × 13 langs
+7. unknown_toast × 13 langs
+8. edit_cycle_length contains {cycle_length} × 13 langs
+
+---
+
+## 📜 Original 4 design risks (как они выглядели до mig 375)
+
+> Сохраняется ниже для исторического контекста и для других агентов которые могут наткнуться на похожие patterns в других фичах.
 
 ## Архитектура (как сейчас работает)
 
