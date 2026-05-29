@@ -118,6 +118,26 @@ ssh root@89.167.86.20 'curl -s -H "X-N8N-API-KEY: $KEY" http://127.0.0.1:5678/ap
 - [ ] Что произойдёт если claim ложен и я сделаю операцию? Если «обратимо» — go. Если «5+ юзеров сломаются» — STOP.
 - [ ] Документирована ли rollback процедура? Если нет — STOP, документируй сначала.
 
+## Subagent claims — тот же риск, выше частота
+
+**Дополнение 2026-05-29 (Nutritionist 10):** Тот же паттерн ошибки происходит когда **Explore/general-purpose subagent** возвращает claims о состоянии прода. Subagent читает code/migrations и обобщает — но он **не verify через live SQL** если ты явно не попросил. За одну сессию словил 3 ошибочных subagent claim'а:
+
+| Subagent claim | Реальность |
+|---|---|
+| «BMI/min_kcal warnings — copywriter pending» | ✅ DONE через mig 270 (351 × 13 langs) + `safety_guards.py` |
+| «Maternal sub-menu labels — EN fallback, нужен copywriter» | ✅ DONE через mig 269+286+361 |
+| «Phenotype Quiz — UX done, but renders as pass-through skip, не mandatory» | ❌ Quiz **полностью в FSM**, есть Skip кнопка, юзер реально проходит. Router включает `registration_step_phenotype_quiz` в onboarding statuses (`router.py:81,372`), `cmd_quiz_skip` живой (mig 199:354) |
+
+**Почему subagent ошибается чаще handover-а:** subagent читает migrations + handlers как snapshot, без cross-reference с router FSM / button meta-dispatch / hot-reload constants. «Renders as pass-through» = subagent увидел один code path и обобщил.
+
+**Правило:** перед действиями на основании subagent-claim'а про статус фичи — **обязательно verify** через один из:
+- `SELECT screen_id FROM ui_screens WHERE ...` + `SELECT ... FROM ui_screen_buttons WHERE screen_id=...`
+- Router status whitelist в `dispatcher/router.py`
+- `SELECT * FROM app_constants WHERE key=...` если фича зависит от flag
+- Прямой UAT (попросить owner-а проверить в Telegram, как Phase 3d cycle)
+
+Особенно осторожно с claims вида «частично сделано», «pass-through», «UI exists but не activated» — это области где subagent чаще всего смешивает FSM-инспекцию с deep meta-dispatch (button.meta `set_status`/`target_screen`).
+
 ## Связано с
 
 - [[concepts/pre-migration-discovery-recipe]] — verify RPC definitions через `pg_get_functiondef` LIVE
@@ -125,3 +145,4 @@ ssh root@89.167.86.20 'curl -s -H "X-N8N-API-KEY: $KEY" http://127.0.0.1:5678/ap
 - [[concepts/release-protocol]] §rebase-перед-commit — параллельная работа усугубляет stale-state
 - [[concepts/n8n-data-flow-patterns]] §Safe PUT — verify GET перед PUT
 - [[concepts/npc-bots-users-table]] — конкретный пример где stale claim («1000 users») рушится через is_bot filter
+- [[concepts/subagent-live-apply-review-rule]] — orchestrator review для destructive subagent action; этот концепт расширяет до non-destructive claim'ов
