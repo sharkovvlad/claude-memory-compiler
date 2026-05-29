@@ -79,7 +79,36 @@ Hook ловит локально (быстро, бесплатно, понятн
 2. `echo "migrations/999_test.sql" | python3 .github/scripts/migration_collision_check.py --mode=local` → exit 0.
 3. CI-часть — закрытый draft-PR с реальной коллизией → workflow fail + комментарий.
 
+## Edge case: parallel subagents в shared worktree (2026-05-29 lesson)
+
+**Сценарий:** Orchestrator (main agent) запускает 2-3 subagents через Agent tool с инструкцией «возьми mig N для тебя, N+1 для меня, N+2 для другого subagent'a». Каждый subagent работает в **своём отдельном worktree** (Agent tool default), полностью изолированно.
+
+**Что произошло 29.05** (Nutritionist 10):
+1. Orchestrator проверил `ls migrations/` + open PRs → 374 last, никаких open PRs с миграциями → решил mig 375 = себе, 376 = subagent A, 377 = subagent B.
+2. Subagent A был запущен. **Но он сам проверил** `ls migrations/` + `gh pr list` (правильное поведение per CLAUDE.md) — увидел 374 last, никаких open PRs → решил что свободно с 375. Орchestrator-инструкция «возьми 376» воспринята как один из вариантов, не як strict rule.
+3. Subagent A apply LIVE mig 375 (его version) + push branch + open PR #229 with mig 375.
+4. Несколько минут позже orchestrator apply LIVE свой mig 375 (cycle version) + push + open PR #231.
+5. **На прод БД applied 2 разные migrations с одним номером 375**. На GitHub 2 PR с конфликтующими migrations/375_*.sql.
+
+**Почему pre-push hook не сработал у subagent A:**
+- Subagent A push'нул **первым** — на момент его push origin/main был на 374. Hook прошёл.
+- Orchestrator push'нул вторым с уже-existing-on-origin mig 375 → hook должен был блокировать **orchestrator**, но **migration_collision_check.py** видимо не был активирован в orchestrator's worktree (different hooks setup).
+
+**Resolution (29.05):**
+- Один из PR переименован 375 → 378 (filename only, БД уже applied; миграции идемпотентны).
+- Используется `git mv` + amend commit + `git push --force-with-lease`.
+- На каждый PR comment объясняющий хронологию + rename rationale.
+
+**Lessons for orchestrators:**
+
+1. **Subagent инструкция «возьми mig N» — не enforceable** на уровне subagent'а. Subagent работает в isolation, может **переопределить** твой номер своей независимой проверкой `ls migrations/`.
+2. **Orchestrator должен first push свой commit** перед запуском subagents — тогда origin/main уже advanced, subagent'ы увидят занятый номер через pre-push hook.
+3. **Альтернатива:** orchestrator делает `git push` **пустого** placeholder файла `migrations/<N>_placeholder.sql` (или DO NOTHING migration) — резервирует номер. После своей работы — amend на real content.
+4. **Если коллизия уже произошла:** rename **через git mv** (sed заменить внутри тела «mig N» → «mig M»). БД не трогать — миграции идемпотентны.
+5. **`--force-with-lease` на subagent's завершённой ветке** — safe, потому что subagent уже не пишет в неё (его process exited).
+
 ## Связано
 
 - [[concepts/release-protocol]] — общий протокол релиза, защиты 1-3 (force-push, stale-worktree, semantic-rollback).
 - [[concepts/pre-migration-discovery-recipe]] — что делать **внутри** миграции (отдельно от номера).
+- [[concepts/session-close-discipline]] — фиксация collision resolution в handover (иначе следующий агент не знает что 2 mig'а на проде с разными file numbers).

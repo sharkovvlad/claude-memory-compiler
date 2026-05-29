@@ -1,7 +1,11 @@
 # Knowledge Base Index
 
-> **Re-organized 2026-05-25** — 119 concepts, 11 domains. Foundational hubs marked 🔥, legacy/superseded/duplicate 🏛, stale 💤.
+> **Re-organized 2026-05-25** — 128 concepts, 11 domains. Foundational hubs marked 🔥, legacy/superseded/duplicate 🏛, stale 💤.
 > Каждый non-ACTIVE файл имеет `> ⚠️ status: ...` баннер сверху. История компиляции — `log.md`.
+
+## ⛔ ОБЯЗАТЕЛЬНО перед EOS — Session Close Discipline
+
+> **Перед каждым сообщением «готово»** агент **обязан** выполнить 5-step checklist в [[concepts/session-close-discipline]] 🔥 HUB. Без этого следующая сессия начнётся с разбора завалов (10-40 мин потерянного времени каждый раз). Owner явно flagнул эту проблему 2026-05-29.
 
 ## How to use this index
 
@@ -9,19 +13,20 @@
 2. **Foundational hubs (🔥)** — обязательно читать перед погружением в домен.
 3. **При конфликте между файлами** — recent правит. Если видишь `→ [[X]]` — читай X, не оригинал.
 4. **Stale (💤)** — не trust на слово, тема могла измениться. Перепроверь через NLM.
+5. **Перед EOS** — открой [[concepts/session-close-discipline]] и пройди 5 пунктов self-check.
 
 ## Snapshot
 
 | Status | Count | Что значит |
 |---|---|---|
-| ✅ active | 98 | Живой код / упомянуты в недавних daily |
-| 🔥 HUB | 11 | Foundational, ≥5 refs/30d, читать первыми (+4 from 2026-05-29: memory-claim-vs-live, npc-bots-users-table, stage7-global-cutover, cycle-tracking-ux-and-accuracy) |
+| ✅ active | 99 | Живой код / упомянуты в недавних daily |
+| 🔥 HUB | 12 | Foundational, ≥5 refs/30d, читать первыми (+5 from 2026-05-29: memory-claim-vs-live, npc-bots-users-table, stage7-global-cutover, cycle-tracking-ux-and-accuracy, **session-close-discipline**) |
 | 🏛 legacy-n8n | 9 | n8n-механика, фича мигрирована в Python |
 | 🏛 superseded | 5 | Заменён более новым файлом, см. → pointer |
 | 🏛 duplicate | 2 | Содержание полностью покрыто canonical файлом |
 | 🏛 outdated | 1 | Автор сам пометил OUTDATED |
 | 💤 stale | 8 | 0 refs за 30 дней, тема возможно заморожена |
-| **Total** | **128** | |
+| **Total** | **129** | |
 
 ## Start here for common tasks
 
@@ -33,7 +38,6 @@
 | **Payment / Stripe / Stars** | `payment-idempotency-pattern`, `payment-integration`, `subscription-management-headless`, `claim-vs-check-idempotency-anti-pattern`, 🔥 `stars-subscriptions-botfather-prereq` (P0 2026-05-28) |
 | **Перевод / 13 langs / Sage** | `copywriter-playbook`, `ui-translations-bulk-update-recipe`, `sassy-sage-multilingual-glossary`, `double-emoji-button-anti-pattern`, `i18n-rpc-audit-pattern` |
 | **Adaptive modifiers (sleep/stress/luteal)** | `adaptive-modifiers-architecture`, `safety-guard-ux-pattern` |
-| **Cycle tracking UX / luteal accuracy** | 🔥 `cycle-tracking-ux-and-accuracy` (Phase 3d, 4 design risks + RPC matrix, открытые owner-decisions 29.05) |
 | **Cron / scheduled jobs** | `cron-silent-failure-alerting`, `cron-reminder-suppression-tunables`, `cron-pushed-callback-fallback-pattern` |
 | **Deploy / TLS / Caddy issue** | `release-protocol`, `tls-caddy-nomsbot` |
 | **Python handler (cutover)** | `phase2-python-menu-v3`, `phase4-onboarding-migration`, `webhook-server-async-patterns` |
@@ -47,6 +51,8 @@
 | **Aggregate по `users` / counts / engagement** | 🔥 `npc-bots-users-table` — ВСЕГДА `WHERE is_bot=false`, иначе 119 NPC ботов искажают цифры на ≈30% |
 | **MEMORY/handover claim → verify перед действием** | 🔥 `memory-claim-vs-live-verification` (2026-05-29 Stage 7 case), `pre-migration-discovery-recipe` |
 | **AI Engine cutover / Stage 7 history** | `stage7-global-cutover` (mig 299→373, canary→global blueprint + monitoring metrics) |
+| **🚨 ПЕРЕД EOS («готово») — обязательный self-check** | 🔥 `session-close-discipline` — 5-step checklist (daily / handover / KB / MEMORY / size), real failure cases, anti-patterns. **Owner-flagged 29.05: каждая новая сессия = 20-40мин на разбор завалов.** |
+| **Cycle tracking UX / luteal accuracy** | 🔥 `cycle-tracking-ux-and-accuracy` (Phase 3d, 4 design risks closed mig 375 — Decisions implemented section + historical context) |
 
 ## Quick navigation
 
@@ -69,7 +75,7 @@
 _8 files · 121 incoming refs (30d)_
 
 - [[adaptive-modifiers-architecture]] — Adaptive Modifiers Architecture (Phase 3, mig 301+)
-- [[cycle-tracking-ux-and-accuracy]] **`🔥 HUB`** — Cycle tracking UX matrix (mig 334-360, Phase 3d) + nutritional accuracy risks. 4 open design questions ждут owner: default `7d_ago` problem, static checkmark drift, menopause gate, hardcoded 28-day length.
+- [[cycle-tracking-ux-and-accuracy]] **`🔥 HUB`** — Cycle tracking UX matrix (mig 334-360, Phase 3d) + nutritional accuracy. **4 design risks closed by mig 375** (2026-05-29): dynamic dates, «Не помню точно» silent skip, menopause gate age≥55, inline cycle length range 21-35. Original historical context сохранён в статье.
 - [[energy-availability-design-decision]] — Energy Availability (EA / RED-S) — Design Decision: defer to P2
 - [[personalized-macro-split]] — Each user receives unique daily protein/fat/carbs targets computed from their body type, training style, and weight goal — replacing the previous one-size-fits-all macro percent...
 - [[phenotype-quiz]] — Phenotype Quiz (Body Composition Classification)
@@ -210,6 +216,7 @@ _13 files · 40 incoming refs (30d)_
 
 _14 files · 31 incoming refs (30d)_
 
+- [[session-close-discipline]] **`🔥 HUB`** — **MUST READ перед каждым EOS.** 5-step checklist (daily / handover / KB / MEMORY / housekeeping). Real failure cases (Stage 7 phantom 25→29.05, BMI warnings phantom debt 18→29.05, migration collision parallel subagents). Owner explicitly flagged 2026-05-29 — каждая новая сессия начинается с разбора завалов предыдущей.
 - [[stacked-pr-base-change-gotcha]] **`🔥 HUB`** — Stacked-PR base-change gotcha — `gh api PATCH base=feature-branch` redirects «Merge pull request» button into the intermediate branch, NOT main (P0 2026-05-28).
 - [[memory-claim-vs-live-verification]] **`🔥 HUB`** — MEMORY/handover claim ↔ live разрыв. 5 классов claim'ов которые ОБЯЗАТЕЛЬНО verify через 2+ независимых источника. Case study: Stage 7 «GLOBAL CUTOVER 25.05» был ложным 4 дня (2026-05-29).
 - [[stage7-global-cutover]] — Stage 7 Python AI Engine — full cutover history (mig 299 canary 21.05 → mig 373 global 29.05). Architecture diff, rollback recipe, monitoring metrics, n8n SQLite execution_entity quirk.
