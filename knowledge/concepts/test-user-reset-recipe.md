@@ -12,19 +12,55 @@ updated: 2026-05-12
 
 # Test User Reset Recipe
 
-Полное обнуление тестового пользователя для повторного прогона онбординга E2E. **С 2026-05-12 — one-liner:**
+Полное обнуление тестового пользователя для повторного прогона онбординга E2E.
 
-```sql
-SELECT public.reset_to_onboarding(<TARGET_TELEGRAM_ID>);
-```
+## ⚠️ КРИТИЧНО — RPC + Telegram reply-keyboard removal
 
-Через psycopg2:
+**Direct psycopg2 вызов `reset_to_onboarding` НЕ убирает Telegram-side reply-keyboard.** Это обнаружили 2026-05-29 (Nutritionist 10): после reset через SQL юзер видит «✅ зарегистрирован» а reply-kb «Добавить еду / Мой день / Прогресс / Профиль» **продолжает висеть** до завершения нового онбординга.
+
+**Причина:** RPC меняет server-side state (`status='new'`, nav_stack=[], etc.). Reply-keyboard это **client-side artifact** Telegram, его убрать может только бот через `sendMessage` с `reply_markup: {"remove_keyboard": true}`.
+
+**Production-путь** (`handlers/onboarding_v3.py:_handle_start_fresh`) делает это правильно:
 ```python
-cur.execute("SELECT public.reset_to_onboarding(%s)", (786301802,))
-print(cur.fetchone()[0])   # {"success": true, "reset_by": "mig_203", "status": "new"}
+await ghost_remove_reply_keyboard(ctx.telegram_id)  # ← FIRST
+await rpc_caller("reset_to_onboarding", {...})       # ← THEN
 ```
 
-Функция (mig 203) обнуляет **64 поля** атомарно в одной транзакции, в т.ч.:
+`ghost_remove_reply_keyboard` ([services/telegram_send.py:368](services/telegram_send.py:368)) — отправляет ⏳ с `remove_keyboard:true`, затем удаляет это сообщение.
+
+## Правильный test reset через psycopg2 (manual)
+
+```python
+import os, psycopg2, httpx
+from dotenv import load_dotenv; load_dotenv()
+
+TID = 786301802
+BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+
+# 1) Убрать Telegram-side reply-kb FIRST
+async def ghost_remove():
+    async with httpx.AsyncClient() as c:
+        r = await c.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={"chat_id": TID, "text": "⏳", "reply_markup": {"remove_keyboard": True}})
+        mid = r.json()["result"]["message_id"]
+        await c.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/deleteMessage",
+            json={"chat_id": TID, "message_id": mid})
+
+# 2) Reset server state
+conn = psycopg2.connect(os.environ["DATABASE_URL"])
+with conn:
+    with conn.cursor() as cur:
+        cur.execute("SELECT public.reset_to_onboarding(%s)", (TID,))
+        print(cur.fetchone()[0])
+```
+
+**Проще** — попросить owner-а нажать в Telegram кнопку «Удалить аккаунт → Начать заново» (cmd_start_fresh) — production handler сделает всё правильно, включая ghost_remove + reset.
+
+## Что обнуляет `reset_to_onboarding` (mig 224, текущая версия)
+
+Функция (mig 224) обнуляет **64 поля** атомарно в одной транзакции, в т.ч.:
 - `status='new'`, `nav_stack='[]'`, `stickers_shown='{}'`, `previous_status=NULL`
 - Биометрию (`gender/birth_date/weight/height/activity/training/goal/speed`)
 - Phenotype quiz (`phenotype='default'`, `phenotype_answers=NULL`, generated cols q1..q4 auto-reset)

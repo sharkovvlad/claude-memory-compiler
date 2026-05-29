@@ -14,14 +14,14 @@
 
 | Status | Count | Что значит |
 |---|---|---|
-| ✅ active | 97 | Живой код / упомянуты в недавних daily |
-| 🔥 HUB | 10 | Foundational, ≥5 refs/30d, читать первыми (+3 from 2026-05-29: memory-claim-vs-live, npc-bots-users-table, stage7-global-cutover) |
+| ✅ active | 98 | Живой код / упомянуты в недавних daily |
+| 🔥 HUB | 11 | Foundational, ≥5 refs/30d, читать первыми (+4 from 2026-05-29: memory-claim-vs-live, npc-bots-users-table, stage7-global-cutover, cycle-tracking-ux-and-accuracy) |
 | 🏛 legacy-n8n | 9 | n8n-механика, фича мигрирована в Python |
 | 🏛 superseded | 5 | Заменён более новым файлом, см. → pointer |
 | 🏛 duplicate | 2 | Содержание полностью покрыто canonical файлом |
 | 🏛 outdated | 1 | Автор сам пометил OUTDATED |
 | 💤 stale | 8 | 0 refs за 30 дней, тема возможно заморожена |
-| **Total** | **127** | |
+| **Total** | **128** | |
 
 ## Start here for common tasks
 
@@ -33,6 +33,7 @@
 | **Payment / Stripe / Stars** | `payment-idempotency-pattern`, `payment-integration`, `subscription-management-headless`, `claim-vs-check-idempotency-anti-pattern`, 🔥 `stars-subscriptions-botfather-prereq` (P0 2026-05-28) |
 | **Перевод / 13 langs / Sage** | `copywriter-playbook`, `ui-translations-bulk-update-recipe`, `sassy-sage-multilingual-glossary`, `double-emoji-button-anti-pattern`, `i18n-rpc-audit-pattern` |
 | **Adaptive modifiers (sleep/stress/luteal)** | `adaptive-modifiers-architecture`, `safety-guard-ux-pattern` |
+| **Cycle tracking UX / luteal accuracy** | 🔥 `cycle-tracking-ux-and-accuracy` (Phase 3d, 4 design risks + RPC matrix, открытые owner-decisions 29.05) |
 | **Cron / scheduled jobs** | `cron-silent-failure-alerting`, `cron-reminder-suppression-tunables`, `cron-pushed-callback-fallback-pattern` |
 | **Deploy / TLS / Caddy issue** | `release-protocol`, `tls-caddy-nomsbot` |
 | **Python handler (cutover)** | `phase2-python-menu-v3`, `phase4-onboarding-migration`, `webhook-server-async-patterns` |
@@ -68,6 +69,7 @@
 _8 files · 121 incoming refs (30d)_
 
 - [[adaptive-modifiers-architecture]] — Adaptive Modifiers Architecture (Phase 3, mig 301+)
+- [[cycle-tracking-ux-and-accuracy]] **`🔥 HUB`** — Cycle tracking UX matrix (mig 334-360, Phase 3d) + nutritional accuracy risks. 4 open design questions ждут owner: default `7d_ago` problem, static checkmark drift, menopause gate, hardcoded 28-day length.
 - [[energy-availability-design-decision]] — Energy Availability (EA / RED-S) — Design Decision: defer to P2
 - [[personalized-macro-split]] — Each user receives unique daily protein/fat/carbs targets computed from their body type, training style, and weight goal — replacing the previous one-size-fits-all macro percent...
 - [[phenotype-quiz]] — Phenotype Quiz (Body Composition Classification)
