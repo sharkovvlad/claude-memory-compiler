@@ -33,7 +33,7 @@
 | **Payment / Stripe / Stars** | `payment-idempotency-pattern`, `payment-integration`, `subscription-management-headless`, `claim-vs-check-idempotency-anti-pattern`, 🔥 `stars-subscriptions-botfather-prereq` (P0 2026-05-28) |
 | **Перевод / 13 langs / Sage** | `copywriter-playbook`, `ui-translations-bulk-update-recipe`, `sassy-sage-multilingual-glossary`, `double-emoji-button-anti-pattern`, `i18n-rpc-audit-pattern` |
 | **Adaptive modifiers (sleep/stress/luteal)** | `adaptive-modifiers-architecture`, `safety-guard-ux-pattern` |
-| **Cron / scheduled jobs** | `cron-silent-failure-alerting` |
+| **Cron / scheduled jobs** | `cron-silent-failure-alerting`, `cron-reminder-suppression-tunables` |
 | **Deploy / TLS / Caddy issue** | `release-protocol`, `tls-caddy-nomsbot` |
 | **Python handler (cutover)** | `phase2-python-menu-v3`, `phase4-onboarding-migration`, `webhook-server-async-patterns` |
 | **Day-summary / Stats / Mood** | 🔥 `profile-v5-screens-specs`, `stats-main-headless`, `personalized-macro-split` |
@@ -165,6 +165,7 @@ _8 files · 53 incoming refs (30d)_
 - [[access-credentials]] — NOMS Access Credentials + Agent Tools Recipe
 - [[architecture-registry]] — Architecture Registry — Python authoritative vs n8n fallback
 - [[cron-silent-failure-alerting]] — Cron Silent Failure Pattern + Centralized BaseCron Alerting
+- [[cron-reminder-suppression-tunables]] — Tunables для cron reminder suppression (mute-windows, hour cutoffs) живут в `app_constants`, не в RPC body
 - [[noms-architecture]] — Telegram nutrition tracking bot with AI food recognition, gamification (XP, leagues, quests, NomsCoins), 13-language support, and subscriptions. Character: "Sassy Sage" — helpfu...
 - [[project-structure]] — Project Structure & Tech Stack
 - [[release-protocol]] — Release Protocol — Auto-deploy через GitHub Actions, manual fallback
