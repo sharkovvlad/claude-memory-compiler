@@ -14,14 +14,14 @@
 
 | Status | Count | Что значит |
 |---|---|---|
-| ✅ active | 94 | Живой код / упомянуты в недавних daily |
-| 🔥 HUB | 7 | Foundational, ≥5 refs/30d, читать первыми |
+| ✅ active | 97 | Живой код / упомянуты в недавних daily |
+| 🔥 HUB | 10 | Foundational, ≥5 refs/30d, читать первыми (+3 from 2026-05-29: memory-claim-vs-live, npc-bots-users-table, stage7-global-cutover) |
 | 🏛 legacy-n8n | 9 | n8n-механика, фича мигрирована в Python |
 | 🏛 superseded | 5 | Заменён более новым файлом, см. → pointer |
 | 🏛 duplicate | 2 | Содержание полностью покрыто canonical файлом |
 | 🏛 outdated | 1 | Автор сам пометил OUTDATED |
 | 💤 stale | 8 | 0 refs за 30 дней, тема возможно заморожена |
-| **Total** | **124** | |
+| **Total** | **127** | |
 
 ## Start here for common tasks
 
@@ -43,6 +43,9 @@
 | **Multi-stage PRs / stacked merges** | 🔥 `stacked-pr-base-change-gotcha` (P0 2026-05-28), `migration-collision-guard`, `release-protocol` |
 | **Stars subscriptions (recurring) — setup гoтча** | 🔥 `stars-subscriptions-botfather-prereq` — `provider_token` omit, BotFather prereq, re-enable checklist |
 | **Test-user reset / fresh start** | `test-user-reset-recipe` (НЕ `start-fresh-flow` — outdated) |
+| **Aggregate по `users` / counts / engagement** | 🔥 `npc-bots-users-table` — ВСЕГДА `WHERE is_bot=false`, иначе 119 NPC ботов искажают цифры на ≈30% |
+| **MEMORY/handover claim → verify перед действием** | 🔥 `memory-claim-vs-live-verification` (2026-05-29 Stage 7 case), `pre-migration-discovery-recipe` |
+| **AI Engine cutover / Stage 7 history** | `stage7-global-cutover` (mig 299→373, canary→global blueprint + monitoring metrics) |
 
 ## Quick navigation
 
@@ -206,6 +209,8 @@ _13 files · 40 incoming refs (30d)_
 _14 files · 31 incoming refs (30d)_
 
 - [[stacked-pr-base-change-gotcha]] **`🔥 HUB`** — Stacked-PR base-change gotcha — `gh api PATCH base=feature-branch` redirects «Merge pull request» button into the intermediate branch, NOT main (P0 2026-05-28).
+- [[memory-claim-vs-live-verification]] **`🔥 HUB`** — MEMORY/handover claim ↔ live разрыв. 5 классов claim'ов которые ОБЯЗАТЕЛЬНО verify через 2+ независимых источника. Case study: Stage 7 «GLOBAL CUTOVER 25.05» был ложным 4 дня (2026-05-29).
+- [[stage7-global-cutover]] — Stage 7 Python AI Engine — full cutover history (mig 299 canary 21.05 → mig 373 global 29.05). Architecture diff, rollback recipe, monitoring metrics, n8n SQLite execution_entity quirk.
 - [[adversarial-review-protocol]] — Adversarial Review Protocol — pre-apply critical pass
 - [[agent-collaboration-protocol]] — Agent Collaboration Protocol — Shared rules для всех NOMS-агентов
 - [[anti-spam-debounce]] — Anti-Spam / Debounce — защита от повторных нажатий
@@ -253,6 +258,7 @@ _7 files · 14 incoming refs (30d)_
 
 _9 files · 7 incoming refs (30d)_
 
+- [[npc-bots-users-table]] **`🔥 HUB`** — 119 NPC-ботов сидят в `users` с `is_bot=true` + отрицательный telegram_id `-1XXX`. **ЛЮБОЙ** aggregate query по `users` обязан фильтровать `is_bot=false` — иначе counts искажены ≈30%. Safe-патtern templates + 4 типичные ошибки агентов.
 - [[league-npc-system]] — NPC bots fill league groups to ensure competition exists even with few real users — inspired by Duolingo's approach. 25 bots with `telegram_id` from −1001 to −1025, later extend...
 - [[no-mana-python-precheck]] — No-Mana Python Pre-check — Strangler Fig pattern
 - [[smart-freeze-notification-delivery]] — Smart Freeze Notification Delivery (mig 191)
