@@ -28,6 +28,8 @@ await rpc_caller("reset_to_onboarding", {...})       # ← THEN
 
 `ghost_remove_reply_keyboard` ([services/telegram_send.py:368](services/telegram_send.py:368)) — отправляет ⏳ с `remove_keyboard:true`, затем удаляет это сообщение.
 
+> **UPDATE 2026-05-30:** `handle_onboarding` теперь также вызывает `ghost_remove_reply_keyboard` proactively когда `status='new'` AND inbound text starts with `/start` (см. `handlers/onboarding_v3.py` UAT round 2 patch). Это закрывает bare-`/start` путь: после голого `SELECT public.reset_to_onboarding(...)` через psql, **следующий `/start` юзера сам очистит** stale reply-kb. Manual HTTP ghost ниже всё ещё чище UX-wise (не показывает кратковременный ⏳ flash перед welcome), но больше не критичен для функциональности.
+
 ## Правильный test reset через psycopg2 (manual)
 
 ```python

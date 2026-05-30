@@ -229,6 +229,7 @@ _14 files · 31 incoming refs (30d)_
 - [[e2e-telethon-crawler]] — E2E Telethon DFS Crawler — headless UI smoke testing
 - [[nlm-sync-infrastructure]] — NLM Sync Infrastructure — NOMS
 - [[router-prefix-collision]] — Router prefix collision — exclusion guard pattern
+- 🔥 [[fsm-state-whitelist-discipline]] — HUB. Adding registration_step_* requires BUTTON_ONLY + ONBOARDING + NUMERIC_INPUT registration. mig 259 lesson 3+ recurrences in 2 weeks (mig 382/386 latest). Checklist included.
 - [[specs-vs-reality-ground-truth]] — Specs vs Reality — Ground Truth Protocol
 - [[subagent-live-apply-review-rule]] — Subagent LIVE-apply: orchestrator МUST review SQL before authorize. TaskStop ≠ rollback (P0 lesson 2026-05-26)
 - [[systemd-dropin-override-pattern]] — systemd drop-in override pattern для persistent service config changes
