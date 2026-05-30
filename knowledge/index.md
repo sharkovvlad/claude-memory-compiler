@@ -121,7 +121,7 @@ _31 files · 108 incoming refs (30d)_
 - [[sticker-architecture-adr]] **`🏛 merged-stub`** → [[ui-stickers-headless]] — ADR rationale (Context / Alternatives / Consequences) перенесён в winner как раздел «ADR rationale»; этот файл = 5-line stub
 - [[ui-inventory]] **`🏛 superseded`** → [[ui-screens-map]] — UI Inventory — All Screens, Callbacks, Menus
 - [[progress-screen-redesign]] **`💤 stale`** — Редизайн экрана Progress (inline) в рамках обновления геймификации: новые иконки, Premium-маркер, формат отображения стрика и маны, личность Sassy Sage в инсайтах. Standalone wo...
-- [[user-preferences]] **`💤 stale`** — Working style and conventions for the NOMS project owner.
+- [[user-preferences]] — Working style + **communication style** (простой язык, без жаргона, объяснять последствиями — owner-flagged 2026-05-30) для owner-а NOMS.
 
 ## 🔧 Migration & Headless Patterns
 
