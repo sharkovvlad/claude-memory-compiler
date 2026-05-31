@@ -45,6 +45,7 @@
 | **Bug идемпотентности / дубль event** | `claim-vs-check-idempotency-anti-pattern`, `payment-idempotency-pattern` |
 | **Subagent → LIVE apply (orchestrator hat)** | `subagent-live-apply-review-rule`, `agent-collaboration-protocol`, `pre-migration-discovery-recipe` |
 | **`content \|\| payload` JSONB safety** | `jsonb-shallow-merge-antipattern` (P0 2026-05-26), `ui-translations-bulk-update-recipe` |
+| **JSONB-array Sassy variants** | `jsonb-array-python-consumer-blind-spot` (P0 2026-05-31) — Python `.replace()` падает AttributeError; grep всех consumer'ов после mig string→array |
 | **Multi-stage PRs / stacked merges** | 🔥 `stacked-pr-base-change-gotcha` (P0 2026-05-28), `migration-collision-guard`, `release-protocol` |
 | **Stars subscriptions (recurring) — setup гoтча** | 🔥 `stars-subscriptions-botfather-prereq` — `provider_token` omit, BotFather prereq, re-enable checklist |
 | **Test-user reset / fresh start** | `test-user-reset-recipe` (НЕ `start-fresh-flow` — outdated) |
@@ -136,6 +137,7 @@ _16 files · 79 incoming refs (30d)_
 - [[language-switch-headless-ux]] — Language Switch UX in Headless Architecture
 - [[premium-hide-line-pattern]] — Pre-resolved SQL line с leading/trailing `\n` для conditional-hide строк в template без orphan blank line (mig 343/348/353/354/355)
 - [[jsonb-shallow-merge-antipattern]] — `content \|\| payload` wipes nested namespaces (P0 incident 2026-05-26, mig 359 → mig 360 recovery). 3 safe alternatives documented.
+- [[jsonb-array-python-consumer-blind-spot]] — Sassy variants (mig 306) переводят translation key в JSONB-array, но Python-consumers через `.replace()` остаются не array-aware → AttributeError. Recipe: grep всех consumer'ов (SQL + Python), фикс через `isinstance(list)`. P0 2026-05-31 PR #263.
 - [[migration-collision-guard]] — SQL-миграции в NOMS — последовательные: `migrations/NNN_<slug>.sql`, NNN растёт монотонно. Агенты обычно берут «следующий номер» через `ls migrations/ | tail -1` в момент старта...
 - [[migration-deploy-ordering]] — Migration Deploy Ordering — split additive vs breaking schema changes
 - [[progress-hub-headless]] — Progress Hub Headless Migration (Phase 3A Iterations 2-4)
