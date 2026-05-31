@@ -1,6 +1,14 @@
 # Handover — Onboarding food nudge («доделай профиль» после пробного распознавания)
 
-**From:** агент angry-liskov, 2026-05-31. **Status:** копи готов + утверждён owner (вариант 1 «метаболический»). Триггер НЕ реализован (требует food-path работы — отдельный фокус).
+**From:** агент angry-liskov, 2026-05-31. **Status:** ✅ РЕАЛИЗОВАНО И ЗАДЕПЛОЕНО (обновлено в конце сессии).
+
+> **Итоговое состояние (31.05 вечер):** онбординг-еда для незарегов полностью на Python.
+> - **PR #254 (merged, mig 404/405):** гейт в webhook + `handle_onboarding_food` + `log_meal_onboarding` (лог+мана, без XP/streak) + nudge вариант 1 (`messages.onboarding_food_nudge` ×13).
+> - **PR #258 (merged, mig 406):** компактная карточка КБЖУ `food_log.onboarding_recognized` (языко-нейтральный шаблон, под-ключи ×13) на success.
+> - **PR #260 (open, mig 407):** при mana=0 → `messages.onboarding_trial_exhausted` ×13 («пробы всё → заверши профиль → +5 маны», {mana_bonus}←app_constants.mana_gift_registration). NB: коммит сначала осиротел (запушен в #258 после мёржа) → re-PR #260.
+> - **PR #257 (open):** индикатор — геолокация→стикер, онбординг-еда (new)→глушим (был двойной/орфан).
+> - Поведение `handle_onboarding_food`: success→карточка+nudge; NO_MANA→trial_exhausted; not-food→только ре-рендер шага.
+> Ниже — исторический контекст (изначально nudge планировался как proposal).
 
 ## Что это
 Незарегистрированный юзер (status `new`/`registration_step_*`) может пробовать распознавание еды (намеренно, owner: вовлечение). После пробы — мягкий НЕблокирующий nudge: «доделай профиль, подгоню калории под метаболизм». БЕЗ слова «стрик/серия» (owner-правило).

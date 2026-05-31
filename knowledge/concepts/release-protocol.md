@@ -312,3 +312,15 @@ git push --force-with-lease origin <branch>
 - [[concepts/n8n-self-hosting]] — VPS infra
 - [[concepts/specs-vs-reality-ground-truth]] — local vs live truth priority
 - `.github/workflows/deploy.yml` + `.github/workflows/SETUP.md` (в noms-bot репо) — реализация auto-deploy и operations guide.
+
+## Gotcha (2026-05-31): доп-коммит в ветку ПОСЛЕ мёржа PR → осиротел
+
+Сделал доп-коммит (mig 407 + no-mana handler) и `git push` в ветку `claude/onboarding-food-card`, **не заметив, что её PR #258 уже смержен** (на более ранней стадии — карточка mig 406). Коммит лёг на удалённую ветку, но в `main` НЕ попал (PR закрыт) и не задеплоился. UAT: фича «не сработала» — при mana=0 показался старый nudge вместо нового сообщения.
+
+**Правило:** перед `git push` доп-коммита в существующую ветку — проверь, не смержен/не закрыт ли её PR:
+```bash
+gh pr view <N> --json state,mergedAt
+```
+Если `MERGED`/`CLOSED` → коммит туда бесполезен. Делай **новый branch от свежего `origin/main` + cherry-pick** нужного коммита + новый PR.
+
+**Симптом для диагностики:** код есть в ветке и работает локально, но `git show origin/main:<file> | grep <маркер>` его не находит, а `gh pr view <N>` показывает `MERGED`. → коммит осиротел.

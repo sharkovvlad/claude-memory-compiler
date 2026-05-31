@@ -93,3 +93,13 @@ mig 390 **показал** кнопку «Назад» (снял visible_conditi
 - [[concepts/onboarding-v3-map]] — FSM state map
 - mig 259 (canonical first codification of this lesson)
 - mig 382 + 386 (latest recurrences fixed)
+
+## Рецидив (2026-05-31): suppression индикатора должна совпадать с гейтом обработчика
+
+Тот же класс рассинхрона, но между **telegram_proxy `maybe_send_indicator`** и **`handle_onboarding_food`** (webhook gate), не только router'ом.
+
+- **Гейт обработчика** онбординг-еды: `status == "new" OR status LIKE "registration_step_%"`.
+- **Suppression индикатора** в proxy покрывала только `registration_step_*` — **`new` был пробелом**. На первом шаге онбординга (status `new`) еда → proxy слал food-текст «Анализирую еду» + handle_onboarding_food слал СВОЙ стикер → `clear_indicator_message` удалял стикер, food-текст орфанился (UAT 31.05, PR #257).
+- **Fix:** в suppression добавлен `new` (полное совпадение с гейтом). Плюс контент-исключение для location (ей индикатор нужен — стикер, не food-текст).
+
+**Правило расширено:** когда новый обработчик ловит набор статусов, **все компоненты, фильтрующие по статусу** (router BUTTON_ONLY/ONBOARDING, NO_INDICATOR_STATUSES в proxy, и т.п.) должны покрывать ТОТ ЖЕ набор. Рассинхрон → двойные/потерянные side-effects. Проверяй полный путь, не один компонент.
