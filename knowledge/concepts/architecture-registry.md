@@ -190,3 +190,16 @@ Hot-reload: после загрузки UserCtx читается из `ctx.const
 - **Open issue (конец 20.05):** «Кнопка «Продлить подписку» не работает» — триаж в handover-файле. Подозрение на parallel agent regression router.py/payment.py.
 
 Pattern detail — [[payment-idempotency-pattern]].
+
+---
+
+## Состояние на 2026-05-31 (AI Engine cutover — registered + onboarding на Python)
+
+Таблицы выше (datestamp 21.05) показывали `ai / add_food → 03_AI_Engine` целиком в n8n. С тех пор AI Engine мигрирован в Python в два этапа:
+
+- **Registered AI — Python с 2026-05-29 (Stage 7 GLOBAL).** `handle_ai_input` (handlers/food_log.py) обслуживает food (текст/фото/голос) для `status in (registered, editing_meal)` → `log_meal_transaction` + food-карточка. Гейт в `webhook_server.py:_try_authoritative_path`. Полная история — [[stage7-global-cutover]]. До этого admin-canary с 21.05 (mig 299→373).
+- **Onboarding/unregistered food — Python с 2026-05-31 (PR #254, mig 404/405).** `handle_onboarding_food` (handlers/food_log.py) для `status='new'` / `registration_step_*` → `log_meal_onboarding` (mig 404 — изолированная RPC: food_logs + check_and_deduct_mana, **БЕЗ XP/streak/league** — соцкапитал только после регистрации) → nudge (`messages.onboarding_food_nudge`, mig 405 ×13) + `_rerender_current_screen`. Закрывает Strangler-Fig scope-сужение из [[no-mana-python-precheck]] (раньше unregistered-ветка сознательно оставалась в n8n `Send No Mana CTA`).
+  - **Gotcha (проверено):** свой thinking-стикер в хендлере безопасен — `sticker.send_thinking` пишет в `indicator_message_id` (не `last_bot_message_id`), плюс proxy-индикатор для `registration_step_*` заглушён (telegram_proxy, UAT batch2 31.05) → mig 238 fire-and-forget race не применим.
+- **n8n `03_AI_Engine` (`kjw4kkKMD0IqNALg`)** теперь только legacy fallback (Python exception → forward). Реальный трафик еды (registered + onboarding) идёт в Python. Cleanup (deactivate + Indicator_Clear) — Stage 7c, после стабильности.
+
+**Итог:** `ai`/`add_food` target — **Python authoritative для всех статусов** (registered + onboarding). Таблицу 1 строку `ai` следует считать Python; таблица 2 строка `add_food / ai → 03_AI_Engine` — только аварийный fallthrough.
