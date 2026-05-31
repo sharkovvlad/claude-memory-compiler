@@ -75,6 +75,16 @@ Copy-paste into your migration PR description:
 
 The first 4 lines catch 95% of recurrences. If you skip them, expect owner UAT to find the bug within hours.
 
+## Recurrence 2026-05-31 — un-hidden button без routing-check (mig 390 → fix #248)
+
+mig 390 **показал** кнопку «Назад» (снял visible_condition) на `edit_speed` в онбординге, но `registration_step_speed` **отсутствовал в BUTTON_ONLY_STATUSES** → `cmd_back` маршрутизировался в `target='ai'` (food engine) вместо onboarding → юзер видел мусор. goal/activity/training там были (повезло), speed — нет. Fix #248: + `registration_step_speed` в BUTTON_ONLY.
+
+**Два новых правила из этого рецидива:**
+1. **Показываешь inline-кнопку на статусе → проверь, что статус в правильном whitelist.** Un-hide кнопки = новый callback-путь, которого раньше не было. «Кнопка есть в БД, но скрыта» = routing никогда не тестировался.
+2. **🔴 Тестируй back-навигацию через `dispatcher.router.route()` (ПОЛНЫЙ путь), а НЕ прямой вызов `process_onboarding_input`.** mig 390 тестировался прямым вызовом RPC → переходы верны, но пропущено, что роутер вообще не доводит `cmd_back` до RPC (уходит в 'ai'). Прямой-RPC тест = **ложная зелёнка**. Минимум: `route(callback, ctx) → target` + `route(text, ctx) → target`.
+
+Открытый риск (handover 2026-05-31): text-шаги `registration_step_2/3/4` (age/weight/height) тоже route cmd_back → 'ai'. Не баг пока (text_input → remove_keyboard, кнопки нет). Но variant-1 (инлайн-back на text-шагах) обязан сперва добавить их в routing.
+
 ## Related
 
 - [[concepts/headless-fsm-vs-dynamic-handler-separation]] — broader FSM vs handler architecture
