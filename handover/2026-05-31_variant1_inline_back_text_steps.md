@@ -78,3 +78,29 @@ Owner предпочёл этот вариант (а не 2-message pattern).
 - [[concepts/phase2-python-menu-v3]] — text_input → remove_keyboard правило.
 
 EOS — Opus 4.7, 2026-05-31.
+
+---
+
+## DE-RISK UPDATE (агент angry-liskov, 2026-05-31, после mig 393/394)
+
+Подтверждённые фактами неизвестные (чтобы исполнитель не перепроверял):
+
+1. **Router СЕЙЧАС misroute'ит cmd_back на step_2/3/4 → `ai`** (проверено `route()`):
+   `route(cmd_back, registration_step_2/3/4)` → `target='ai' reason='text_food'`.
+   Текст («30») → `onboarding reason='numeric_answer'` (корректно, NUMERIC-фаза раньше).
+   → Нужно добавить `registration_step_2/3/4` в `BUTTON_ONLY_STATUSES`. **Проверить через route(), что текст ВСЁ ЕЩЁ → onboarding** (numeric_answer фаза должна срабатывать до button-only; подтвердить, что добавление в BUTTON_ONLY не перехватывает текст).
+
+2. **`ask_age/ask_weight/ask_height` — ОБЩИЕ screen_id** для онбординга и профиля:
+   `workflow_states`: `edit_age→ask_age`, `edit_weight→ask_weight`, `edit_height→ask_height` (профиль) И `registration_step_2/3/4` рендерят те же экраны (онбординг).
+   → Screen-level meta-флаг (`show_back_inline`) затронет ОБА контекста. **ОБЯЗАТЕЛЕН status-гейт в render_screen** (`v_user.status LIKE 'registration_step_%'`), иначе профильные edit_weight/age/height потеряют `remove_keyboard` → reply-kb регрессия (боль mig 392).
+
+3. **RPC back-логика (mig 390) для step_2/3/4 — в LIVE**, не трогать.
+
+### Точный change-list (execute-ready)
+- **render_screen (RPC mig):** в Step 9 (telegram_ui assembly) добавить поле, напр. `text_input_inline_back` = `(v_screen.input_type='text_input' AND COALESCE(v_screen.meta->>'show_back_inline','')='true' AND v_user.status LIKE 'registration_step_%')`. Anchor-replace по live `pg_get_functiondef` (Pattern 4). ⚠️ render_screen — самый shared RPC, любой anchor-промах = глобально.
+- **template_engine.py `_build_reply_markup` (services/template_engine.py:433):** `if input_type=='text_input':` → если `telegram_ui.get('text_input_inline_back')` → вернуть `{'inline_keyboard': _build_inline_keyboard(keyboard,...)}`, иначе прежний `{'remove_keyboard': True}`. (keyboard уже в telegram_ui — содержит cmd_back-кнопку.)
+- **router.py:** `registration_step_2/3/4` в `BUTTON_ONLY_STATUSES`. Verify текст не ломается.
+- **data mig:** `ui_screens.meta || '{"show_back_inline":true}'` для `ask_age/ask_weight/ask_height` ТОЛЬКО.
+- **тесты (FULL PATH route()):** для каждого step — cmd_back→onboarding + text→onboarding (не сломан); render: онбординг ask_weight → inline_keyboard с «Назад»; **профиль edit_weight (status=edit_weight) → ВСЁ ЕЩЁ remove_keyboard** (регресс-страховка); cycle/country text_input не затронуты.
+
+**Почему не сделано в этой сессии:** owner pre-approved, но change затрагивает render_screen (shared) + hot-path шаблонизатора + профиль как regression-поверхность. Контекст-бюджет сессии (bugs A/B + research) исчерпан; shared-renderer лучше делать фокусной сессией со свежим контекстом. Risk-консенсус: предыдущий handover-автор + UX-research-агент + этот агент.
