@@ -149,4 +149,4 @@ helper + trial-card branch, keep PR #277 `services.i18n_plural` import + univers
 - [[concepts/release-protocol]] — общий протокол релиза, защиты 1-3 (force-push, stale-worktree, semantic-rollback).
 - [[concepts/pre-migration-discovery-recipe]] — что делать **внутри** миграции (отдельно от номера).
 - [[concepts/session-close-discipline]] — фиксация collision resolution в handover (иначе следующий агент не знает что 2 mig'а на проде с разными file numbers).
-- [[concepts/i18n-cldr-plural-runtime]] — конкретный case 6 (PR #277, mig 418→419 после CI catch).
+- [[concepts/i18n-cldr-plural-runtime]] — конкретные cases 6+7 (PR #277, mig 418→419→421 после двух CI catch'ей с PR #276 и PR #278).

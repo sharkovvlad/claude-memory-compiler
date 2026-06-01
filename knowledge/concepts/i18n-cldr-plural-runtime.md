@@ -18,7 +18,7 @@ related:
 назад» и перечитать корректный текст.
 
 NOMS уже сталкивался с этим в **mig 415** (PL `{streak_days} dni`,
-fix внутри `crons/subscription_lifecycle.py:_pl_day_word`). **mig 419** (PR #277)
+fix внутри `crons/subscription_lifecycle.py:_pl_day_word`). **mig 421** (PR #277)
 обобщил решение на ru/uk/pl/ar/es/fr/it/pt через единый helper и единый
 placeholder.
 
@@ -161,7 +161,7 @@ n mod 10 in 5..9 or n mod 100 in 12..14`). Если в `_CLDR_RULES["pl"]`
 Шаблон применения: для `food_log.header_*_multi` нужна табличка
 `ITEM_FORMS` (или `POSITION_FORMS`/`ENTRY_FORMS` — что копирайтер выберет).
 `referral.cta_active_2` — `AGENT_FORMS` / `RECRUIT_FORMS`. Они out of scope
-для mig 419, отдельные миграции.
+для mig 421, отдельные миграции.
 
 ## Lessons
 
