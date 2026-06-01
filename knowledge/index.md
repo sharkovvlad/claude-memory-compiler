@@ -170,7 +170,7 @@ _6 files · 54 incoming refs (30d)_
 
 - [[copywriter-playbook]] — Copywriter Playbook — single entry point для translation sessions
 - [[double-emoji-button-anti-pattern]] — `icon_const_key` + emoji prefix в i18n value → двойной рендер (CLAUDE.md rule 2 + KB concept; 19 keys fixed 2026-05-26)
-- [[i18n-cldr-plural-runtime]] — `{N word}` форматирование через babel CLDR + `services/i18n_plural.py:format_count()`; ru/uk/pl/ar 3+ форм, ar 6 категорий, «teens trap» в Slavic (mig 418, 2026-06-01)
+- [[i18n-cldr-plural-runtime]] — `{N word}` форматирование через babel CLDR + `services/i18n_plural.py:format_count()`; ru/uk/pl/ar 3+ форм, ar 6 категорий, «teens trap» в Slavic (mig 419, PR #277, 2026-06-01)
 - [[l1-cultural-sanity-brief]] — L1 Cultural Sanity Brief — Чек-лист для нутрициолога
 - [[sassy-sage-dialog-variants]] — Sassy Sage Dialog Variants System
 - [[sassy-sage-multilingual-glossary]] — Sassy Sage Multilingual Glossary

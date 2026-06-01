@@ -107,8 +107,46 @@ Hook ловит локально (быстро, бесплатно, понятн
 4. **Если коллизия уже произошла:** rename **через git mv** (sed заменить внутри тела «mig N» → «mig M»). БД не трогать — миграции идемпотентны.
 5. **`--force-with-lease` на subagent's завершённой ветке** — safe, потому что subagent уже не пишет в неё (его process exited).
 
+## 2026-06-01 — CI guard поймал то, что pre-push hook не видит (PR #277 case 6)
+
+**Что произошло:** агент PR #277 (CLDR plural runtime) запушил mig 418. Pre-push
+hook прошёл — `ls-tree origin/main` показал 415 как last (416/417 уже взяты PR #273
+mig'и тоже на main к этому моменту). НО параллельно открытый PR #276 (P2.1
+trial-card-CTA) тоже держал mig 418 в branch. Pre-push hook **не проверяет
+открытые PR'ы** (либо `gh` не авторизован в worktree-сессии, либо проверка
+silent-fail'нула).
+
+**Что спасло:** **CI workflow `PR Migration Collision Guard`** — он `gh pr list`'ит
+из CI environment (где `GITHUB_TOKEN` всегда есть). Запостил комментарий-инструкцию:
+suggested rename → 419 + ready-to-run `git mv` + `git commit --amend` + `git push
+--force-with-lease`. 1 минуту от detect до actionable fix.
+
+**Resolution (PR #277):** rename 418 → 419 + 4 internal refs (header, cron comment,
+test docstring, error messages). Rebase на свежий main (PR #276 уже merged к этому
+моменту) — конфликт в `crons/subscription_lifecycle.py` (оба PR трогали
+`_send_renewal_reminders`). Manual resolve: keep PR #276 `_resolve_text()` JSONB
+helper + trial-card branch, keep PR #277 `services.i18n_plural` import + universal
+`{streak_days_word}` block. 214 tests pass post-rebase. force-with-lease push.
+
+**Lessons:**
+
+- **Layered defense работает.** Layer 1 (pre-push hook) пропустил cross-PR
+  collision, Layer 2 (CI workflow) поймал. 1+1 надёжнее чем любой single point.
+- **Pre-push hook gap.** Hook вызывает `gh pr list` для cross-PR check'а, НО:
+  (a) `gh` может быть unauthenticated в worktree session — fallback на silent skip;
+  (b) hook может быть disabled в worktree — `core.hooksPath` per-clone setting,
+  не наследуется. Проверять: `git config --get core.hooksPath` в каждом worktree
+  при старте сессии.
+- **Manual coordination через MEMORY reserve** (owner) — частичное решение.
+  «Opus 4.7 берёт mig 421» не охватывает unrelated сессии (PR #277 ничего о
+  reserve не знал).
+- **6 случаев collision'а за 30 дней (200/217/229-231 cluster/415-417/418/418)**
+  → Layer 1 hook надо доводить до 100% (auto-authenticate `gh` через token из
+  env, fail-loud если `gh` недоступен, не silent skip).
+
 ## Связано
 
 - [[concepts/release-protocol]] — общий протокол релиза, защиты 1-3 (force-push, stale-worktree, semantic-rollback).
 - [[concepts/pre-migration-discovery-recipe]] — что делать **внутри** миграции (отдельно от номера).
 - [[concepts/session-close-discipline]] — фиксация collision resolution в handover (иначе следующий агент не знает что 2 mig'а на проде с разными file numbers).
+- [[concepts/i18n-cldr-plural-runtime]] — конкретный case 6 (PR #277, mig 418→419 после CI catch).
