@@ -11,6 +11,13 @@ status: open
 
 **Scope.** 7 languages × 10 translation keys = **70 strings** to be reviewed by native-speaker copywriters on Fiverr. Current values in production are Opus-4.7-generated L1 (mig 402 + mig 409); they pass the algorithmic Sage-tone checks but have NOT had native-speaker sign-off.
 
+> **📝 Addendum 2026-06-01 (post-mig-419).** A separate audit triggered by owner's question «не придёт ли английский вместо фарси» surfaced a related hole in `payment.*` subscription-management screens — 35 lang-key pairs were returning English to non-EN users. Those have been **shipped as Opus L1 in mig 419** (PR #278) to close the immediate user-facing dataset hole. For a polished native-review pass, **add these 9 keys to the same Fiverr orders** (small marginal cost — sellers are already reviewing dunning copy in the same tone):
+>
+> - Scalar: `select_method` (fa/hi/pl/id/uk), `method_prefix` (hi), `auto_renewal_on` / `auto_renewal_off` (hi).
+> - JSONB-array×3 variants: `cancelled_body` (ar/fa/hi/pl/id/pt/uk/it), `cancel_confirm_body` (ar/fa/hi/pl/id/pt/uk/de/es/fr/it), `already_premium_block_body` (ar/fa/hi/pl/id/pt/uk/it).
+>
+> Total extra strings to review: ~80. Pull current values via `SELECT content->'payment'->'<key>' FROM ui_translations WHERE lang_code='<lang>';` (or ask Claude to re-run the dump script in `/tmp/dunning_prod_values.json`-style for these keys). Tone anchor for the variant arrays = RU canonical L1 (already in DB).
+
 **Why a handover rather than another LLM pass.** Adding a second Opus iteration on top of an Opus translation is illusion-of-progress — the same model with the same priors. Native sign-off on Fiverr (~$15-30 per language) gives independent linguistic judgement: idiomaticity, regional register, grammatical-gender bypass naturalness, anti-shame tone in-context — all of which an LLM can fake convincingly but cannot self-verify.
 
 **Two priority tiers:**
