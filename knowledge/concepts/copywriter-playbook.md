@@ -90,6 +90,7 @@ ls migrations/ | sort -t_ -k1 -n | tail -5           # next free NNN (см. та
 - ✅ Telegram SRE budgets per surface (banner_title ≤40, banner_body ≤140, modal_full ≤12 lines × ≤35 chars, button ≤18)
 - ✅ Gender bypass strategy per language (table in [[concepts/ui-translations-bulk-update-recipe]] "Gender bypass patterns" + per-lang section в glossary)
 - ✅ L1 mandatory pre-deploy для hard block / hard regulated / soft override; informational glossary-self-screen OK
+- ✅ **«Streak»/«стрик» НЕ транслитерировать в non-EN** (owner rule 2026-06-01). Слово `streak` допустимо ТОЛЬКО в `en`; в остальных 12 языках транслит («стрик», «стрік») не несёт смысловой нагрузки → использовать смысловой эквивалент: RU «серия дней» / «дней в ударе», UK «серія», DE «Serie», ES «racha», FR «série», и т.д. Тот же принцип для любых англицизмов-без-смысла. См. §5.
 - ✅ Snapshot before apply: `backup_ui_translations_<scope>_<date>` (immune к mig# renumber)
 - ✅ Pre-push sanity: `git diff origin/main..HEAD --stat` (cap diff scope, abort if чужие файлы — см. [[concepts/release-protocol]] и Rule 7)
 
@@ -106,6 +107,7 @@ Per session:
 ## 5. Known cross-language insights (don't re-discover)
 
 - **`log` = DevOps false friend в 7 языках** — DE `loggen`/`tracken`, PL `zalogować`=sign-in/`zapisać`, FR `logguer`/`noter`, IT `loggare`/`registrare`, PT-BR/`anotar`, HI/`note karo`, ID/`catat`.
+- **`streak`/«стрик» — англицизм-пустышка в non-EN** (owner rule 2026-06-01). Транслит «стрик/стрік» = ноль смысла для носителя. EN-only; везде ещё — смысловой эквивалент («серия дней», «дней в ударе», «racha», «Serie», «série»). Обобщение Phase 1 RU-паттерна «стрик→серия» на все языки.
 - **Gender-neutral grammar BONUS:** ID + FA — нет gender в глаголах, prosaдает «slash problem» полностью.
 - **Hinglish-Latin escape для HI:** 100% Latin script — gender escape + Devanagari SRE relief одновременно.
 - **AR LRM/RLM markers критичны** для mixed Latin/Arabic (BMI 18.5 в AR text).

@@ -1,8 +1,8 @@
 # Adaptive Modifiers Architecture (Phase 3, mig 301+)
 
-> **Status:** Phase 3a foundation merged 2026-05-21 (mig 301). **Phase 3b sleep UX merged 2026-05-23 (mig 310).** Sub-phases 3c/3d pending.
+> **Status:** Phase 3 ALL DONE 2026-05-25. 3a foundation (mig 301), 3b sleep (mig 310), 3c stress (mig 317), **3d luteal (mig 334-335)**. Sprint stabilization closed parallel (mig 330-333).
 >
-> **Roadmap:** [[concepts/calc-user-targets-roadmap]] §P2.4.
+> **Roadmap:** [[concepts/calc-user-targets-roadmap]] §P2.4 — DONE.
 
 ## Что это
 
@@ -299,3 +299,116 @@ Clinical keys (`rpp_guard`, `teen_stress`) use `<b>...</b>` HTML tags (proper HT
 - T5: RPP gate fire + guard_audit_log check + lifestyle log still written
 - T8: ordering — lifestyle log written BEFORE Premium gate (free user gets it)
 - T12: cron dedup — user who answered today not in candidates
+
+## Phase 3d — Luteal Cycle Tracking (mig 334-335, 2026-05-25)
+
+### Overview
+
+Closes the final sub-phase of Adaptive Modifiers. Luteal phase = прогестерон термогенез → +150-200 kcал (late) / +100 (early). Opt-in для cycle-aware женщин, auto-disable при беременности/лактации.
+
+**Delivered (mig 334, 706 LOC SQL):**
+- `phase_from_cycle_day(day, length)` SQL helper — single source of truth для фазы цикла (follicular/ovulation/luteal_early/luteal_late)
+- Auto-disable: `set_user_pregnancy_flag` + `set_user_lactation_flag` обнуляют `cycle_tracking_enabled=FALSE` при maternal flag=TRUE (C1 decision тимлида)
+- `save_user_cycle_data` — single-callback save RPC (`cmd_save_cycle_<today|7d_ago|14d_ago>`), упрощение vs staging design. `cycle_avg_length=28` fixed, custom length через future edit screen.
+- 2 новых screens: `cycle_tracking_intro` (privacy + ценность opt-in) + `cycle_tracking_setup` (3 кнопки date offset)
+- Populate existing `personal_metrics_cycle_premium_upsell` (был dormant)
+- Wire-up `cmd_cycle_premium`: visible_condition `gender='female' AND ¬pregnant AND ¬lactating` + Premium/free split
+- Cron `luteal_morning` @ 08:00 local в `cron_get_reminder_candidates` — DRY через `compute_cycle_day_for_user` (уже инкапсулирует maternal+opt-in gate)
+- Widget integration в `wellbeing_today`: `business_data_rpc=get_day_summary` (reuse existing, не плодить новый RPC)
+- EN+RU placeholder × 16 ключей
+- 19/19 sentinel tests PASS
+
+### Architecture: single-callback save
+
+Изначальный design включал `staging` через `user_status_data` column (не существовала). Cleanup на лету: **single-callback** save pattern — `cmd_save_cycle_<today|7d_ago|14d_ago>` → RPC вычисляет `cycle_start_date = CURRENT_DATE - offset` → write. Никаких intermediate states, никаких промежуточных screens. Cleaner UX (3 кнопки → save → return).
+
+### Luteal cron integration
+
+`cron_get_reminder_candidates('luteal_morning')` — target hour 08 local. Eligibility:
+- `cycle_tracking_enabled=TRUE`
+- Premium/trial (`COALESCE(subscription_status,'free') <> 'free'`)
+- Не pregnant / не lactating (gate inside `compute_cycle_day_for_user`)
+- `apply_daily_modifier` не applied today (dedup through existing pattern)
+- Phase = `luteal_early` или `luteal_late` (computed from `cycle_start_date + cycle_avg_length`)
+
+### i18n × 13 langs (mig 335, 143 строки)
+
+Anti-РПП reframe per language — critic 5/5:
+- DE: «kein Kontrollverlust»
+- FR: «pas un manque de discipline»
+- UK: «не зриви»
+- AR: «ليس ضعف إرادة» (secular medical MSA)
+- FA: «ضعف اراده نیست» (ZWNJ preserved)
+- HI: «kamzori nahin» (Hinglish-Latin per glossary)
+- ID: «bukan kelemahan» (halal-safe, Ramadan-adjacent clean)
+
+Button labels shortened for conversion per Номсова правка (DE/ES/FR/PT/UK — «короткие глаголы конвертят лучше»).
+
+## My Day wellbeing line (mig 410, 2026-06-01)
+
+До mig 410 залогованное самочувствие в карточке «Мой день» (`stats_main`) **не
+отображалось** — был только Premium-gated `active_modifiers_strip` (applied-дельты,
+вверху карточки) + хаб 🧬 Самочувствие для ввода. Owner запросил видимый at-a-glance
+статус.
+
+### Что добавлено
+
+Новое поле `wellbeing_line` в `get_daily_stats_rpc` + плейсхолдер `{wellbeing_line}`
+в `stats.main_text` ×13 — строка **под блоком БЖУ**: `🌙 Сон: 🥱 · 🌀 Стресс: 🤯`.
+
+- **Free-tier** (в отличие от `active_modifiers_strip`): качественный лог сна/стресса
+  бесплатный (лестница привычки), макро-дельты остаются Premium. Без premium-gate.
+- Читает `daily_metrics.{sleep_quality_qualitative,stress_label_qualitative}` за
+  СЕГОДНЯ (`date = (timezone(v_tz, now()))::date`, UNIQUE(tid,date)). Пусто если
+  ничего не залогано → trailing `\n\n` только когда непусто → плейсхолдер схлопывается
+  (паттерн `active_modifiers_strip`).
+
+### UX-решения (durable)
+
+1. **Значение = ЭМОДЗИ, не слово.** Telegram body — пропорциональный шрифт; «вторую
+   колонку» справа от Б/Ж/У выровнять нельзя (ragged + макро-буквы локализованы:
+   Б/Ж/У vs P/F/C vs П/Ж/В). Слова-значения («Спокойно»/«Нормально») не влезают в
+   ≤35 chars на части языков. Эмодзи-значение снимает обе проблемы → одинаково на
+   всех устройствах/языках. **Не делать right-column layout в Telegram-тексте.**
+2. **Single source эмодзи** — `app_constants` (`icon_sleep_*`/`icon_stress_*`); те же
+   эмодзи на check-in кнопках. Категория-лейбл («🌙 Сон»/«🌀 Стресс») берётся из
+   `wellbeing.button_sleep/button_stress`.
+3. **Эмодзи-набор без коллизий** (owner-approved): Сон 🥱/🙂/😎, Стресс 😌/😬/🤯.
+   Заменил 😴/✨/🌀/🔥. Критерии: 😴 (спящее лицо) ≠ «мало сна»; 🌀 дублировал иконку
+   категории «🌀 Стресс»; 🔥 конфликтовал со 🔥 стрика на той же карточке. Урок:
+   проверяй, не занят ли эмодзи другим смыслом на ТОМ ЖЕ экране.
+
+stored values: sleep ∈ {short,okay,great}, stress ∈ {none,moderate,high}. Python-кода
+не трогали — `stats_main` уже читает `get_daily_stats_rpc`, рендерер резолвит `{wellbeing_line}`.
+
+## Sprint stabilization (mig 330-333, 2026-05-25)
+
+4 parallel P0 fixes closed in one session:
+
+### mig 330 — Premium-filter + soft mutex
+
+- **Premium-filter:** sleep_checkin / stress_checkin push только для paid юзеров. `COALESCE(subscription_status,'free') <> 'free'` — покрывает premium/trial/promo без новой миграции. НЕ `user_has_renewable_sub` (исключает trial).
+- **Soft mutex sleep > meal_morning:** окно meal_morning расширено до [9, 10] local. В 9:00 meal_morning suppressed если Premium юзер pending sleep_checkin. В 10:00 — догоняем. **Один пуш в утренний слот**, не два.
+
+### mig 331 — stats_main wellbeing entry + hub
+
+Новые screens:
+- `wellbeing_today` — hub с [🌙 Сон] [🌀 Стресс] buttons
+- `wellbeing_premium_teaser` — free CTA
+- stats_main row=0: col=0 [Исправить] + col=1 [🧬 Самочувствие] (Premium) + col=2 [🔒 Самочувствие] (free) — mutually exclusive visible_condition
+
+### mig 333 — CRITICAL sleep cron bug + 13 langs
+
+**CRITICAL bug найден и закрыт:** `cron_notifications.reminder_sleep_checkin` = NULL во всех 13 langs. Mig 310 не залила payload, mig 317 не сделала back-fill. Закрыло баг «утренний пуш сна приходит на EN-заглушках / не приходит вовсе».
+
+Также: 😤→🌀 emoji swap × 39 strings, RU/UK gender-leak fix, AR title bidi swap. **144 strings total** across 11 langs.
+
+### Phase 3 Roadmap — CLOSED 2026-05-25
+
+| Sub-phase | Mig | Closed | Что закрыто |
+|---|---|---|---|
+| 3a Foundation | 301 | 2026-05-21 | daily_modifiers table + 4 clinical gates + age-aware deltas |
+| 3b Sleep UX | 310 | 2026-05-23 | sleep_checkin screen + Premium teaser + maternal banner + i18n |
+| 3c Stress UX | 317 | 2026-05-24 | stress_checkin + hybrid modal routing + i18n |
+| **3d Luteal** | **334-335** | **2026-05-25** | cycle tracking opt-in + auto-disable maternal + cron luteal_morning + widget + i18n |
+| **Stabilization** | **330-333** | **2026-05-25** | Premium-filter + soft mutex + wellbeing hub + CRITICAL sleep cron NULL fix |

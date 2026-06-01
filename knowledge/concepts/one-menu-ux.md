@@ -110,6 +110,29 @@ The following message types must never call `save_bot_message`:
 
 Tracking these would cause the next navigation tap to delete a food log entry — permanently losing user data.
 
+### Python authoritative path — `persist_as_menu` footgun (lesson 2026-06-01, PR #264)
+
+В Python (`webhook_server._send_and_persist`) дефолт `persist_as_menu=True` → после
+отправки envelope вызывает `save_bot_message(..., 'menu')`. **Любая ветка контента
+ОБЯЗАНА передавать `persist_as_menu=False`.** Это позиционный bool с опасным
+дефолтом: забыл kwarg = молча сломал One-Menu.
+
+**Реальный рецидив:** когда AI Engine промоутнули в Python GLOBAL (mig 373, 29.05),
+новая ветка `target=ai` в `_try_authoritative_path` скопировала
+`_send_and_persist(envelope, chat_id)` **без** `persist_as_menu=False`. Карточка
+распознанной еды стала писать себя в `last_bot_message_id` → следующий клик «Мой
+день»/«Прогресс»/«Профиль» (`delete_and_send_new`) удалял карточку. n8n-путь
+`/internal/food_log/render` имел флаг правильно — регрессию внёс именно Python-cutover
+(commit `ff3446f`). Симптом тот же, что описанный 24.05 («борщ → Мой день → карточка
+исчезла»), но через другой слой.
+
+**Чек-лист при cutover любого контент-хендлера на Python:**
+1. Карточка еды / AI-распознавание / payment / level-up / cron-пуш → `persist_as_menu=False`.
+2. Навигационный экран (stats/profile/progress/onboarding-шаг) → `persist_as_menu=True` (дефолт).
+3. Добавь регрессионный тест на kwarg (см. `test_webhook_ai_engine_gate.py::test_ai_gate_food_card_persisted_as_content_not_menu`).
+4. Идеал (не сделано) — убрать footgun: пусть `ResponseEnvelope` несёт флаг своей
+   природы, а `_send_and_persist` читает его, не забываемый kwarg.
+
 ## One Menu Promotion Pattern (mig 180, 2026-05-06)
 
 Автоматическое продвижение `send_new → replace_existing` в `services/template_engine.py`, когда callback path предоставляет `callback_message_id`. Закрывает целый класс «двойных сообщений» в headless-экранах.
