@@ -174,6 +174,7 @@ _5 files · 54 incoming refs (30d)_
 - [[sassy-sage-dialog-variants]] — Sassy Sage Dialog Variants System
 - [[sassy-sage-multilingual-glossary]] — Sassy Sage Multilingual Glossary
 - [[ui-translations-bulk-update-recipe]] — UI Translations Bulk Update Recipe
+- [[handover/2026-06-01_fiverr_dunning_l1_review_brief]] **`📬 open handover`** — Fiverr brief для native-review dunning + plan_name × 7 langs (AR/FA/HI/PL priority, ID/PT/UK sign-off); 70 strings, ~$120-180, owner action.
 
 ## 🏛 Architecture & Infrastructure
 
