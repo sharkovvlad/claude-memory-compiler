@@ -29,7 +29,7 @@ For each of the 7 languages:
 2. **Send them the per-language packet** from §3 below (English context block + table of 10 current values). The packet is self-contained — paste it as the order brief.
 3. **Deliverable format** (see §4): they return a JSON or markdown table with `proposed_value` and `reasoning` per row.
 4. **Quality check:** open the deliverable, sanity-check that placeholders `{expires_date_localized}` and `{streak_days}` are preserved verbatim. Spot-check 2-3 strings against the brief criteria.
-5. **Apply** via mig 416 (template in §5). Test with `pytest tests/crons/test_subscription_dunning_pl_plural.py` (PL only — others have no plural runtime).
+5. **Apply** via fresh mig number (template in §5; 416/417 taken by PR #273 Trial Soft Downgrade). Test with `pytest tests/crons/test_subscription_dunning_pl_plural.py` (PL only — others have no plural runtime).
 
 Estimated turnaround per language: 24-72h depending on seller.
 
@@ -305,14 +305,14 @@ Placeholders MUST be byte-identical in `current_value` and `proposed_value` — 
 
 ---
 
-## 5. Apply template — mig 416 (one migration covers all 7 langs)
+## 5. Apply template — fresh migration NNN (one migration covers all 7 langs)
 
-When you have all 7 review packets back, draft `migrations/416_dunning_native_l1_polish_7_langs.sql` modelled on `migrations/409_dunning_l1_copyrighting_7_langs.sql`. Same structure, same POST-VERIFY DO-block (no EN-literal collisions). Apply via psycopg2; auto-deploy after merge.
+When you have all 7 review packets back, draft `migrations/NNN_dunning_native_l1_polish_7_langs.sql` (определить свежий номер на момент apply — 416/417 заняты Trial Soft Downgrade PR #273) modelled on `migrations/409_dunning_l1_copyrighting_7_langs.sql`. Same structure, same POST-VERIFY DO-block (no EN-literal collisions). Apply via psycopg2; auto-deploy after merge.
 
 Skeleton:
 
 ```sql
--- 416_dunning_native_l1_polish_7_langs.sql
+-- NNN_dunning_native_l1_polish_7_langs.sql
 -- Native-speaker polish of dunning + plan_name × 7 langs (AR/FA/HI/PL priority,
 -- ID/PT/UK sign-off). Replaces Opus-generated mig 409 L1 with reviewer-signed-off
 -- versions. POST-VERIFY identical to mig 409.
