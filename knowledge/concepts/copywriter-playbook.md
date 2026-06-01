@@ -108,6 +108,11 @@ Per session:
 
 - **`log` = DevOps false friend в 7 языках** — DE `loggen`/`tracken`, PL `zalogować`=sign-in/`zapisać`, FR `logguer`/`noter`, IT `loggare`/`registrare`, PT-BR/`anotar`, HI/`note karo`, ID/`catat`.
 - **`streak`/«стрик» — англицизм-пустышка в non-EN** (owner rule 2026-06-01). Транслит «стрик/стрік» = ноль смысла для носителя. EN-only; везде ещё — смысловой эквивалент («серия дней», «дней в ударе», «racha», «Serie», «série»). Обобщение Phase 1 RU-паттерна «стрик→серия» на все языки.
+  - **Конвейер mig 413 (2026-06-01, PR #269) — 3 execution-урока:**
+    1. **Live-аудит сужает scope.** Задание было «11 langs», live-греп `ui_translations` дал транслит лишь в **5** (de/fa/hi/id/uk, 16 ключей, 61 строка). ar/es/fr/it/pl/pt/ru уже были compliant. Не верь априорному списку — грепай прод (вырезав плейсхолдеры `{...}`/`{tr:...}`/`{icon_streak}`, иначе 240+ false positives на именах ключей).
+    2. **Целевое слово бери из уже-compliant ключей того же языка** (не выдумывай): de→Serie (из `profile_gamification.streak`), uk→серія, id→runtun (из `beruntun`), fa→رکورد, hi→सिलसिला/silsila. Даёт внутреннюю консистентность бесплатно.
+    3. **Смена слова меняет грамматический род → правь согласования.** de m→f (dein→deine, den→die, er→sie), uk m→f (пішов→пішла, його→її), hi f→m (ki→ka, gayi→gaya, latki→latka, आपकी…की→आपका…का, अपनी→अपना). Замена одного существительного «насухо» ломает грамматику предложения.
+  - **Naturalized давний loanword ≠ свежий геймерский англицизм.** fa `رکورد` (record, полностью натурализован, в персидской графике) допустим как замена, в отличие от свежего `استریک`. Правило бьёт по бессмысленному транслиту, не по любым заимствованиям.
 - **Gender-neutral grammar BONUS:** ID + FA — нет gender в глаголах, prosaдает «slash problem» полностью.
 - **Hinglish-Latin escape для HI:** 100% Latin script — gender escape + Devanagari SRE relief одновременно.
 - **AR LRM/RLM markers критичны** для mixed Latin/Arabic (BMI 18.5 в AR text).
