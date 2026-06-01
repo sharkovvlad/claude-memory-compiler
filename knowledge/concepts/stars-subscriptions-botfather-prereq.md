@@ -1,29 +1,47 @@
 ---
-title: "Telegram Stars Subscriptions — undocumented BotFather prerequisite"
-aliases: [stars-subscriptions-botfather-prereq, stars-recurring-provider-account-invalid, stars-subscription-setup]
-tags: [payment, stars, telegram-api, gotcha, p0]
+title: "Stars Subscriptions PROVIDER_ACCOUNT_INVALID — client top-up restricted (resolved)"
+aliases: [stars-subscriptions-botfather-prereq, stars-recurring-provider-account-invalid, stars-subscription-setup, stars-balance-insufficient]
+tags: [payment, stars, telegram-api, gotcha, resolved]
 status: active
 sources:
   - "daily/2026-05-28.md"
+  - "daily/2026-05-31.md"
   - "concepts/architecture-registry.md"
 created: 2026-05-28
-updated: 2026-05-28
+updated: 2026-05-31
 ---
 
-# Telegram Stars Subscriptions — undocumented BotFather prerequisite
+# Stars Subscriptions PROVIDER_ACCOUNT_INVALID — client top-up restricted (resolved)
 
-> 🔥 **HUB** — read BEFORE enabling Stars Subscriptions in any new bot or
-> re-enabling NOMS' disabled flow.
+> 🔥 **HUB** — read BEFORE diagnosing `PROVIDER_ACCOUNT_INVALID` on
+> Stars-recurring payments. Original 2026-05-28 H1 hypothesis (undocumented
+> BotFather toggle) **disproven** by Telegram Support 2026-05-31.
 
-## TL;DR
+## TL;DR (updated 2026-05-31 after @BotSupport reply)
 
 **One-time Stars payments work out-of-the-box.** Just call `sendInvoice` /
 `createInvoiceLink` with `currency='XTR'`, no setup. ✅
 
-**Stars Subscriptions (recurring) require BotFather setup** that Telegram
-does NOT document anywhere. Skip it → users see
-`Error: PROVIDER_ACCOUNT_INVALID` in the payment modal when they click
-the invoice link.
+**Stars Subscriptions (recurring) ALSO work** with no BotFather setup. The
+`PROVIDER_ACCOUNT_INVALID` error is **a client-side Telegram bug** triggered
+when the user has 0 Stars balance AND taps "Top up balance" inside the
+payment modal — the internal `@PremiumBot` top-up gateway is currently
+restricted (Apple/Google antitrust pressure).
+
+**Fix is UX-only:** show a warning before the payment modal opens, asking
+the user to top up Stars manually first via Telegram Settings → My Stars
+→ Top Up Balance. NOMS implementation: `payment.stars_balance_warning` ×
+13 langs + send_message прямо перед sendInvoice/createInvoiceLink (mig 414
++ handlers/payment.py:_handle_pay_stars, 2026-05-31, PR #пнр).
+
+## Resolution timeline
+
+| Дата | Что |
+|---|---|
+| 2026-05-28 | Stage 2 раскатился (PR #214 → #216, mig 365). Live-test показал PROVIDER_ACCOUNT_INVALID. Гипотеза H1 — BotFather toggle. Hotfix PR #217 отключил monthly recurring (`_STARS_SUBSCRIPTION_PLANS = frozenset()`). |
+| 2026-05-28 | Issue #218 открыт владельцу: написать саппорту Telegram, ждать ответ. |
+| 2026-05-31 20:16 UTC | @BotSupport ответил: «It is not an issue with your bot specifically. Payments towards most bots through @PremiumBot are restricted due to external circumstances. ... It should work fine if user has enough stars.» → **H2 подтверждена**, H1 disproven. |
+| 2026-05-31 (этот PR) | Revert PR #217: `_STARS_SUBSCRIPTION_PLANS = frozenset({"monthly"})`. Un-skip 2 integration tests. + mig 414: `payment.stars_balance_warning` × 13 langs. + `_handle_pay_stars`: send_message warning перед sendInvoice/createInvoiceLink. Issue #218 закрыт. |
 
 ## The incident (2026-05-28)
 
@@ -210,3 +228,37 @@ others).
 * `concepts/architecture-registry.md` — payment target = Python authoritative.
 * `concepts/subscription-management-headless.md` — mig 362 RPC v3 logic.
 * `migrations/365_stars_recurring_rpcs.sql` — DB-side infrastructure (live, dormant).
+
+## Admin observability — Stars balance & transactions (2026-06-01)
+
+Сразу после re-enable Stars Subscriptions (mig 414) owner спросил «куда приходят и как посмотреть». Telegram Bot API даёт `getMyStarBalance` + `getStarTransactions`. Реализованы **3 уровня доступа** для admin:
+
+### 1. CLI на VPS — `scripts/stars_balance.py` (PR #272, merged)
+
+```bash
+sudo -u taskbot bash -c "cd /home/taskbot/noms && set -a && source .env && set +a && \
+    /home/taskbot/noms/venv/bin/python scripts/stars_balance.py [--limit N] [--json]"
+```
+
+Output: balance + last N tx (default 20, max 100) с USDT estimate. `--json` для машинного чтения.
+
+### 2. Daily digest cron — `StarsDigestCron` (PR #275)
+
+`crons/stars_digest.py`, schedule `06:30 UTC` (между `subscription_lifecycle :00` и `reminders :20`). Filter транзакций за последние 24h. **Молчит когда 0 tx** — не спамит admin chat. При активности → HTML message в `ADMIN_CHAT_ID`: balance + USDT estimate + IN/OUT counts + last 10 tx с partner info.
+
+### 3. On-demand bot commands — `/admin_stars` & `/admin_stars_export` (PR #275)
+
+`handlers/admin_stars.py`. Fast-path в `webhook_server._route_or_forward_locked` — если `text.startswith('/admin_stars')` AND `chat_id == ADMIN_CHAT_ID` → handle directly, BYPASSING dispatch_with_render/menu_v3 (паттерн как `admin_payout_*` callbacks).
+
+- **`/admin_stars [N]`** — баланс + last N в HTML message (default 20, max 50)
+- **`/admin_stars_export [N]`** — CSV файл через sendDocument (default 100, max 500). Пагинация когда N>100 (Telegram API cap).
+
+Non-admin chat_id шлёт `/admin_stars` → fast-path не срабатывает, текст идёт в обычный AI handler (silent ignore без security exposure).
+
+### Куда уходят Stars
+
+`@nomsaibot` аккаунт. Просмотр через `@BotFather → Bot Settings → Payments` (или `Stars`). Вывод: `convertStarToTon` Bot API → TON wallet → Fragment. Telegram retains ~30%, min payout 1000 ⭐. Estimate в Python: `usdt_net = stars * 0.006 * 0.7`.
+
+### Live state (01.06.2026)
+
+Баланс @nomsaibot = **580 ⭐** (~$2.44 net). 1 IN транзакция от tid 1670095403 (Евгения) — первая реальная Stars-покупка.
