@@ -156,6 +156,7 @@ Per session:
 - [[concepts/safety-guard-ux-pattern]] — UX framework (severity → banner/emoji/opt-out)
 - [[concepts/sassy-sage-multilingual-glossary]] — tone per 11 languages
 - [[concepts/ui-translations-bulk-update-recipe]] — 10-step apply pipeline
+- [[concepts/i18n-cldr-plural-runtime]] — `{N word}` через babel CLDR; placeholder `{streak_days_word}` / `{count_word}` вместо запечённой literal-формы для langs с >1 категории (ru/uk/pl/ar/es/fr/it/pt). При тексте с числом + существительным — используй helper, не пиши «{N} дней» в шаблоне.
 - [[concepts/l1-cultural-sanity-brief]] — L1 reviewer operational checklist
 - [[concepts/migration-collision-guard]] — parallel-agent NNN-protection
 - [[concepts/release-protocol]] — git discipline (rebase ДО commit, sanity-check ДО push)

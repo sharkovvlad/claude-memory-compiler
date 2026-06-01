@@ -271,4 +271,5 @@ If diff scope unexpected (e.g. 30+ files modified) — **СТОП, не push**. 
 - [[concepts/sassy-sage-multilingual-glossary]] — tone-doc per language (11 sections, 8 subsections each)
 - [[concepts/migration-collision-guard]] — parallel-agent protection
 - [[concepts/python-vs-n8n-template-grammar]] — variant-array structures Sassy Sage
+- [[concepts/i18n-cldr-plural-runtime]] — для шаблонов «{N} <word>» (ru/uk/pl/ar/es/fr/it/pt): placeholder `{N_word}` + `services/i18n_plural.format_count(n, lang, forms)`. Mig 418 (`dunning_d3` × 8 langs) — референс apply.
 - [[concepts/safety-guard-ux-pattern]] — adjacent pattern for unified storage
