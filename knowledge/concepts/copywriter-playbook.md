@@ -12,7 +12,7 @@ sources:
   - "handover/2026-05-18_bmi_min_kcal_copywriter_brief.md"
   - "daily/2026-05-15.md … 2026-05-18.md"
 created: 2026-05-18
-updated: 2026-05-18
+updated: 2026-06-01
 ---
 
 # Copywriter Playbook

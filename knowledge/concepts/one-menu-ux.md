@@ -7,7 +7,7 @@ sources:
   - "daily/2026-04-17.md"
   - "daily/2026-05-06.md"
 created: 2026-04-11
-updated: 2026-05-06
+updated: 2026-06-01
 ---
 
 # One Menu UX
