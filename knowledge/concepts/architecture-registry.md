@@ -183,11 +183,12 @@ Hot-reload: после загрузки UserCtx читается из `ctx.const
 - **Pre-checkout active-premium guard** — `webhook_server.py:pre_checkout_query` отбивает Telegram запрос `answer_pre_checkout_query(ok=False)` если `users.subscription_status='active'` и `expires_at > now()`. Защита от double-charge.
 - **Stripe live keys в `/home/taskbot/noms/.env`** (Stripe Review «in progress», но платежи принимаются).
 - **Stars success path → referral reward parity** — `process_referral_reward` теперь вызывается в обоих paths (Stripe + Stars).
-- **Open tech debt по handover'у `2026-05-20_payment_p1_brief.md`:**
-  - P1: dunning UX, `/start payment_success` deep-link, trial_7d flow, localised dates everywhere, Stars success message i18n.
-  - P2: upgrade/downgrade с proration, EU VAT automatic, receipt emails, refund mechanism.
-  - P3: one-menu pattern по всем payment screens (Stars done, crypto pending), n8n `10_Payment` row DELETE, Route Classifier executeWorkflow refs cleanup.
-- **Open issue (конец 20.05):** «Кнопка «Продлить подписку» не работает» — триаж в handover-файле. Подозрение на parallel agent regression router.py/payment.py.
+- **Open tech debt (post-2026-06-01 audit):**
+  - ~~P1: dunning UX~~ ✅ mig 402 + 420 (PR #276); ~~`/start payment_success` deep-link~~ ✅ mig 313 HTML-stub; ~~trial_7d auto-convert~~ ✅ REPLACED Soft Downgrade'ом (PR #273); ~~localised dates crypto~~ ✅ mig 423 (PR #282); ~~Stars success i18n~~ ✅ mig 290/306/307.
+  - **P2 (отложено):** upgrade/downgrade Stripe proration, EU VAT automatic, receipt emails, refund mechanism — большие отдельные sprints.
+  - ~~P3: one-menu pattern по payment screens, n8n 10_Payment cleanup~~ ✅ DONE 2026-05-21 + audit 2026-06-01 (envelope architecture, 10_Payment workflow удалён, Route Classifier zero executeWorkflow refs).
+  - **Promo flow (отложено):** entry UI отключён, redesign воронки нужен. Owner: «требует ривизии как должно работать, что подтягивать из БД».
+- ~~**Open issue (конец 20.05):** «Кнопка «Продлить подписку» не работает»~~ ✅ **Closed mig 219+225:** `cmd_renew_plan` whitelist в `dispatcher/router.py:353`.
 
 Pattern detail — [[payment-idempotency-pattern]].
 

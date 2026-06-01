@@ -59,7 +59,7 @@
 | **P1.1** | **Dunning UX** — напоминания за 7/3/1 день до expiry × 13 langs Sage texts | mig + cron job + translation keys | M (1-2 дня) |
 | **P1.2** | **Crypto/promo localised dates** — аудит остальных payment paths + mig | mig + аудит | S (30 мин) |
 | **P1.3** | **n8n 04_Menu cleanup** — remove nodes 121-124 (Check Subscription Blocker) теперь dead code после mig 313 | Safe PUT через scp+curl recipe | S (15 мин) |
-| **P1.4** | **TON UX** — clickable wallet/мемо (HTML tags) + warning network + ±10% tolerance вместо ±30% | mig + handlers/payment.py edit | M (1 сессия) |
+| ~~P1.4~~ | ~~TON UX~~ — ✅ **DONE** (mig 296 + ru L1 polish). Live screen 2026-06-01: `<code>` теги для wallet/memo (тап = copy), жирный `⚠️ TON Mainnet` warning с дисклеймером про ERC/TRC/BSC, комиссия `~$0.20 сверх`, ETA `~2 часа`. Tolerance в `crons/ton_payment_checker.py`: ±15% strict baked + ±30% fallback с классификацией underpaid/overpaid (более user-friendly чем спека ±10% — owner может ужесточить позже). | — | — |
 | **P1.5** | **Stars Subscriptions** — BotFather config + smoke test | External + 30 мин test | XS |
 
 ### P2 — product decisions need
