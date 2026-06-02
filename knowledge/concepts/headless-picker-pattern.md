@@ -507,3 +507,31 @@ END IF;
 проходит!), а через `dispatch_with_render(tid,'callback',{callback_data:'cmd_<prefix>_x'},…)`
 — только он воспроизводит реальный путь клика. Прямой вызов с чистым значением
 ЗЕЛЁНЫЙ, а реальный клик — КРАСНЫЙ. Это и пропустила верификация mig 425.
+
+### Вариант UX «B»: остаться на picker + live business_data (mig 431, edit_diet)
+
+Альтернатива дефолтному «save → navigate to parent». Юзер остаётся на picker-экране,
+✅ переезжает на новый выбор, а строка с пересчитанным значением обновляется live.
+Нагляднее исчезающего toast — видно само число и его сдвиг.
+
+**Рецепт (data-only, без Python):**
+1. **Опции-кнопки:** `target_screen=<self_screen>` + УБРАТЬ `clear_status`
+   (статус остаётся в edit-режиме → picker продолжает ловить клики). `push_nav`
+   НЕ задублирует nav_stack: `process_user_input` пушит только если
+   `next_screen IS DISTINCT FROM current_screen` (стр.~460).
+2. **Свой text_key** (НЕ shared с онбордингом!) с плейсхолдером результата, напр.
+   `📊 Белок: {target_protein_g} г/день`.
+3. **`ui_screens.business_data_rpc`** = RPC(telegram_id)→jsonb, отдающий нужные
+   поля. render_screen мёржит их в `template_vars` (`base_vars || business_data`,
+   render_screen SQL стр.~110); `template_engine._resolve_text` подставляет
+   `{placeholder}` Python-side. Reuse существующего (напр. `get_my_plan_business_data`).
+4. **Back-кнопка** не трогается: nav-pop сам уводит на экран-родитель (откуда вошли).
+
+**Gotcha:** значение из modifier-aware RPC (get_my_plan_business_data, mig 424)
+показывает реальную дневную цель С модификаторами (sleep/stress/luteal), не «голую»
+базу из `users.target_*`. Обычно это и нужно (что юзер реально ест), но помни о
+расхождении с голым числом.
+
+**Тест:** только через `dispatch_with_render` + прогон `template_engine._resolve_text`
+с живыми translations — увидеть ФИНАЛЬНЫЙ текст. render_screen отдаёт text_key +
+template_vars (подстановка Python-side), сырой payload показывает плейсхолдер, а не число.
