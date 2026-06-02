@@ -467,3 +467,43 @@ SELECT pg_get_functiondef('public.set_user_<feature>'::regproc);  -- ищи calc
 
 **edit_diet live (2026-06-02):** routing 4/4, omnivore 139г→vegan 174г белка (×1.25),
 ✅ через `current_value_col=diet_type`, p95 VPS render 41ms / set+recalc 48ms. PR #288.
+
+### ⚠️ Setter-RPC контракт: парсь callback, не жди save_value (mig 429, 2026-06-02)
+
+**P1 bug, скрытый 1 день после mig 425.** `process_user_input` save_via_callback
+dispatch (≈стр.331) передаёт сеттер-RPC **сырой `callback_data`**, НЕ `save_value`:
+```sql
+EXECUTE format('SELECT public.%I($1,$2)', save_rpc) USING p_telegram_id, v_callback;
+```
+→ `set_user_diet_type(tid, 'cmd_diet_vegetarian')`. Поэтому КАЖДЫЙ рабочий сеттер
+(`set_user_training_type`, `set_user_goal`, …) внутри парсит префикс `cmd_*`:
+```sql
+v_value := CASE
+    WHEN p_input = 'cmd_select_strength' THEN 'strength'
+    WHEN p_input IN ('strength','cardio',...) THEN p_input  -- backward-compat
+    ...
+```
+`set_user_diet_type` (mig 291) был написан как `IN ('omnivore','vegetarian','vegan')`
+БЕЗ парсинга — `'cmd_diet_vegetarian'` → `INVALID_DIET_TYPE`, **UPDATE не выполнялся**.
+Симптом коварен: навигация (`clear_status`/`target_screen`) применяется **независимо
+от успеха save** → юзер молча уезжает на parent-screen, галочка не двигается, нет
+ошибки. Выглядит как «UI-баг рендера», а на деле save — тихий no-op.
+
+**Почему не всплыло раньше:** онбординг-diet идёт через onboarding-handler
+(`process_onboarding_input`), а не через `process_user_input` save_via_callback —
+там значение извлекается иначе. RPC впервые вызвали этим dispatch'ем только когда
+mig 425 подключила profile-кнопку `edit_diet`.
+
+**Правило (durable):** новый picker-сеттер ОБЯЗАН принимать ОБЕ формы —
+сырой `cmd_<prefix>_<value>` И чистое `<value>`:
+```sql
+v_normalized := LOWER(TRIM(p_value));
+IF v_normalized LIKE 'cmd_<prefix>_%' THEN
+    v_normalized := SUBSTRING(v_normalized FROM 'cmd_<prefix>_(.*)');
+END IF;
+-- затем валидация + UPDATE
+```
+**Тест-гейт:** проверять picker не прямым вызовом сеттера (`set_user_x(tid,'vegan')`
+проходит!), а через `dispatch_with_render(tid,'callback',{callback_data:'cmd_<prefix>_x'},…)`
+— только он воспроизводит реальный путь клика. Прямой вызов с чистым значением
+ЗЕЛЁНЫЙ, а реальный клик — КРАСНЫЙ. Это и пропустила верификация mig 425.
