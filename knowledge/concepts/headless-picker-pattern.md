@@ -425,3 +425,45 @@ Dispatch правило в Route Classifier (migration 120): `cmd_auto_location`
 5. **Dynamic pct в speed labels** — `{pct}%` stripped в migration 118, dynamic расчёт не реализован
 6. **02_Onboarding_v3 → Headless migration (Phase 3B)**
 7. **04_Menu legacy decommission (Phase 3B)**
+
+---
+
+## edit_diet — паттерн «screen built, entry never wired» (mig 425, 2026-06-02)
+
+**Ловушка для следующего агента:** прежде чем строить «новый» picker — `grep` живой БД.
+Часто экран + опции + setter RPC + переводы УЖЕ существуют от предыдущей миграции,
+а не подключена только **кнопка-вход**.
+
+Кейс diet_type: mig 291 (DIAAS protein multiplier) создала `edit_diet` (3 опции
+`cmd_diet_*` + Back, `save_rpc=set_user_diet_type` который сам зовёт
+`calculate_user_targets(.., TRUE)`), переводы `questions.diet_question`/`answers.diet_*`
+×13 и `profile.diet_label` — но `ui_screen_buttons` нигде не содержал кнопки с
+`meta.target_screen='edit_diet'`. Экран был недостижим. Задача «вывести тип питания
+в меню» свелась к **1 кнопке + 4 строкам роутера**, а не к постройке с нуля.
+
+**Чек перед постройкой нового edit-экрана:**
+```sql
+-- экран уже есть?
+SELECT screen_id, meta FROM ui_screens WHERE screen_id ILIKE '%<feature>%';
+-- кнопка-вход уже есть? (если пусто — экран висит в воздухе)
+SELECT screen_id, callback_data FROM ui_screen_buttons WHERE meta->>'target_screen' = '<screen>';
+-- setter RPC уже есть и зовёт ли пересчёт?
+SELECT pg_get_functiondef('public.set_user_<feature>'::regproc);  -- ищи calculate_user_targets
+```
+
+**Что нужно для подключения висящего picker-экрана (минимум):**
+1. **`workflow_states` строка** `<screen>` — ОБЯЗАТЕЛЬНА, иначе `set_status='<screen>'`
+   падает по FK `users.status → workflow_states.state_code` (23503). edit_diet её не имел
+   (в отличие от edit_training), хотя экран был.
+2. **Кнопка-вход** на родителе: `callback_data=cmd_edit_<x>`, `meta={set_status:'<screen>', target_screen:'<screen>'}`, `icon_const_key`, `text_key`.
+3. **Лейбл ×13** (deep-merge `jsonb_set(content,'{buttons}', COALESCE(...)||jsonb_build_object(...), true)` — sibling-safe). Tip: если есть готовая отревьюенная метка-поле (`profile.<x>_label`), переиспользуй её минус двоеточие — кнопка читается как поле, новой L1 не требует.
+4. **Router (Python, cutover global)** — 4 точки:
+   - `<screen>` → `BUTTON_ONLY_STATUSES` (inline-only, текст не в AI) + `PROFILE_V5_STATUSES` (picker-saves роутятся в menu_v3);
+   - `cmd_edit_<x>` → `PROFILE_V5_CALLBACKS` (entry routes to menu_v3);
+   - `cmd_<x>_` → `PROFILE_V5_PICKER_PREFIXES` (option saves).
+   - **Коллизия-гард:** если тот же `cmd_<x>_` префикс используется в онбординге (напр.
+     `cmd_diet_*` в `registration_step_diet`), убедись что онбординг-статус ∈ `ONBOARDING_STATUSES`
+     — picker-секция 4b стоит на `status not in ONBOARDING_STATUSES`, так что онбординг не перехватится. Verified mig 425.
+
+**edit_diet live (2026-06-02):** routing 4/4, omnivore 139г→vegan 174г белка (×1.25),
+✅ через `current_value_col=diet_type`, p95 VPS render 41ms / set+recalc 48ms. PR #288.
