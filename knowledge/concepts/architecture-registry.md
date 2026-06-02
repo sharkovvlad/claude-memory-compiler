@@ -1,6 +1,6 @@
 # Architecture Registry — Python authoritative vs n8n fallback
 
-**Status:** актуально на 2026-05-21 (n8n cleanup — 02_Onboarding_v3, 02.1_Location, 10_Payment удалены из n8n SQLite + executeWorkflow refs зачищены в 01_Dispatcher / 04_Menu / 04_Menu_v3). **Source of truth для агентов:** какой target обслуживает Python authoritative, какой fallthrough'ит на legacy n8n.
+**Status:** live-аудит обновлён **2026-06-02** (см. секцию «Состояние на 2026-06-02» внизу — осталось 7 n8n workflows, 03_AI_Engine + 06_Indicator_Clear деактивированы). Таблицы аудита от 21.05 ниже — исторические. **Source of truth для агентов:** какой target обслуживает Python authoritative, какой fallthrough'ит на legacy n8n.
 
 > **Как обновлять:** при cutover'е каждого нового target (см. [variant-b-cutover](variant-b-cutover.md)) — добавить строку в таблицу 1, удалить из таблицы 2, обновить раздел «Флаги фич».
 >
@@ -204,3 +204,32 @@ Pattern detail — [[payment-idempotency-pattern]].
 - **n8n `03_AI_Engine` (`kjw4kkKMD0IqNALg`)** теперь только legacy fallback (Python exception → forward). Реальный трафик еды (registered + onboarding) идёт в Python. Cleanup (deactivate + Indicator_Clear) — Stage 7c, после стабильности.
 
 **Итог:** `ai`/`add_food` target — **Python authoritative для всех статусов** (registered + onboarding). Таблицу 1 строку `ai` следует считать Python; таблица 2 строка `add_food / ai → 03_AI_Engine` — только аварийный fallthrough.
+
+---
+
+## Состояние на 2026-06-02 (live n8n audit + Stage 7c частично)
+
+**Верифицировано против live** (GET `/api/v1/workflows` + SQLite `workflow_entity`). Таблица аудита от 21.05 устарела — обновлённый снимок:
+
+### Live n8n workflows (осталось 7, было 15)
+
+| active | ID | Name | Роль |
+|---|---|---|---|
+| ✅ | `7jVRdAvVlzOqIMEi` | 01_Dispatcher | legacy fallback (живой; 23 exec за ~2д) |
+| ✅ | `0xJXA5M4wQUSiGXT` | 04_Menu_v3 | headless dispatcher (живой) |
+| ✅ | `JQsipPWxijse3F0b` | 04_Menu (legacy) | Edit Meal flow → 04.2 (13 exec) |
+| ✅ | `wgY05rXde1PbszSk` | 04.2_Edit_StatsDaily | зависит от 04_Menu |
+| ⬜ | `kjw4kkKMD0IqNALg` | 03_AI_Engine | **deactivated 2026-06-02** (Stage 7c шаг 2). Fallback через executeWorkflow ещё жив. |
+| ⬜ | `jQn0nTxThFal4Kpe` | 06_Indicator_Clear | **deactivated 2026-06-02** (Stage 7c шаг 2). |
+| ⬜ | `su5JZbUXOgE614Lo` | 08.3_Friends | inactive (payout chain — не трогать) |
+
+Все остальные (02_Onboarding_v3, 02_Onboarding v1, 02.1_Location, 10_Payment, 06_Indicator_Send, 08.1_Quests, 08.2_League, 08.4_Shop) — **физически DELETE'нуты** ранее.
+
+### Dead-ref cleanup (2026-06-02)
+
+- **`04_Menu_v3 → Switch Forward To`:** убраны 2 мёртвых case (`02_Onboarding_v3`, `02.1_Location` — без outgoing connections) через Safe PUT. Оставлены `03_AI_Engine` (живой output[0]) и `10_Payment` (payment вне scope — другой агент). Switch теперь 2 правила.
+- **`01_Dispatcher → Route Classifier`:** упоминания `02.1_Location` / `10_Payment` — это **устаревшие комментарии** + живая routing-логика `loc_`/payment (ведёт в Python-таргеты), НЕ dead executeWorkflow. Не трогали (риск без пользы на живом fallback Code-node).
+
+### Метод деактивации (gotcha n8n 2.17.7)
+
+API `/activate`+`/deactivate` → **Forbidden**; PUT не меняет `active` (read-only). Деактивация только прямым SQLite `UPDATE workflow_entity SET active=0` на `/home/noms/n8n/data/database.sqlite` (bind-mount). Детали + render-endpoint решение — [[stage7-global-cutover]] §7c прогресс.

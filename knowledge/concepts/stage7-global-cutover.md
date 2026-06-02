@@ -112,6 +112,14 @@ INSERT INTO app_constants(key, value, scope, description) VALUES
 
 ## Stage 7c cleanup (после 7д стабильного global)
 
+> **⏩ Прогресс 2026-06-02 (день 4 из 7, частично выполнено досрочно по решению owner'а):**
+> - ✅ **Шаг 2 (deactivate 03_AI_Engine + 06_Indicator_Clear) — СДЕЛАНО.** `active=0` в live SQLite. Verified: SQLite SELECT + API GET оба показывают `active=false`.
+> - ⛔ **Шаг 3 (DELETE `/internal/food_log/render`) — НЕ делали.** Endpoint оставлен живым: 03_AI_Engine хоть и `active=0`, всё ещё вызывается через `executeWorkflow` (fallback) и зовёт этот endpoint для рендера. Удалять только когда 03 будет физически DELETE'нут (шаг 5).
+> - 🟡 **Шаги 1 (свежий 0-exec чек за чистые 7д), 4 (Route Classifier executeWorkflow refs), 5 (DELETE workflows) — pending**, после ~05-06.
+> - **Метод деактивации (важный gotcha, n8n 2.17.7):** публичные API endpoints `/workflows/{id}/activate` и `/deactivate` отдают **`{"message":"Forbidden"}`** на этой сборке/лицензии. Обычный `PUT /workflows/{id}` работает (200), но **не меняет `active`** (read-only в API). Единственный рабочий способ — **прямой `UPDATE workflow_entity SET active=0` на live `/home/noms/n8n/data/database.sqlite`** (bind-mount; в контейнере sqlite3 нет, на хосте есть). Прецедент: 10_Payment деактивировали так же.
+> - **Рестарт n8n НЕ делали.** Для этих executeWorkflow-sub-workflow'ов `active` почти косметический: fallback (`01_Dispatcher → Go to 03_AI → Execute Workflow Trigger`) работает независимо от флага. После SQLite UPDATE: API GET и SQLite уже консистентны (`active=false`); in-memory webhook-триггеры 03/06 (`Webhook B-1 Cutover ai_engine`, MCP-вебхуки) остаются зарегистрированы до следующего рестарта n8n, но Python их не вызывает (`ai` нет в `TARGET_TO_PATH`) → безвредно. Следующий деплой/рестарт reconcile'ит.
+> - **Заодно (2026-06-02):** `04_Menu_v3 → Switch Forward To` — убраны 2 мёртвых case (`02_Onboarding_v3`, `02.1_Location`, без outgoing connections) через Safe PUT. Оставлены `03_AI_Engine` (живой output[0] → `Go to 03_AI_Engine`) и `10_Payment` (payment вне scope сессии). Verified fresh GET.
+
 **Не делать сразу.** Дать 7 дней global без регрессий, потом:
 
 1. **n8n executions verify** (SQLite, не API):
