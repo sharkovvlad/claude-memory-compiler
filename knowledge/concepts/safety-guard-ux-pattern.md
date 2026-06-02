@@ -4,11 +4,12 @@ aliases: [safety-guard-ux, argued-override, guard-banner, age-guard-ux]
 tags: [ux, safety, headless, calculate-user-targets, retention, legal]
 sources:
   - "daily/2026-05-17.md"
+  - "daily/2026-05-21.md"
   - "concepts/calc-user-targets-roadmap.md"
   - "concepts/user-data-collection-pattern.md"
   - "migrations/234_calculate_user_targets_age_guards.sql"
 created: 2026-05-17
-updated: 2026-05-17
+updated: 2026-05-21
 ---
 
 # Safety Guard UX Pattern
@@ -292,6 +293,21 @@ Caller пишет event при каждом show / override / resolve. Это **
    - Если `effective_goal_type != original_goal_type` → show tooltip «Цель: <effective> (исходно <original>)».
    - Banner color: red для hard, yellow для soft, blue для informational.
 4. **При detected auto-reset** (например, юзеру стукнуло 18) → отправить one-shot Telegram message «защита снята» + clear из `users.shown_guards`.
+
+### 9b. ⚠️ `effective_goal_type` — обязательно для ЛЮБОГО consumer'а goal (lesson 2026-05-21)
+
+> **Blind spot обнаружен при safety review `services/sage.py`:** после mig 234/246/254 raw `users.goal_type` может расходиться с `effective_goal_type` (pregnancy force-maintain, underage force-maintain, underweight override). Любой consumer, читающий `users.goal_type` напрямую, получает **юзерское намерение**, а не **фактическое поведение формулы**.
+
+**Правило:** любой код, которому нужна **текущая цель юзера для принятия решений** (LLM prompt, UI label, notification copy, cron filter), **ОБЯЗАН** брать `effective_goal_type` из `calculate_user_targets(p_telegram_id, p_save_to_db := FALSE)`, а НЕ из `users.goal_type`.
+
+**Пример опасности:** Sage LLM-комментарий для food log. Sage читает `users.goal_type='lose'` → генерирует «молодец, дефицит удерживаешь!». Но юзерка беременна → формула force-maintain → она НЕ на дефиците → Sage дал **медицински опасный совет** по baseline raw field.
+
+**Исключения (когда raw `goal_type` допустим):**
+- Отображение «Исходная цель: <raw>» в tooltip (явно маркированное как original).
+- Аналитика «сколько юзеров хотели lose vs maintain» (демографика намерений).
+- Setter RPCs (`set_user_goal`) — они пишут намерение юзера, не effective.
+
+**Связь с v_user_context:** `v_user_context` view содержит `goal_type` (raw). Это **by design** — view отражает state, не решение формулы. Consumers которым нужен effective → вызывают `calculate_user_targets` с `p_save_to_db=FALSE` (read-only mode, ~1ms overhead).
 
 ## 10. Reusability — будущие applications
 

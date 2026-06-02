@@ -234,7 +234,7 @@ Fixture в `test_adaptive_modifiers_foundation.py` + `test_v12_personas.py` те
 1. **`ui_screens` schema** — нет `screen_type`/`layout`/`sort_order` полей. Use `render_strategy` + `input_type` (e.g. `'replace_existing'` + `'inline_kb'`). Buttons: `row_index`+`col_index`+`text_key`+`callback_data`+`meta` (NO `sort_order`/`button_label_key`).
 2. **`ui_translations`** — JSONB per language, не key-value rows. Schema: `(lang_code TEXT, content JSONB)`. Для nested keys нужен deep merge или per-key `jsonb_set` с явным созданием parents.
 3. **`user_subscriptions` нельзя DELETE** — FK на `payment_events`. Toggle Premium через UPDATE existing row.
-4. **Canonical entitlement check:** `user_has_active_premium(tid)` RPC (mig 424) — это тир **A** (paid-only). НЕ `user_has_renewable_sub` (см. ниже — «продлится ли», не «есть ли доступ»). Полная матрица 3 предикатов (A paid / B active-incl-trial `user_has_active_access` / C renewability) — KB [[subscription-management-headless]] §«Entitlement predicates — SSOT» (mig 432).
+4. **Canonical entitlement check:** `user_has_active_premium(tid)` RPC (mig 424) — это тир **A** (paid-only). НЕ `user_has_renewable_sub` (см. ниже — «продлится ли», не «есть ли доступ»). Полная матрица 3 предикатов (A paid / B active-incl-trial `user_has_active_access` / C renewability) — KB [[subscription-management-headless]] §«Entitlement predicates — SSOT» (mig 434).
 
    ⚠️ **mig 424 lesson — renewable ≠ entitlement.** До mig 424 гейт стоял на `user_has_renewable_sub(tid)`, который требует `cancelled_at IS NULL`. Юзер, отменивший автопродление но с активным оплаченным доступом (`status='active'`, `cancelled_at` set, `expires_at` в будущем), молча терял adaptive-модификаторы — `applied=FALSE/premium_required`, КБЖУ не пересчитывалось, хотя на экране подписки «Премиум до <дата>». Правильный entitlement-предикат = `status='active' AND payment_method != 'trial' AND expires_at > now()` (отмена НЕ влияет на доступ — KB [[subscription-management-headless]] §«status остаётся active после cancel»). `user_has_renewable_sub` остаётся только для button `visible_condition` (resume/cancel), где «продлится ли» — правильный вопрос. Свапнут в `apply_daily_modifier` + `get_daily_stats_rpc` (mig 348 premium strip).
 - Mig 301 НЕ интегрирован с UI — handlers/menu_v3 read `get_day_summary['adjusted_targets']` появится в Phase 3b+.
@@ -391,7 +391,7 @@ stored values: sleep ∈ {short,okay,great}, stress ∈ {none,moderate,high}. Py
 
 ### mig 330 — Premium-filter + soft mutex
 
-- **Premium-filter:** sleep_checkin / stress_checkin push для active-access юзеров (вкл. trial). Изначально (mig 330) `COALESCE(subscription_status,'free') <> 'free'`; с mig 432 → `user_has_active_access(c.subscription_status)` (тир B, тот же набор premium+trial, поведение-нейтрально). НЕ `user_has_renewable_sub` (исключает trial).
+- **Premium-filter:** sleep_checkin / stress_checkin push для active-access юзеров (вкл. trial). Изначально (mig 330) `COALESCE(subscription_status,'free') <> 'free'`; с mig 434 → `user_has_active_access(c.subscription_status)` (тир B, тот же набор premium+trial, поведение-нейтрально). НЕ `user_has_renewable_sub` (исключает trial).
 - **Soft mutex sleep > meal_morning:** окно meal_morning расширено до [9, 10] local. В 9:00 meal_morning suppressed если Premium юзер pending sleep_checkin. В 10:00 — догоняем. **Один пуш в утренний слот**, не два.
 
 ### mig 331 — stats_main wellbeing entry + hub

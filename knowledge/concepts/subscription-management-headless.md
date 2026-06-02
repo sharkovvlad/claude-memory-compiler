@@ -7,7 +7,7 @@ sources:
   - "Master Blueprint 3.0 §8 Payment / Premium"
   - "concepts/payment-integration.md"
   - "daily/2026-05-21.md (mig 300 Уловка-22 cancel/delete fix)"
-  - "daily/2026-06-02.md (mig 432 entitlement SSOT — user_has_active_access)"
+  - "daily/2026-06-02.md (mig 434 entitlement SSOT — user_has_active_access)"
 created: 2026-05-14
 updated: 2026-06-02
 ---
@@ -182,7 +182,7 @@ Returns JSONB:
 
 **Тесты:** 19 новых (mig 300) + 33 existing = 52/52 PASS.
 
-## 🔥 Entitlement predicates — Single Source of Truth (mig 424 + 432)
+## 🔥 Entitlement predicates — Single Source of Truth (mig 424 + 434)
 
 **Правило:** права доступа считаются ровно ДВУМЯ каноническими предикатами + ОДНИМ
 для кнопок. Никогда не вводи новый ad-hoc `subscription_status = '...'` в RPC-гейте.
@@ -190,7 +190,7 @@ Returns JSONB:
 | Понятие | Канон | Семантика | Реализация | Где |
 |---|---|---|---|---|
 | **A — paid entitlement** | `user_has_active_premium(p_tid bigint)` | оплаченный активный доступ ПРЯМО СЕЙЧАС, **исключает trial**. `cancelled_at` НЕ влияет (отменённый автопродление = ещё есть доступ до `expires_at`) | EXISTS over `user_subscriptions` (`status='active' AND payment_method!='trial' AND not expired`) — live-precise | `apply_daily_modifier`, `get_daily_stats_rpc` (mig 424) |
-| **B — active access** | `user_has_active_access(p_status text)` / `(p_tid bigint)` | активный доступ **включая trial** (`premium` OR `trial`) | text-версия = `COALESCE(status,'free') IN ('premium','trial')`, **IMMUTABLE → инлайнится** (zero-cost). bigint-обёртка делегирует в text | reminder cron, mana, shop, profile, meal-log (mig 432) |
+| **B — active access** | `user_has_active_access(p_status text)` / `(p_tid bigint)` | активный доступ **включая trial** (`premium` OR `trial`) | text-версия = `COALESCE(status,'free') IN ('premium','trial')`, **IMMUTABLE → инлайнится** (zero-cost). bigint-обёртка делегирует в text | reminder cron, mana, shop, profile, meal-log (mig 434) |
 | **C — renewability** | `user_has_renewable_sub` / `user_has_resumable_sub` | «можно ли отменить / возобновить» (требует `cancelled_at IS NULL` / `IS NOT NULL`) — **НЕ entitlement** | EXISTS | ТОЛЬКО button `visible_condition` (resume/cancel) |
 
 ### Смертельный анти-паттерн (баг mig 424)
@@ -217,7 +217,7 @@ Returns JSONB:
 Тонкое расхождение A-предиката (EXISTS-live, проверяет `expires_at>now()`) vs колонка
 `='premium'` — только grace-окно до flip'а cron'ом (≤24ч); A-предикат строже.
 
-### mig 432 — что сведено
+### mig 434 — что сведено
 ВСЕ разрозненные B-хардкоды (`IN ('premium','trial')`, `NOT IN ('free','expired')`,
 `<> 'free'`) → `user_has_active_access(...)` в 6 RPC. + починены 3 несостыковки того
 же класса (trial показывался как free): `recharge_mana_with_coins` (`='premium'` жёг

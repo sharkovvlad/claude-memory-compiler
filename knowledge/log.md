@@ -1,5 +1,145 @@
 # Build Log
 
+## [2026-05-29T18:20:00+03:00] compile | daily/2026-05-25.md
+
+- Source: daily/2026-05-25.md
+- Articles created:
+  - [[concepts/ux-mobile-compact-redesign-sweep]] — UX Mobile Compact Redesign (mig 347-355): 9 migrations in one evening redesigning stats_main/progress_main/profile_main for mobile compact layout. БЖУ Letter→Icon→X/Y pattern, ±10% macro corridor indicator, premium-hide line pattern (3 surfaces), checkmark daily_metrics extension (mig 347), Profile v2 inline layout (mig 355). 2 bug-fix PRs (#193 stress_high TypeError, #194 Sage fog-prompt regression).
+- Articles updated:
+  - [[concepts/adaptive-modifiers-architecture]] — Added §"Phase 3d — Luteal Cycle Tracking (mig 334-335)": `phase_from_cycle_day` SQL helper, auto-disable cycle on maternal flags, single-callback save pattern (`cmd_save_cycle_<offset>`), 2 screens (cycle_tracking_intro + setup), cron `luteal_morning` @ 08:00 local, widget via get_day_summary reuse, anti-RPP reframe i18n × 13 langs. Added §"Sprint stabilization (mig 330-333)": Premium-filter for cron push (sleep/stress only paid), soft mutex sleep>meal_morning, wellbeing hub screens (wellbeing_today + teaser), **CRITICAL fix** `cron_notifications.reminder_sleep_checkin` NULL × 13 langs, 😤→🌀 swap, RU/UK gender-leak fix, AR bidi. Phase 3 roadmap table → ALL DONE. Status updated.
+  - [[concepts/sage-food-log-llm-integration]] — Added §"Fog-prompt regression fix (PR #194)": `handle_ai_input` + `_handle_edit_meal_input` silent empty envelope for `is_food=False` → now resolves `errors.ai_not_food`/`ai_failed` with variant pick + icon substitution. Sources extended.
+  - [[concepts/my-day-llm-insight]] — Added §"System prompt length reduction (mig 349)": 100-250→80-150 chars × 13 langs per-lang rewrite. Sources extended.
+- Already compiled by inline agents / existing concepts:
+  - [[concepts/claim-vs-check-idempotency-anti-pattern]] — PR #177 hotfix already fully documented in existing concept (created during 2026-05-25 session).
+  - [[concepts/premium-hide-line-pattern]] — mig 343/348/353/354 pattern already documented (created during 2026-05-25 session).
+  - [[concepts/checkmark-prefix-pattern]] — mig 347 `current_value_source='daily_metrics'` already documented in existing concept.
+  - [[concepts/double-emoji-button-anti-pattern]] — mig 360 recovery context already documented.
+- Skipped (minor operational):
+  - KB cleanup session (Phase 1-3) — meta-knowledge about KB organization, already executed directly on index.md.
+  - PR #178 smoke test retry — CI tweak, not architecture.
+  - Timezone debugging lesson — operational, documented in daily only.
+  - Subagent i18n workflow lesson — process optimization, not code pattern.
+
+## [2026-05-29T14:35:00+03:00] compile | daily/2026-05-24.md
+
+- Source: daily/2026-05-24.md
+- Articles created:
+  - [[concepts/my-day-llm-insight]] — Cache-on-write LLM insight для stats_main. 10-enum day_status tone anchor, prompt guardrails (4 logic rules preventing LLM contradicting payload), _normalise_day_summary nested-shape fix (P0). cache lifecycle (write on food log, read on view, 4h TTL + locale match). PR #164 mig 319-320, PR #166 mig 322, PR #167 mig 323.
+  - [[concepts/meals-picker-two-stage]] — 2-stage meal edit/delete flow: meals_picker (dynamic per-meal buttons) → meal_action (edit/delete/back). Parametric `cmd_select_meal_<uuid>` callbacks, template_engine `text` field extension, ownership-checked RPCs, Python interceptors in menu_v3. PR #168 mig 324. Plus gotcha cascade: meta copy trap (PR #165), visible_condition widening (mig 322), deploy ordering lesson (mig 324 breaking applied before Python deploy → 30min dead button).
+- Articles updated:
+  - [[concepts/sage-food-log-llm-integration]] — Added §"Sage v3 — timeout fix + emoji rollback + always-fallback (2026-05-24)": timeout 2.5→5s hot-flip, `pick_food_log_fallback` always-render pattern, tg-emoji→unicode rollback (😏/🤩/🤨/🧘‍♂️), `persist_as_menu=False` kwarg for food card One-Menu fix, My Day insight integration cross-ref. Custom emoji IDs marked REPLACED.
+- Already compiled by inline agents during sessions (verified in existing articles):
+  - [[concepts/adaptive-modifiers-architecture]] — Phase 3c Stress UX (mig 317) already documented with hybrid modal routing, gate 3c isolation, i18n × 13 langs, 12/12 tests.
+  - [[concepts/hybrid-modal-routing-pattern]] — already exists as standalone concept from this session.
+  - [[concepts/headless-button-creation-gotchas]] — gotchas 4 (meta copy trap, mig 318) and 5 (visible_condition widening, mig 322) already documented.
+  - [[concepts/migration-deploy-ordering]] — already exists as standalone concept from this session (mig 324 trap).
+  - [[concepts/pre-migration-discovery-recipe]] — LLM payload normaliser gotcha (mig 322), timezone gotcha (mig 329), deploy ordering gotcha (mig 324) all already in existing gotchas table.
+- Skipped (minor operational):
+  - PR #163 bonus: custom emoji ID pending → replaced by unicode — covered in sage v3 update.
+  - My Day LLM i18n audit (104/104 cells) — operational verification, not architecture.
+  - stats_main template polish `💬 Noms` → `NOMS {emoji}` × 13 langs — cosmetic migration, covered in my-day-llm-insight.
+  - SAGE_MY_DAY_PROMPT logging — debug instrumentation, not pattern.
+
+## [2026-05-29T11:24:16+03:00] compile | daily/2026-05-23.md
+
+- Source: daily/2026-05-23.md
+- Articles created: (none — concepts extend existing articles)
+- Articles updated:
+  - [[concepts/sage-food-log-llm-integration]] — Added §"Sage v2 — JSON mode + emotion→emoji + macros focus (2026-05-23)": PR #160 (mig 314) JSON response_format, EMOTION_TO_EMOJI dict with tg-custom-emoji-ids, `_compute_macros_focus()` helper (High Protein/Carbs/Fat/Balanced/Low Calories), expanded `_build_user_prompt` (local time, meal phase, diet, notifications_mode, silent context), tamagotchi_stage removed from prompt, `_MAX_OUTPUT_CHARS` 200→280, mig 314 header prefix swap × 13 langs. PR #161 (mig 315): Noms v2 fallback phrases × 13 langs (5 variations each, "neurons overloaded" brand voice). Hot DB tuning: temperature 0.9→0.7, max_tokens 80→300. 60 tests. Deferred: Pet tone variation CANCELLED, custom emoji IDs pending owner.
+- Skipped (already compiled by inline agents into existing KB):
+  - Mig 310 Phase 3b Sleep Modifier UX — already documented in [[concepts/adaptive-modifiers-architecture]] §"Phase 3b" during 2026-05-23 session. Covers: Premium gate writer-side pivot, free-tier lifestyle logging, maternal supportive banner, sleep_checkin screen, set_user_sleep_quality wrapper, cron reminder sleep_checkin branch, i18n × 13 langs (15 keys), waist_retrofit cron fix, 12/12 tests, p95 183ms.
+
+## [2026-05-29T11:19:00+03:00] compile | daily/2026-05-22.md
+
+- Source: daily/2026-05-22.md
+- Articles created:
+  - [[concepts/sage-food-log-llm-integration]] — First OpenAI call in NOMS: gpt-4o-mini Sassy Sage one-liner after food log. services/sage.py (407 LOC), 5 safety paths (РПП/maternal/underage/underweight/editing), pre-baked deterministic fallback, asyncio parallel + wait_for timeout, cost $0.70/мес. Timeout calibrated 1500→2500ms via hot-flip. PR #156, mig 312.
+- Articles updated:
+  - [[concepts/ton-api-v3-forward-payload-boc]] — Added §"TX Hash Normalization (mig 302-303)": base64 vs hex encoding mismatch caused cascading TON payment duplicates. 3-level dedup (L1 `_normalize_tx_hash` → L2 RPC pre-check → L3 DB UQ index). Canonical format = lowercase hex. Mig 303 cleanup non-canonical records.
+  - [[concepts/payment-idempotency-pattern]] — Added §"4. TON blockchain dedup (tx-hash-level)": 4th idempotency layer for TON with `external_charge_id` + normalize + partial UQ. Cross-ref to ton-api-v3 KB article.
+- Skipped (minor operational, no KB-worthy concept):
+  - Migration collision 296→300 renumber — process documented in migration-collision-guard, no new pattern.
+  - TON cron alert timing vs deploy — operational observation, not architecture.
+  - Payment cancel/resume 7 Q&A — covered by existing subscription-management-headless.
+  - Manual test plan for payment — operational checklist, not architecture.
+
+## [2026-05-28T18:30:00+03:00] compile | daily/2026-05-21.md
+
+- Source: daily/2026-05-21.md
+- Articles created: (none — all major concepts from 21.05 already captured by inline agents during sessions)
+- Articles updated:
+  - [[concepts/subscription-management-headless]] — Added §"Mig 300 — Уловка-22 cancel/delete fix (2026-05-21)": 3 SQL helper functions (`user_has_renewable_sub`, `user_has_cancellable_sub`, `user_sub_is_trial`), 5 conditional buttons via visible_condition, cancel_confirm screen, Python handler с Stripe API call FIRST, `delete_user_account` v2 (silent cancel trials, paid blocker with cancelled_at check), Stripe Customer Portal endpoint, resume flow, webhook `customer.subscription.updated`. TODO #1 marked DONE.
+  - [[concepts/safety-guard-ux-pattern]] — Added §9b "effective_goal_type — обязательно для ЛЮБОГО consumer'а goal (lesson 2026-05-21)": blind spot discovered during Sage safety review — raw `users.goal_type` может расходиться с effective после mig 234/246/254 guards. Rule: any consumer needing current goal MUST use `calculate_user_targets(p_save_to_db=FALSE)`, not raw field. Exception: display/analytics. Link to v_user_context VIEW design.
+- Already compiled by inline agents (verified, no gaps found):
+  - [[concepts/architecture-registry]] — Updated 2026-05-21 ✓. 3 workflows (02_Onboarding_v3, 02.1_Location, 10_Payment) DELETED from n8n SQLite + executeWorkflow refs cleaned in 01_Dispatcher/04_Menu/04_Menu_v3. Граф вызовов очищен. State: 6 active + 1 inactive.
+  - [[concepts/n8n-data-flow-patterns]] — Updated 2026-05-21 ✓. Lesson: DELETE workflow blocked by `workflow_published_version` FK (RESTRICT) in n8n 2.17.7. Cleanup recipe (backup + DELETE from published tables + retry API DELETE).
+  - [[concepts/adaptive-modifiers-architecture]] — Created 2026-05-21 ✓. Phase 3a foundation (mig 301): `daily_modifiers` table, `apply_daily_modifier` RPC with 4 clinical safety gates (РПП/cachexia, teen stress block+escalate, maternal exclusion, opt-in), `compute_daily_modifier_stack` engine, age-aware sleep deltas, headless reason i18n_key pattern. 16/16 tests. p95 116ms.
+  - [[concepts/ton-api-v3-forward-payload-boc]] — Created 2026-05-21 ✓. TON API v3 `forward_payload` shape change (dict→base64 BoC string). `_extract_memo` with 3 fallback paths.
+  - [[concepts/visible-condition-business-data-gotcha]] — Created 2026-05-21 ✓. `render_screen` visible_condition evaluates only `public.users` columns. Canonical pattern: SQL STABLE function.
+  - [[concepts/calc-user-targets-test-spreadsheet]] — Already had v8 golden test cases. v11 personas integration test (12 personas, mig 291/292/295 cross-product coverage) lives in `tests/integration/test_v11_personas.py` + `tools/personas_v11.py`.
+  - [[concepts/calc-user-targets-roadmap]] — Already had P2.4 Phase 3a DONE.
+  - [[concepts/payment-idempotency-pattern]] — Already covered Stripe webhook dedup + Stars UQ + pre-checkout guard.
+- Skipped (minor operational, no KB-worthy concept):
+  - n8n snapshot archival (3 JSON files saved to `n8n_workflows/`) — operational backup, not pattern.
+  - Migration collision 296→300→301 renumbering — process documented in migration-collision-guard.
+  - v_user_context VIEW drift (13 missing columns) — observation noted in safety-guard-ux-pattern §9b context; full VIEW refresh deferred to mig 296 follow-up.
+  - Sage food_log personality plan review (parallel agent) — review notes, no code shipped; lessons captured in safety-guard-ux-pattern §9b.
+  - `/paysupport` mandatory endpoint — small operational detail in mig 300, not standalone pattern.
+  - Stripe Customer Portal activation manual steps — operational, not architecture.
+- Note: Daily 2026-05-21 covers 4 major workstreams: (1) **n8n cleanup** (3 deactivated workflows deleted, 7 dangling refs cleaned), (2) **v11 personas integration test** (12 cross-product personas, P1 Accuracy trilogy cement), (3) **Payment P0 launch blockers** (mig 300: 6 fixes including Уловка-22, TON BoC parsing, visible_condition gotcha, Stripe double-charge pre-check), (4) **Phase 3a Adaptive Modifiers** (mig 301: daily_modifiers table + 4 RPCs + 4 clinical gates + 16 tests). Most architecture-level content self-compiled by session agents into 6+ KB articles.
+
+## [2026-05-27T00:35:00+03:00] compile | daily/2026-05-20.md
+
+- Source: daily/2026-05-20.md
+- Articles created:
+  - [[concepts/i18n-rpc-audit-pattern]] — Lesson: при i18n-rollout'е scan pg_proc отдельно от ui_translations JSONB. Mig 285 (streak food-log 2 ключа × 13) + mig 286 (4 RPCs cleanup 23 ключа × 13 = 299 entries). Phase 4 i18n cleanup полностью завершён. Scan recipe (Cyrillic-in-literal regex), fix pattern (SELECT from ui_translations in RPC), taxonomy decisions.
+  - [[concepts/food-log-python-cutover]] — Stage 7a: food log confirmation rendering migration n8n→Python. 4-PR phased cutover (A: SQL translations+RPC, B: Python handler+endpoint, C: n8n wiring+flag flip, D: 5 runtime iterations). First callback endpoint n8n→Python (`/internal/food_log/render`). Docker bridge gotcha, systemd drop-in, n8n cross-branch scope rule, legacy callback routing fix.
+- Articles updated:
+  - [[concepts/personalized-macro-split]] — Added v9 (mig 291 vegan DIAAS multiplier 1.00/1.10/1.25), v10 (mig 292 Schofield/Molnar/Lührmann BMR switch), v11 (mig 295 RFM+Katch-McArdle+waist, Брока ликвидирована). P1 Accuracy sprint closed.
+  - [[concepts/nlm-sync-infrastructure]] — Added Upload-First Refactor section (2026-05-20): old delete-first→upload-first order change across all 3 sync layers, failure mode matrix, delta-delete pattern.
+- Already compiled by inline agents (verified, no gaps found):
+  - [[concepts/docker-bridge-networking-pattern]] — Created 2026-05-20 ✓. ECONNREFUSED bridge gateway 172.18.0.1.
+  - [[concepts/systemd-dropin-override-pattern]] — Created 2026-05-20 ✓. Persistent override survives deploy.
+  - [[concepts/payment-idempotency-pattern]] — Updated ✓. PR #134 merged (Stripe webhook dedup + Stars UQ + pre-checkout guard + referral parity).
+  - [[concepts/safety-guard-ux-pattern]] — Already had §2b touch point #5 status ✅ (mig 289 auto-resolve cron).
+  - [[concepts/calc-user-targets-roadmap]] — Already had P1.2/P1.5/P2.1-2.3 DONE with mig details.
+  - [[concepts/nlm-sync-infrastructure]] — Already had transient SOURCE_ID throttle section (3-level defense).
+- Skipped (minor operational, no KB-worthy concept):
+  - Mig 289 safety guard auto-resolve cron details — covered by safety-guard-ux-pattern §2b + safety-center-implementation-plan.
+  - Mig 293 food-log title colon fix — covered in food-log-python-cutover PR D.
+  - Payment P0 sprint PR #134 merge details — covered by existing payment-idempotency-pattern.
+  - NLM sync rescue operational steps — covered by nlm-sync-infrastructure update.
+  - Snapshot cleanup (27 stale tables dropped) — operational, no pattern.
+- Note: Daily 2026-05-20 is the densest production day in project history — 10 sessions, 12+ migrations (285-295), 8+ PRs, 3 sprints running parallel (Phase 4 i18n cleanup, P1 Accuracy trilogy, food log cutover Stage 7a). Most architecture-level content captured in 2 new concepts + 2 updates.
+
+## [2026-05-26T21:00:00+03:00] compile | daily/2026-05-19.md
+
+- Source: daily/2026-05-19.md
+- Articles created: (none — all major concepts created by inline agents during 19.05 sessions)
+- Articles updated:
+  - [[concepts/safety-center-implementation-plan]] — Added full Execution Log: B1-A (mig 274, PR #113), B1-B (mig 276, PR #117), B1-B hotfix (mig 277, PR #119), B1-B Bug 2 (mig 281), B2 rollout (mig 282), decommission (mig 283), B3 per-guard modal (mig 284, PR #125). 5 key technical lessons: CREATE OR REPLACE signature overload, visible_condition SQL EXECUTE, STABLE memoization, static buttons + visible_condition pattern, screen_id 63-char constraint. Latency post-B3: my_plan p50=77ms, safety_center p50=123ms. Status: plan→execution→live in 2 days. All 4/5 touch points closed.
+- Already compiled by inline agents (verified, no gaps found):
+  - [[concepts/tls-caddy-nomsbot]] — Created 2026-05-19 ✓. Caddy + LE on `nomsbot.com`, FastAPI loopback 127.0.0.1:8443, LE auto-renewal, ACME HTTP-01 challenge.
+  - [[concepts/n8n-sqlite-docker-cp-trap]] — Created 2026-05-19 ✓. `docker cp` ownership trap, SQLITE_READONLY crash loop 1+ hour, fix via chown + 3 correct patterns.
+  - [[concepts/telegram-invoice-constraints]] — Created 2026-05-19 ✓. `editMessageText` silently rejected on invoice, `deleteMessage` works, glue Back in reply_markup + delete+send_new pattern.
+  - [[concepts/docker-bridge-networking-pattern]] — Created 2026-05-20 ✓. Container→host ECONNREFUSED, bridge gateway IP 172.18.0.1, 0.0.0.0 bind.
+  - [[concepts/systemd-dropin-override-pattern]] — Created 2026-05-20 ✓. Persistent service config via drop-in override, survives main unit revert/rsync.
+  - [[concepts/nlm-sync-infrastructure]] — Updated 2026-05-19 ✓. SSH tunnel for n8n backup, git pull before code sync, full NLM resync procedure (3 layers 212 sources), transient SOURCE_ID throttle 3-level defense.
+  - [[concepts/release-protocol]] — Updated 2026-05-19 ✓. Lesson: stale-base phantom deletions 5+ recurrence in single long session (PR #106/#108/#115/#121).
+  - [[concepts/architecture-registry]] — Updated (payment now Python authoritative, handler_payment_use_python flipped, 10_Payment active=0, pre_checkout/successful_payment безусловно Python).
+  - [[concepts/payment-idempotency-pattern]] — Updated ✓. Stripe live keys on VPS, webhook endpoint on nomsbot.com.
+  - [[concepts/safe-create-or-replace-recipe]] — Already had signature-change gotcha (mig 224 lesson 2026-05-14). B1-B mig 276 re-confirmed same lesson with build_safety_pill_block.
+  - [[concepts/visible-condition-business-data-gotcha]] — Already had canonical pattern. B3 confirmed `has_active_safety_guards(u.telegram_id)` in visible_condition works.
+  - [[concepts/safety-guard-ux-pattern]] — Already had §2b with mig 284 touch point #4 status ✅.
+- Skipped (minor operational, no KB-worthy concept):
+  - Mig 278 pet persona cleanup (39 i18n entries) — phantom «Pet» entity removed, no new pattern beyond existing ui-translations-bulk-update-recipe.
+  - NLM full resync operational steps — covered in nlm-sync-infrastructure.
+  - n8n infra strategy discussion (session 14:38) — no new code/decision, discussion about self-host vs Python migration (already documented in n8n-selfhost-migration).
+  - B1-B number collision (mig 275→276, mig 277→278) — process documented in migration-collision-guard.
+  - Stripe Checkout open test (no actual payment) — pre-production verification, no architecture.
+  - Parallel subagent delegation pattern (session 4 note) — good practice but not a new concept.
+- Note: Daily 2026-05-19 is an execution-heavy day — 5 sessions spanning NLM infra, Safety Center B1-A/B1-B/B2/B3, TLS migration, Stripe live, Stage 6 payment cutover, n8n SQLITE incident. Most content self-compiled by session agents into 8+ KB articles. Primary compilation gap was Safety Center execution tracking (plan existed, results didn't).
+
 ## [2026-05-23T21:45:00+03:00] compile | daily/2026-05-18.md
 
 - Source: daily/2026-05-18.md

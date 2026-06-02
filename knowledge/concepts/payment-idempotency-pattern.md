@@ -5,7 +5,7 @@ tags: [payments, stripe, telegram-stars, idempotency, webhooks]
 
 # Payment Idempotency Pattern
 
-**Status:** captured 2026-05-20 после PR #134 (post-first-live-payment audit). Покрывает три ортогональные idempotency-проблемы которые открылись после первого live Stripe платежа.
+**Status:** captured 2026-05-20 после PR #134 (post-first-live-payment audit). Покрывает **четыре** ортогональные idempotency-проблемы: Stripe webhook dedup, Stars charge dedup, pre-checkout active-premium guard, TON tx-hash dedup (mig 302-303, added 2026-05-22).
 
 > **Source of truth:** `migrations/290_payment_idempotency.sql`, `webhook_server.py` (handlers `checkout.session.completed` / `invoice.paid` / `successful_payment` / `pre_checkout_query`), audit `/tmp/payment-ux-audit-2026-05-20.md`.
 
@@ -25,7 +25,7 @@ tags: [payments, stripe, telegram-stars, idempotency, webhooks]
 
 ---
 
-## Три слоя защиты
+## Четыре слоя защиты
 
 ### 1. Stripe webhook dedup (event-level)
 
@@ -149,6 +149,35 @@ async def test_stripe_duplicate_webhook_no_double_grant():
 4. **DELETE FROM stripe_webhook_events at end of handler** — наоборот, ОСТАВЛЯТЬ rows как audit trail. Цена 1 row = ~50 bytes; даже 100k webhook'ов в год = 5 MB.
 5. **Pre-checkout `ok=True` always** — Telegram автоматически отвечает `True` если мы не ответили в 10s, но если мы вернули `ok=False` неправильно — деньги списались. Логика: проверка state ДО `answer_pre_checkout_query(ok=True)`, на ошибку — `ok=False, error_message=<i18n>`.
 
+### 4. TON blockchain dedup (tx-hash-level, mig 302-303, 2026-05-22)
+
+**Проблема:** TON cron (`TonPaymentCheckerCron`) опрашивает блокчейн каждые 5 минут. Та же транзакция может вернуться в нескольких последовательных poll'ах. Без dedup — каждый poll создаёт новую подписку.
+
+**Дополнительный encoding-gotcha:** TON API v3 отдаёт `transaction_hash` в base64, а manual backfill (через tonviewer) записывал в hex. Одна и та же транзакция — разный encoding → dedup не сматчил → **каскадное дублирование** подписок.
+
+**Решение:** 3-уровневая защита:
+
+1. **L1 — `_normalize_tx_hash()`:** нормализует любой формат (base64/hex/mixed-case) к canonical lowercase hex ПЕРЕД сравнением/INSERT.
+2. **L2 — RPC pre-check:** `process_ton_payment` v0.5 проверяет `EXISTS(WHERE external_charge_id = p_normalized_hash)`.
+3. **L3 — DB partial UQ:** `CREATE UNIQUE INDEX uq_payment_events_external_charge ON payment_events(external_charge_id) WHERE external_charge_id IS NOT NULL`.
+
+```python
+@staticmethod
+def _normalize_tx_hash(raw: str) -> str:
+    if not raw: return ""
+    raw = raw.strip()
+    if re.fullmatch(r'[0-9a-fA-F]+', raw) and len(raw) % 2 == 0:
+        return raw.lower()  # already hex
+    try:
+        return base64.b64decode(raw, validate=False).hex()
+    except Exception:
+        return raw.lower()
+```
+
+**Lesson:** при сохранении идентификаторов из внешних API **всегда канонизировать encoding**. base64/hex mismatch — один из самых коварных dedup-breakers, потому что оба значения выглядят «валидными» и INSERT проходит без ошибок.
+
+Полные детали: [[concepts/ton-api-v3-forward-payload-boc]] секция «TX Hash Normalization».
+
 ---
 
 ## Cross-refs
@@ -156,6 +185,8 @@ async def test_stripe_duplicate_webhook_no_double_grant():
 - [[concepts/payment-integration]] — high-level payment UX (tier picker, regional pricing).
 - [[concepts/architecture-registry]] — payment в Python authoritative с 2026-05-19.
 - [[concepts/telegram-invoice-constraints]] — `editMessageText` silently rejected на invoice (другой gotcha).
+- [[concepts/ton-api-v3-forward-payload-boc]] — TON-specific: BoC parsing + hash normalization (mig 300 + 302-303).
 - [[concepts/save-bot-message-contract]] — one-menu pattern, separate.
-- `migrations/290_payment_idempotency.sql` — SQL spec.
+- `migrations/290_payment_idempotency.sql` — SQL spec (Stripe + Stars layers).
+- `migrations/302_ton_dedup_external_charge.sql` — SQL spec (TON layer).
 - `handover/2026-05-20_payment_p1_brief.md` — что дальше делать с payment quality (P1 + P2).

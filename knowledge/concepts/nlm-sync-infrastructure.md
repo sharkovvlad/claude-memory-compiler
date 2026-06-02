@@ -99,6 +99,35 @@ source .venv/bin/activate && notebooklm login
 4. Когда single upload работает, перезалить пачку через `batch-add-sources` с `--delay 3.0`. Файлы экспорта в `tmp/` обычно ещё свежие (mtime = сегодняшний), повторный экспорт не нужен.
 5. Verify: `notebooklm source list -n <NB_ID> --json | jq '.sources | length'`.
 
+## Upload-First Refactor (2026-05-20)
+
+После инцидента с SOURCE_ID throttle порядок операций во всех 3 слоях изменён с «delete-first» на **«upload-first»**.
+
+**Старый порядок (опасный):**
+1. Delete старых источников
+2. Upload новых
+3. Если upload fails → данные потеряны до следующего cron
+
+**Новый порядок (resilient):**
+1. Snapshot текущих: `map {entity_name → [old_source_ids]}`
+2. **UPLOAD** новых файлов (с retry внутри `nlm.py`)
+3. **Delta-delete**: удалить ТОЛЬКО старые для entity, чьи новые прошли успешно
+4. Для failed entity — старые сохраняются как rollback fallback
+5. Wait for indexing
+
+Применено к:
+- `noms-supabase-sync/SKILL.md` (DB слой)
+- `noms-n8n-backup/SKILL.md` (n8n слой)
+- `NOMS/scripts/code_to_nlm.py` (code слой — uncommitted, ждёт commit'а git-archive агента)
+
+**Защита от failure modes:**
+
+| Failure mode | Старое | Новое |
+|---|---|---|
+| Single file fail | Старый source удалён → данные потеряны | Старый сохранён, ноутбук consistent |
+| Whole batch fail (throttle) | Все старые удалены, 0 новых → катастрофа | 0 старых удалено, retry at next cron |
+| Partial (3/70 fail) | 3 таблицы пропали | 3 старые сохранены, 67 новых загружены |
+
 ## `NotebookLM+Claude` git-репо: важный нюанс
 
 Локальный git-репо в `/Users/vladislav/Documents/NotebookLM+Claude/.git/` **существует** (80+ коммитов), но **без remote**. Это значит:

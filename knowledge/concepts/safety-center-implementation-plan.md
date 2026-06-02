@@ -8,17 +8,52 @@ sources:
   - "concepts/headless-architecture.md"
   - "migrations/256_extend_banner_injection.sql"
   - "migrations/264_safety_guard_first_trigger_modals.sql"
+  - "daily/2026-05-19.md (B1-A through B3 execution)"
 created: 2026-05-18
-updated: 2026-05-18
-status: approved by owner — execution pending
-estimated: 8-12 dev days, phased
+updated: 2026-05-19
+status: "B0-B3 ALL DEPLOYED (2026-05-19). Touch points 1-4 closed. Tier 5 auto-resolve = separate workstream."
+estimated: 8-12 dev days, phased → actual 2 days (18-19.05)
 ---
 
 # Safety Center — Implementation Plan (Plan B, phased)
 
-> **Status:** owner approved 2026-05-18. Phasing B0→B1→B2→B3 утверждено. Naming `🛡️ Твоя безопасность` утверждено. Сам код пишется в **отдельных миграциях с отдельными PR'ами per phase** — не one big PR.
+> **Status:** ✅ **B0-B3 ALL DEPLOYED** (2026-05-19). Safety Center live on 3 surfaces (my_plan, profile_main, personal_metrics) + per-guard click-to-modal. Touch points 1-4 closed; Tier 5 auto-resolve = separate workstream.
 >
 > **Context:** Plan B chosen из [safety-banner-ux-redesign-2026-05-18](safety-banner-ux-redesign-2026-05-18.md). Rationale: roadmap имеет ≥6 не-implemented guards (RED-S, diet breaks, extreme BMI, vegan protein, ABW obese, athlete phenotype), inline-banners не масштабируются. Mobile-first + headless arch good fit.
+
+## Execution Log (2026-05-18 → 2026-05-19)
+
+| Phase | Mig | PR | Date | Key deliverables |
+|---|---|---|---|---|
+| **B0** | 271 | #113 precursor | 2026-05-18 | my_plan 6→4 buttons, `my_plan_settings` submenu |
+| **B1-A** | 274 | #113 | 2026-05-19 | Dormant foundation: `get_safety_center_data` RPC, `build_safety_pill_block` helper, `safety_center` screen, 13 langs × 2 keys (pill + screen text). 3 sentinels passed. |
+| **B1-B** | 276 | #117 | 2026-05-19 | Integration: extended RPCs с `p_calc`, `has_active_safety_guards` helper, surgical patches 3 business_data RPCs, pill button on my_plan. CREATE OR REPLACE signature-change gotcha caught (DROP first). 6 sentinels passed. p95=187ms local. |
+| **B1-B hotfix** | 277 | #119 | 2026-05-19 | Pill trailing newline fix + `cmd_safety_center` in PROFILE_V5_CALLBACKS router. |
+| **B1-B Bug 2** | 281 | #123 | 2026-05-19 | Hide «Темп» line for ANY maintain (forced + chosen). New `labels.pace_line` key × 13 langs. |
+| **B2** | 282 | #123 | 2026-05-19 | Pill rollout: profile_main + personal_metrics. `{banner_block}` → `{safety_pill_block}` in 3 surface templates × 13 langs. |
+| **Decommission** | 283 | #123 | 2026-05-19 | DROP `build_safety_guard_banner_block` (verified 0 callers). Tech debt снят. |
+| **B3** | 284 | #125 | 2026-05-19 | 10 guard-modal screens (`gm_<family>_<enum>`), static buttons + visible_condition pattern, severity-sorted (hard_block rows 0-3, hard_regulated 4-6, soft_override 7-9). STABLE function memoization confirmed (10× evals = zero penalty). |
+
+### Latency post-B3 (local Mac → EU pooler, ~70ms RTT included)
+
+| Surface | p50 | p95 |
+|---|---|---|
+| my_plan | 77ms | 85ms |
+| profile_main | 85ms | 94ms |
+| personal_metrics | 77ms | 82ms |
+| safety_center | 123ms | — |
+
+### Key technical lessons from execution
+
+1. **`CREATE OR REPLACE FUNCTION` с новым optional parameter = overload, не replace.** Добавление `p_calc JSONB DEFAULT NULL` создало новую перегрузку. Fix: `DROP FUNCTION IF EXISTS <old_signature>` ПЕРЕД `CREATE OR REPLACE`. Lesson added to [[safe-create-or-replace-recipe]].
+
+2. **`visible_condition` evaluation в `render_screen` = SQL fragment под `EXECUTE`.** Условие может вызывать SQL-functions: `has_active_safety_guards(u.telegram_id)` — работает. Прецедент подтверждён в проде.
+
+3. **STABLE function memoization.** PostgreSQL planner memoизирует STABLE function calls в рамках одного query. 10× visible_condition evals через `_user_active_guards_array` = фактически бесплатно. `render_screen('safety_center')` p50=123ms vs `render_screen('my_plan')` p50=149ms — safety_center FASTER despite 10× more button evals.
+
+4. **Static buttons + visible_condition pattern** для dynamic content — clean alternative to render_screen engine extension. Pre-allocate all possible buttons, hide irrelevant via visible_condition. Works for bounded sets (≤20 items).
+
+5. **`screen_id` constraint** (`^[a-z_][a-z0-9_:]{1,62}$`) — max 63 chars. Long enum names require short screen prefixes (`gm_` instead of `guard_modal_`).
 
 ## Phasing overview
 
