@@ -544,3 +544,13 @@ END IF;
 **Тест:** только через `dispatch_with_render` + прогон `template_engine._resolve_text`
 с живыми translations — увидеть ФИНАЛЬНЫЙ текст. render_screen отдаёт text_key +
 template_vars (подстановка Python-side), сырой payload показывает плейсхолдер, а не число.
+
+### Pattern B для TEXT-INPUT (не picker) — edit_waist, mig 438 (2026-06-02)
+
+Pattern B изначально для **picker'ов** (кнопки + save_via_callback, target_screen=self). Для **text-input** edit-экранов (юзер вводит число: талия/вес/рост) механика «stay + live recalc» другая — навигацией после сохранения рулит не `button.meta.target_screen`, а **`workflow_states[status].next_step_code`** (process_user_input text-path, стр.~441):
+
+1. **Stay:** `workflow_states.<edit_status>.next_step_code = '<edit_status>'` (само-петля) + **сеттер НЕ advance статус** (`v_next_status := v_current_status`). После ввода status остаётся в edit-режиме → re-render того же экрана с пересчётом. (Если сеттер пишет 'registered' И next_step_code='registered' — будет прыжок в родителя = старый UX.)
+2. **Live recalc-строка:** `business_data_rpc=get_my_plan_business_data` + `text_key` с `{target_protein_g}`/`{target_calories}`. Reuse Sage-тон: `waist_question_edit = waist_question || E'\n\n' || split_part(diet_question_edit, E'\n\n', 2)` — не нужна новая L1-копия.
+3. **[Назад] ОБЯЗАТЕЛЬНА** (на text-input экране её часто забывают — у edit_waist было 0 кнопок!): `cmd_back`, `meta={clear_status:true, target_screen:'<родитель>'}`. Без неё передумавший юзер заперт в text-input (любой текст уходит в сеттер).
+
+**Durable урок (owner 2026-06-02):** text-input edit-экран = picker по части UX. ВСЕГДА: (а) кнопка [Назад] с clear_status; (б) Pattern B stay (next_step_code=self + setter no-advance) + live recalc-строка; (в) проверять e2e через `dispatch_with_render` (клик→ввод→Назад), а не только сеттер. edit_waist (mig 438) — канонический пример.
