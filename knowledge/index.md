@@ -1,6 +1,6 @@
 # Knowledge Base Index
 
-> **Re-organized 2026-05-25** — 128 concepts, 11 domains. Foundational hubs marked 🔥, legacy/superseded/duplicate 🏛, stale 💤.
+> **Re-organized 2026-05-25** — 130 concepts, 11 domains. +1 (food-recognition-prompt-lab, 2026-06-02). Foundational hubs marked 🔥, legacy/superseded/duplicate 🏛, stale 💤.
 > Каждый non-ACTIVE файл имеет `> ⚠️ status: ...` баннер сверху. История компиляции — `log.md`.
 
 ## ⛔ ОБЯЗАТЕЛЬНО перед EOS — Session Close Discipline
@@ -19,7 +19,7 @@
 
 | Status | Count | Что значит |
 |---|---|---|
-| ✅ active | 99 | Живой код / упомянуты в недавних daily |
+| ✅ active | 100 | Живой код / упомянуты в недавних daily |
 | 🔥 HUB | 12 | Foundational, ≥5 refs/30d, читать первыми (+5 from 2026-05-29: memory-claim-vs-live, npc-bots-users-table, stage7-global-cutover, cycle-tracking-ux-and-accuracy, **session-close-discipline**) |
 | 🏛 legacy-n8n | 9 | n8n-механика, фича мигрирована в Python |
 | 🏛 superseded | 5 | Заменён более новым файлом, см. → pointer |
@@ -52,6 +52,7 @@
 | **Aggregate по `users` / counts / engagement** | 🔥 `npc-bots-users-table` — ВСЕГДА `WHERE is_bot=false`, иначе 119 NPC ботов искажают цифры на ≈30% |
 | **MEMORY/handover claim → verify перед действием** | 🔥 `memory-claim-vs-live-verification` (2026-05-29 Stage 7 case), `pre-migration-discovery-recipe` |
 | **AI Engine cutover / Stage 7 history** | `stage7-global-cutover` (mig 299→373, canary→global blueprint + monitoring metrics) |
+| **Качество vision-распознавания / prompt improvement** | `food-recognition-prompt-lab` — текущие промпты v3, дефекты (схлопывание, пропуск тарелок), варианты патча, дизайн eval golden-set, gotcha _prompt_cache |
 | **🚨 ПЕРЕД EOS («готово») — обязательный self-check** | 🔥 `session-close-discipline` — 5-step checklist (daily / handover / KB / MEMORY / size), real failure cases, anti-patterns. **Owner-flagged 29.05: каждая новая сессия = 20-40мин на разбор завалов.** |
 | **Cycle tracking UX / luteal accuracy** | 🔥 `cycle-tracking-ux-and-accuracy` (Phase 3d, 4 design risks closed mig 375 — Decisions implemented section + historical context) |
 
@@ -163,6 +164,7 @@ _11 files · 61 incoming refs (30d)_
 - [[sage-food-log-llm-integration]] — Sassy Sage LLM one-liner (gpt-4o-mini) после каждого food log. Первый OpenAI call в NOMS. 5 safety paths, pre-baked fallback, asyncio parallel + timeout. PR #156, mig 312. **v2 (23.05):** JSON mode, emotion→tg-emoji, macros focus, fallback × 13 langs (mig 314-315). **v3 (24.05):** timeout 5s, always-fallback, emoji rollback unicode, persist_as_menu fix.
 - [[my-day-llm-insight]] — My Day LLM Insight — cache-on-write gpt-4o-mini insight для stats_main. 10-enum `day_status` tone anchor, prompt guardrails (4 rules), normaliser shape fix. PR #164 mig 319-320, PR #166 mig 322, PR #167 mig 323.
 - [[meals-picker-two-stage]] — 2-stage meal edit/delete flow (meals_picker → meal_action). Dynamic per-meal buttons, parametric `cmd_select_meal_<uuid>`, 4 RPCs. PR #168 mig 324.
+- [[food-recognition-prompt-lab]] — Текущие промпты GPT-4o vision/text/recalculate (v3, mig 336), каталог дефектов качества (схлопывание позиций, пропуск тарелок, нестабильные макросы), варианты промпта для теста, дизайн оффлайн eval golden-set, `_prompt_cache` gotcha (нет hot-reload → нужен restart noms-webhooks).
 
 ## ✍️ Copywriter & i18n (13 langs)
 
