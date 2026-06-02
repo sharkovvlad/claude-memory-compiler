@@ -161,6 +161,7 @@ _11 files · 61 incoming refs (30d)_
 - [[python-telegram-adapter]] — Python Telegram Adapter — Replacing Telegram Trigger in n8n
 - [[webhook-server-async-patterns]] — Webhook Server Async Patterns — concurrency + performance
 - [[food-log-python-cutover]] — Stage 7a — food log confirmation rendering migration from n8n to Python (4 PRs, 5 n8n iterations, first callback endpoint)
+- [[content-type-routing-gotchas]] — Content-type routing gotchas: image/* document (desktop «как файл») → vision AI, message.audio → transcription, junk→messages.spam_protect reuse (уже ×13 в БД), полный список junk-типов. PR #294.
 - [[sage-food-log-llm-integration]] — Sassy Sage LLM one-liner (gpt-4o-mini) после каждого food log. Первый OpenAI call в NOMS. 5 safety paths, pre-baked fallback, asyncio parallel + timeout. PR #156, mig 312. **v2 (23.05):** JSON mode, emotion→tg-emoji, macros focus, fallback × 13 langs (mig 314-315). **v3 (24.05):** timeout 5s, always-fallback, emoji rollback unicode, persist_as_menu fix.
 - [[my-day-llm-insight]] — My Day LLM Insight — cache-on-write gpt-4o-mini insight для stats_main. 10-enum `day_status` tone anchor, prompt guardrails (4 rules), normaliser shape fix. PR #164 mig 319-320, PR #166 mig 322, PR #167 mig 323.
 - [[meals-picker-two-stage]] — 2-stage meal edit/delete flow (meals_picker → meal_action). Dynamic per-meal buttons, parametric `cmd_select_meal_<uuid>`, 4 RPCs. PR #168 mig 324.
