@@ -222,8 +222,10 @@ Returns JSONB:
 `<> 'free'`) → `user_has_active_access(...)` в 6 RPC. + починены 3 несостыковки того
 же класса (trial показывался как free): `recharge_mana_with_coins` (`='premium'` жёг
 коины trial-юзеру), `get_shop_rpc.is_premium`, `get_progress_rpc` mana-display.
-**НЕ тронуто (boundary):** `cron_regenerate_mana` (`!='premium'` — тир A, замена = grace
-behavior-change, отдельное решение), button `visible_condition` (UI render-слой),
+**НЕ тронуто (boundary):** `cron_regenerate_mana` (`!='premium'` — тир A; **owner-решение
+2026-06-02: оставляем как есть НАМЕРЕННО** — крон регенерирует ману trial-юзерам в фоне,
+чтобы к концу триала шкала была полной = мягкая посадка в free; отключение дало бы 0 маны
+в момент даунгрейда = негатив), button `visible_condition` (UI render-слой),
 writers (`activate/renew/expire` пишут колонку). `replace_meal` был blacklist
 (`NOT IN ('free','expired')`) — переведён на whitelist-предикат (сегодня эквивалентно,
 убирает скрытую рассинхронизацию blacklist vs whitelist).
