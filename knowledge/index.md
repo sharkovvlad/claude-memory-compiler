@@ -33,6 +33,7 @@
 | Если задача про... | Сначала прочитай (🔥 = foundational hub) |
 |---|---|
 | **Новый screen / inline UX** | 🔥 `headless-architecture`, `one-menu-ux`, `ui-screens-map`, `headless-button-creation-gotchas` |
+| **Новый/правимый edit-picker (diet/training/goal/…)** | `headless-picker-pattern` — ⭐ **Pattern B = owner-mandated дефолт** (остаться на экране + ✅ переезжает + live-число пересчёта); сеттер ОБЯЗАН парсить `cmd_*`; тест через `dispatch_with_render`, не прямой вызов |
 | **SQL миграция / RPC** | 🔥 `pre-migration-discovery-recipe`, `migration-collision-guard`, `migration-deploy-ordering`, `safe-create-or-replace-recipe`, `jsonb-shallow-merge-antipattern` |
 | **n8n workflow правка** | 🔥 `n8n-data-flow-patterns`, `n8n-subworkflow-contract`, `n8n-selfhost-migration` |
 | **Payment / Stripe / Stars** | `payment-idempotency-pattern`, `payment-integration`, `subscription-management-headless`, `claim-vs-check-idempotency-anti-pattern`, 🔥 `stars-subscriptions-botfather-prereq` (P0 2026-05-28) |
