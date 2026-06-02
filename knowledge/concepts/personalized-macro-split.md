@@ -339,6 +339,77 @@ PR (pending review). Daily: [[daily/2026-05-18]].
 - [[concepts/user-profile-personalization]] — training_type and goal_speed editable from Profile screen
 - [[concepts/edit-picker-dual-render]] — ✅ checkmark pattern для edit пикеров; chk*() helpers; dual render locations
 
+### v9 — mig 291 (2026-05-20): vegan/vegetarian DIAAS protein multiplier
+
+Applied to prod 2026-05-20 evening. `calculate_user_targets v8 → v9`. CASE multiplier поверх baseline + maternal_protein_bonus по diet_type.
+
+| diet_type | multiplier | DIAAS justification |
+|---|---|---|
+| `omnivore` (default) | 1.00 | Reference animal protein |
+| `vegetarian` | 1.10 | ~85% DIAAS (молочка + яйца — полноценные АК) |
+| `vegan` | 1.25 | ~70-80% DIAAS, неполный аминокислотный профиль |
+
+- **Schema:** `users.diet_type TEXT DEFAULT 'omnivore'` CHECK IN (3 enum values).
+- **Multiplier order:** applied **после** maternal_protein_bonus → vegan-pregnant = `(baseline + 25) × 1.25`.
+- **Owner decision:** 3-state enum вместо `is_vegan` BOOLEAN из ТЗ нутрициолога — DIAAS science даёт промежуточный профиль для vegetarian.
+- **Telemetry:** `calculations.diet_type` + `calculations.protein_diet_multiplier`.
+- **UX:** `edit_diet` ui_screen + setter RPC `set_user_diet_type` + 13 langs translations.
+- **Severity:** silent accuracy. Banner НЕТ.
+
+PR [#135](https://github.com/sharkovvlad/noms-bot/pull/135).
+
+### v10 — mig 292 (2026-05-20): age-aware BMR formulas (Schofield/Molnar/Lührmann)
+
+Applied to prod 2026-05-20 evening. Step 4 BMR — CASE switch по age + BMI.
+
+| Case | Formula | Source |
+|---|---|---|
+| `<18 + BMI<30` | **Henry 2005** Schofield-HW | PMID 16277825, SACN 2011 |
+| `<18 + BMI≥30` | **Molnar 1995** | PMID 7562290 |
+| `>75` | **Lührmann 2002** (no-height) | PMID 12111047 |
+| `18..75` | Mifflin-St Jeor (unchanged) | — |
+
+- **Units warning (critical):** Henry в **метрах**, Molnar в **сантиметрах**. Поймано dimensional analysis subagent'ом.
+- **Boundary:** `<18` exclusive, `>75` exclusive. Age=18/75 → Mifflin.
+- **Telemetry:** `calculations.bmr_formula` enum (`mifflin`/`schofield_hw`/`molnar`/`luhrmann`).
+- **Severity:** silent accuracy.
+
+PR [#137](https://github.com/sharkovvlad/noms-bot/pull/137). Подробности — [[concepts/calc-user-targets-roadmap]] §P1.5.
+
+### v11 — mig 295 (2026-05-20): RFM + Katch-McArdle + waist + Брока ликвидирована
+
+Applied to prod 2026-05-20 night. **Формула Брока полностью ликвидирована** (DR §LBM Proxy: «глубоко антинаучный подход»).
+
+- **Schema:** `users.waist_circumference NUMERIC` (см, NULL OK). Validation 40-200 cm.
+- **Step 3 obese branch:** Брока removed. `obese + waist NOT NULL` → RFM math → `target_weight = LBM_kg`. `obese + waist NULL` → `target_weight = actual_weight` (Mifflin path).
+- **Step 4 BMR:** ELSIF `v_lbm_kg IS NOT NULL` → Katch-McArdle (`370 + 21.6 × LBM`).
+- **RFM (Woolcott & Bergman 2018):** Male `BF% = 64 − 20×(H/W)`, Female `BF% = 76 − 20×(H/W)`. Defensive clamp BF% ∈ [5, 60]%.
+- **Priority order BMR:** pediatric → geriatric → **Katch-McArdle** → Mifflin.
+- **UX:** `edit_waist` screen + entry button на `phenotype_result` (visible_condition='obese AND waist IS NULL'). Quiz stays 4-step.
+- **Retrofit cron:** `waist_retrofit` (hour=14 local, phenotype='obese' AND waist IS NULL).
+- **Impact on existing users:** 0 obese users на moment apply → нулевая регрессия.
+
+Sprint P1 Accuracy finale. Подробности — [[concepts/calc-user-targets-roadmap]] §P2.1/P2.2/P2.3.
+
+## 🟡 PROPOSAL — Fix C: goal-aware protein (2026-06-02, НЕ реализовано)
+
+**Статус:** design-only, ждёт owner sign-off. Открыто после owner-теста 417002669 (М, 99 кг, 193 см, цель «похудеть», тренировки «кардио»).
+
+**Проблема.** Белок задаётся ТОЛЬКО по `training_type`: `protein_g_per_kg_cardio=1.4`. Для худеющего (caloric deficit) это **занижено** — доказательная норма при дефиците + тренировках = **1.6–2.2 г/кг** (ISSN position stand; Helms et al. 2014 — верхняя граница при дефиците для сохранения LBM). У owner'а: 1.4×99 = 139 г (21% kcal).
+
+**Каскад на углеводы.** Углеводы = **остаток** после белка и жира (`v_carbs = (kcal − protein_kcal − fat_kcal)/4`). Белок занижен (21%), жир на floor (0.8 г/кг = 27%) → остаток валится в углеводы → **344 г (52%)**. Owner справедливо заметил «углеводы завышены» — это симптом низкого белка, не отдельный баг. Белок 1.8–2.0 г/кг (≈178–198 г) → углеводы сами падают до ~40–45%.
+
+**Жир (79 г) — НЕ трогать.** Floor `fat_min_g_per_kg=0.8` (сработал `floor_triggered_fat`). Научно обоснован (гормоны, жирорастворимые витамины).
+
+**Решение (goal-aware множитель).** Вместо плоского `protein_g_per_kg_<training>` — `max(training-baseline, goal-floor)`:
+- `goal_type='lose'` → protein floor **1.8 г/кг** независимо от типа тренировки.
+- `gain`/`maintain` → текущая training-based логика.
+- Impl: новый `app_constants` `protein_g_per_kg_goal_lose_floor` (hot-reload), `v_protein := GREATEST(ROUND(v_protein_g_per_kg*v_tw), ROUND(goal_floor*v_tw))` в `calculate_user_targets` (после строки ~364, до diet_multiplier ~377).
+
+**Pre-impl обязательно:** (1) NLM-first схема v11 mig 295; (2) digital-twin regression на существующих юзерах — не пробьёт ли `min_kcal_floor` / `carbs_min_g`; (3) РПП-safety gate (рост белка vs underweight/cachexia guards); (4) p95; (5) **отдельный PR/миграция, не смешивать с mig 424**.
+
+**Источники для верификации:** ISSN Protein & Exercise (Jäger 2017); Helms ER et al. (2014); `Разработка алгоритмов питания…md` §макро.
+
 ## Sources
 
 - [[daily/2026-04-10.md]] — Migration 055: 7 new columns, 25 new app_constants, calculate_user_targets v3, set_user_training_type/set_user_goal_speed RPCs, backfill for existing users
@@ -347,3 +418,4 @@ PR (pending review). Daily: [[daily/2026-05-18]].
 - [[daily/2026-04-17.md]] — chk*() helpers расширены на goal/training/activity/gender (оба места: Response Builder + Build Ask Markup)
 - [[daily/2026-05-15.md]] — v4 mig 227: PAL fusion, 'none' coefficients, conditional clamp; digital twin верификация в Google Sheets
 - [[daily/2026-05-16.md]] — v5 mig 230: gender-conditional carbs_min_g floor (women=100, men=50); PR #81; floor-bite боундари через algebra
+- [[daily/2026-05-20.md]] — v9 mig 291: vegan/vegetarian DIAAS multiplier. v10 mig 292: Schofield/Molnar/Lührmann BMR switch. v11 mig 295: RFM + Katch-McArdle + waist + Брока ликвидирована. P1 Accuracy sprint закрыт.
