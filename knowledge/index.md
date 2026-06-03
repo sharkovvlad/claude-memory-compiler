@@ -103,6 +103,7 @@ _31 files · 108 incoming refs (30d)_
 - [[one-time-attach-pattern]] — One-Time Attach Pattern (Reply-Keyboard Lifecycle)
 - [[picker-unification-strategy]] — Picker Unification Strategy (Onboarding ≡ Edit Profile)
 - [[reaction-on-param-save-ux]] — UX-паттерн: реакция бота на изменение параметров пользователя
+- [[reply-keyboard-lifecycle]] — Все события attach/detach/revive reply-kb одним списком + WONTFIX re-attach на food-log (полагаться на чек-ины mig374 + /start mig182; крон-пуши НЕ привязывают)
 - [[reply-keyboard-routing-pattern]] — Reply-Keyboard vs Inline Callback Routing — Two-Path Architecture
 - [[save-bot-message-contract]] — save_bot_message Contract — обязательство для всех воркфлоу
 - [[soft-delete-account]] — Soft Delete Account (GDPR-safe)
