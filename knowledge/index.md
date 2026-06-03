@@ -1,6 +1,6 @@
 # Knowledge Base Index
 
-> **Re-organized 2026-05-25** — 130 concepts, 11 domains. +1 (food-recognition-prompt-lab, 2026-06-02). Foundational hubs marked 🔥, legacy/superseded/duplicate 🏛, stale 💤.
+> **Re-organized 2026-05-25** — 130 concepts, 11 domains. +1 (food-recognition-prompt-lab, 2026-06-02). +1 (content-type-classification, 2026-06-03). Foundational hubs marked 🔥, legacy/superseded/duplicate 🏛, stale 💤.
 > Каждый non-ACTIVE файл имеет `> ⚠️ status: ...` баннер сверху. История компиляции — `log.md`.
 
 ## ⛔ ОБЯЗАТЕЛЬНО перед EOS — Session Close Discipline
@@ -19,14 +19,14 @@
 
 | Status | Count | Что значит |
 |---|---|---|
-| ✅ active | 100 | Живой код / упомянуты в недавних daily |
+| ✅ active | 101 | Живой код / упомянуты в недавних daily |
 | 🔥 HUB | 12 | Foundational, ≥5 refs/30d, читать первыми (+5 from 2026-05-29: memory-claim-vs-live, npc-bots-users-table, stage7-global-cutover, cycle-tracking-ux-and-accuracy, **session-close-discipline**) |
 | 🏛 legacy-n8n | 9 | n8n-механика, фича мигрирована в Python |
 | 🏛 superseded | 5 | Заменён более новым файлом, см. → pointer |
 | 🏛 duplicate | 2 | Содержание полностью покрыто canonical файлом |
 | 🏛 outdated | 1 | Автор сам пометил OUTDATED |
 | 💤 stale | 8 | 0 refs за 30 дней, тема возможно заморожена |
-| **Total** | **129** | |
+| **Total** | **130** | |
 
 ## Start here for common tasks
 
@@ -42,6 +42,7 @@
 | **Cron / scheduled jobs** | `cron-silent-failure-alerting`, `cron-reminder-suppression-tunables`, `cron-pushed-callback-fallback-pattern` |
 | **Deploy / TLS / Caddy issue** | `release-protocol`, `tls-caddy-nomsbot` |
 | **Python handler (cutover)** | `phase2-python-menu-v3`, `phase4-onboarding-migration`, `webhook-server-async-patterns` |
+| **Классификация типов контента (photo/doc/audio/junk/location)** | 🔥 `content-type-classification` — 3 независимых классификатора, обязаны быть синхронны; `content-type-routing-gotchas` — предыстория PR #294 |
 | **Day-summary / Stats / Mood** | 🔥 `profile-v5-screens-specs`, `stats-main-headless`, `personalized-macro-split`, `my-day-llm-insight`, `meals-picker-two-stage` |
 | **Bug идемпотентности / дубль event** | `claim-vs-check-idempotency-anti-pattern`, `payment-idempotency-pattern` |
 | **Subagent → LIVE apply (orchestrator hat)** | `subagent-live-apply-review-rule`, `agent-collaboration-protocol`, `pre-migration-discovery-recipe` |
@@ -152,7 +153,7 @@ _16 files · 79 incoming refs (30d)_
 
 ## 🐍 Python Handlers (cutover targets)
 
-_11 files · 61 incoming refs (30d)_
+_12 files · 61 incoming refs (30d)_
 
 - [[canonical-hybrid-location-picker]] — Canonical Hybrid Location Picker — reply-kb prompt + inline list
 - [[dumb-renderer-interpolation-gotchas]] — Dumb Renderer Interpolation — Gotchas
@@ -163,6 +164,7 @@ _11 files · 61 incoming refs (30d)_
 - [[webhook-server-async-patterns]] — Webhook Server Async Patterns — concurrency + performance
 - [[food-log-python-cutover]] — Stage 7a — food log confirmation rendering migration from n8n to Python (4 PRs, 5 n8n iterations, first callback endpoint)
 - [[content-type-routing-gotchas]] — Content-type routing gotchas: image/* document (desktop «как файл») → vision AI, message.audio → transcription, junk→messages.spam_protect reuse (уже ×13 в БД), полный список junk-типов. PR #294.
+- [[content-type-classification]] **`🔥 HUB-кандидат`** — Канонический паттерн классификации контента (photo/image-doc/voice/audio/junk/location-flow). **3 независимых классификатора** (router.py/telegram_proxy.py/location.py), обязаны быть синхронны — рассинхрон = 3 регрессии за 1 день (2026-06-03). Таблица классов + правило «меняешь один — обнови все три» + хроника инцидентов.
 - [[sage-food-log-llm-integration]] — Sassy Sage LLM one-liner (gpt-4o-mini) после каждого food log. Первый OpenAI call в NOMS. 5 safety paths, pre-baked fallback, asyncio parallel + timeout. PR #156, mig 312. **v2 (23.05):** JSON mode, emotion→tg-emoji, macros focus, fallback × 13 langs (mig 314-315). **v3 (24.05):** timeout 5s, always-fallback, emoji rollback unicode, persist_as_menu fix.
 - [[my-day-llm-insight]] — My Day LLM Insight — cache-on-write gpt-4o-mini insight для stats_main. 10-enum `day_status` tone anchor, prompt guardrails (4 rules), normaliser shape fix. PR #164 mig 319-320, PR #166 mig 322, PR #167 mig 323.
 - [[meals-picker-two-stage]] — 2-stage meal edit/delete flow (meals_picker → meal_action). Dynamic per-meal buttons, parametric `cmd_select_meal_<uuid>`, 4 RPCs. PR #168 mig 324.
