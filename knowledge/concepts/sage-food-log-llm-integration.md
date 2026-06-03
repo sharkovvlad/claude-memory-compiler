@@ -8,7 +8,7 @@ sources:
   - "daily/2026-05-24.md"
   - "daily/2026-05-25.md"
 created: 2026-05-22
-updated: 2026-06-02
+updated: 2026-06-03
 ---
 
 # Sage Food Log LLM Integration
@@ -375,6 +375,34 @@ DAY CONTEXT AWARENESS п.2: «high/over/зашкаливает ТОЛЬКО пр
 
 **Verification gotcha:** My Day insight кэшируется 4ч/фазе — после deploy промпт-правки невидимы,
 пока `UPDATE users SET my_day_insight_at=NULL` + 2 открытия экрана. См. [[concepts/my-day-llm-insight]].
+
+## Tone telemetry + самоулучшающаяся петля (mig 447, 2026-06-03, PR #312/#318)
+
+Чтобы тон Номса совершенствовался, **каждая** реакция логируется (раньше food-log
+реакции нигде не хранились — только эмоция+длина в journalctl).
+
+- **Хранилище (reuse, НЕ новая таблица):** `ai_coach_logs` — generic `context_type`-лог
+  AI-вызовов (распознавание = `text`/`vision`; тон = `sage_food_log`/`sage_my_day`).
+  mig 447 добавил nullable `emotion`/`locale`/`meal_id`/`day_context jsonb`. RPC
+  `log_ai_request` + обёртка `services/ai_logging.py:log_request` (fire-and-forget) +
+  GDPR (`crons/data_retention.py`) — **всё уже существовало**. NLM советовал новую
+  таблицу `sage_responses_log` — live показал, что не нужно (owner: «проверь у тебя
+  инфо с полей»).
+- **Запись:** `services/sage.py:_fire_sage_telemetry` — `asyncio.create_task`, не
+  блокирует. `day_context = {"prompt": user_prompt}` — буквальный снимок, что видела
+  модель (для RLHF/анализа правдивости). `meal_id` для food-log (джойн `food_logs`).
+- **⚠️ OVERLOAD-ловушка:** extend RPC новыми параметрами через `CREATE OR REPLACE` с
+  другим числом аргументов = создаёт ВТОРОЙ overload → 12-арг вызовы распознавания →
+  `AmbiguousFunction`. Лечится `DROP FUNCTION IF EXISTS public.log_ai_request(<12 old>)`
+  перед `CREATE` + `NOTIFY pgrst,'reload schema'`. См. [[concepts/safe-create-or-replace-recipe]].
+- **Чтение:** `tools/sage_transcript_export.py` → per-user транскрипт в Markdown
+  (`~/Documents/NOMS/sage_transcripts/`), пара food↔reaction по `meal_id`, `видел
+  HH:MM/phase` для контроля фазы дня.
+- **Судья:** скилл `/sage-tov` (`.claude/commands/sage-tov/SKILL.md`, machine-local —
+  `.claude/` gitignored) — рубрика 12 правил тона → отчёт + предложенные правки промпта
+  под ревью (гейт: предлагает-не-деплоит). Запускать ежедневно / перед-после правки промпта.
+- **Петля:** глаза(телеметрия)→чтение(транскрипт)→судья→правки промпта/few-shot под
+  ревью → лучше тон → удержание. Лучшие реакции (по судье) = кандидаты в few-shot эталоны.
 
 ## Related Concepts
 
