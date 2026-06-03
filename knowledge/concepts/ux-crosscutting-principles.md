@@ -82,6 +82,19 @@ Input screens (`ask_weight`, `ask_age`, `ask_height`) and picker screens (`edit_
 
 Mockup documentation convention: described ONCE in PART 2A of UX catalog, referenced with context-matrix in PART 2 (onboarding) and PART 3 (profile edit).
 
+**⚠️ Гоча — контекст-специфичный контент на shared-экране (mig 444).** Раз `screen_id`
+и его `text_key` ОБЩИЕ, любой контент, зашитый в текст, появится в ОБОИХ контекстах.
+Прогресс-бар онбординга, зашитый в `questions.weight`, полез бы в профиль-редактирование.
+**Правило:** онбординг-специфичный UI (прогресс-бар, шаговые подсказки) НЕЛЬЗЯ зашивать в
+shared `text_key`. Инъекция — через `render_screen` как `template_var`, gated на статус
+(`v_user.status LIKE 'registration_step_%'` / `onboarding:*`), вне онбординга `''`. Тот же
+паттерн, что `text_input_inline_back` (mig 396). Перед правкой текста онбординг-экрана —
+проверь `SELECT state_code, screen_id FROM workflow_states WHERE state_code IN ('edit_*')`:
+`edit_weight→ask_weight`, `edit_gender→edit_gender` и т.д. — все 10 базовых экранов shared.
+**Копирайт (строки «зачем»)** — наоборот, ОК зашивать: улучшает и профиль-редактирование.
+Реализация прогресс-бара — `{onb_progress}` template_var + `onboarding.progress.{phase}`
+строки в `ui_translations`; см. [[concepts/onboarding-v3-map]] §Progress bar.
+
 ---
 
 ### 5. Skip Button — Only for "Improving" Fields

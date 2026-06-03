@@ -264,3 +264,35 @@ stateDiagram-v2
 - [[concepts/start-fresh-flow]] — `cmd_start_fresh` через `reset_to_onboarding` RPC
 - [[concepts/variant-b-cutover]] — общий паттерн n8n→Python staged rollout
 - [[concepts/python-vs-n8n-template-grammar]] — две грамматики шаблонов на одном `ui_translations`
+
+---
+
+## Progress bar по фазам + копирайт (mig 444, 2026-06-03)
+
+**Прогресс-бар** — 5 фаз, монохром `⬛/⬜` (консистентность с баром квиза; 🟩 в БД не
+используется). Ставится динамически в `render_screen` как `template_var {onb_progress}`,
+gated на статус (вне онбординга = `''`). НЕ зашивать в shared `text_key` — иначе полезет в
+профиль-редактирование (см. [[concepts/ux-crosscutting-principles]] §4 гоча).
+
+| Фаза | Строка (RU) | Статусы |
+|---|---|---|
+| 📋 Базовое | `📋 Базовое  [⬛⬜⬜⬜⬜]` | step_1/2/3/4, waist, maternal*, cycle* |
+| 🏃 Образ жизни | `🏃 Образ жизни  [⬛⬛⬜⬜⬜]` | step_5, training, diet |
+| 🎯 Цель | `🎯 Цель  [⬛⬛⬛⬜⬜]` | goal, speed |
+| 🔬 Точность | `🔬 Микро-тест на фенотип` (текст, без блоков — у квиза свой `[⬛⬜⬜⬜] 1/4`) | phenotype_quiz |
+| 🏁 Финал | `🏁 Финал  [⬛⬛⬛⬛⬛]` | onboarding:country, onboarding:timezone |
+
+Строки фаз: `ui_translations` → `onboarding.progress.{basics,lifestyle,goal,precision,finish}`.
+`render_screen` Step 5b: CASE status → phase → SELECT строки для языка → в `v_template_vars`.
+Тело экрана начинается с `{onb_progress}`. Python `_resolve_text` Pass 2 подставляет; var не
+html-экранируется (не в `_USER_INPUT_FIELDS`). Чистый SQL+data, без деплоя Python.
+
+**Копирайт:** 10 «голых» экранов (пол/возраст/вес/рост/активность/тренировки/цель/темп/
+страна/таймзона) переписаны под тон Sassy Sage (наука без пафоса, anti-shame, «зачем»).
+Тексты shared → улучшают и профиль-редактирование. **Только RU+EN** (staged); ×13 — после
+sign-off. Страна/таймзона «зачем» = местная кухня (тортилья MX≠ES) + напоминания в твоё
+время; БЕЗ ценообразования (толкало бы врать про страну).
+
+**FSM-уточнения (сверено с live 2026-06-03):** `maintain`-цель → пропуск `registration_step_speed`
+(сразу phenotype_quiz; lose/gain → speed); `cmd_diet_skip` → omnivore default; waist-шаг
+(`registration_step_waist`) между ростом и активностью (mig 439).
