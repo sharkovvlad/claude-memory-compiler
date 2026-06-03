@@ -545,7 +545,51 @@ END IF;
 с живыми translations — увидеть ФИНАЛЬНЫЙ текст. render_screen отдаёт text_key +
 template_vars (подстановка Python-side), сырой payload показывает плейсхолдер, а не число.
 
-### Pattern B для TEXT-INPUT (не picker) — edit_waist, mig 438 (2026-06-02)
+### ⛔ ПЕРЕСМОТР (mig 442, 2026-06-03): числовой text-input → ВОЗВРАТ НА HUB, НЕ stay
+
+> **Owner-тест 2026-06-03 отменил Pattern-B-stay для числового text-input.** Stay
+> для числа = **ловушка «спрашивает дважды»**: после ввода экран ре-рендерит
+> инструкцию-промпт (`questions.waist_question_edit` — «Окружность талии в см.
+> Измеряем...») → выглядит как повторный запрос числа; любой следующий текст
+> («sdlfksdf») ловится как талия → ошибка not_a_number. Выйти можно только
+> [Назад]. Для ПИКЕРА stay хорош (выбор кнопкой остаётся, ✅ переезжает), для
+> ЧИСЛА — нет (re-prompt + нельзя выйти текстом).
+>
+> **Канон для числового text-input (вес/рост/возраст/талия):** вести себя как
+> вес/рост/возраст — после ввода **возврат на hub** (`personal_metrics`), recalc
+> показать в **тосте**, не in-place. Owner approved (mockup→AskUserQuestion).
+>
+> **3 провода (mig 442 на edit_waist):**
+> 1. `workflow_states.<edit_status>.next_step_code = 'registered'` (НЕ self-loop).
+>    `process_user_input` text-path (стр.441) перезаписывает status на это значение
+>    даже если сеттер сам не advance — **сеттер можно не трогать** (важно если он
+>    общий с онбордингом, как `set_user_waist_circumference`: онбординг гонит FSM
+>    через `process_onboarding_input`, меню — через dispatcher next_step_code).
+> 2. `ui_screens.<screen>`: `next_on_submit` / `parent_screen_id` /
+>    `back_screen_id_default` → `personal_metrics` (hub). После status=registered
+>    (registered.screen_id=NULL) dispatcher берёт экран из `next_on_submit`.
+>    personal_metrics имеет `meta.reply_kb_entry=true` → reply-kb приезжает от
+>    рендера хаба бесплатно (делает reply-kb-костыли тоста для этого поля
+>    избыточными — append-спецслучай убирается, единый prepend как у веса).
+> 3. **Recalc в тост** (сохранить наглядность, ради которой держали stay): свой
+>    ключ с плейсхолдерами `messages.<x>_saved` ×13 (напр. `✅ Талия: {waist} см ·
+>    Белок: {protein} г/день`). Python `_maybe_build_save_toast` строит для этого
+>    статуса спец-текст: waist из `decision.text` (нормализ.), protein из
+>    `get_my_plan_business_data` (1 RPC на редком save-пути). Кнопка
+>    `[<поле>: <новое> ]` на хабе = доп.подтверждение.
+>
+> **Онбординг-шаг того же поля (registration_step_waist)** НЕ трогается этим — он
+> advance'ит FSM сам (`process_onboarding_input` → следующий шаг), ловушки нет.
+>
+> **Durable:** числовой text-input ≠ picker. Pattern-B-stay остаётся дефолтом
+> для ПИКЕРОВ (кнопки). Для числа — return-to-hub + recalc-тост.
+
+---
+
+### Pattern B для TEXT-INPUT — ИСХОДНАЯ версия (edit_waist, mig 438, 2026-06-02) — ОТМЕНЕНА mig 442 ↑
+
+> ⚠️ Описание ниже — историческое (как было до mig 442). Stay для числа породил
+> баг «спрашивает дважды». НЕ применять для числовых полей; см. ПЕРЕСМОТР выше.
 
 Pattern B изначально для **picker'ов** (кнопки + save_via_callback, target_screen=self). Для **text-input** edit-экранов (юзер вводит число: талия/вес/рост) механика «stay + live recalc» другая — навигацией после сохранения рулит не `button.meta.target_screen`, а **`workflow_states[status].next_step_code`** (process_user_input text-path, стр.~441):
 
