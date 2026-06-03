@@ -52,14 +52,38 @@ def slugify(text: str) -> str:
 # ── Wikilink helpers ──────────────────────────────────────────────────
 
 def extract_wikilinks(content: str) -> list[str]:
-    """Extract all [[wikilinks]] from markdown content."""
+    """Extract all [[wikilinks]] from markdown content.
+
+    Fenced (```...```) and inline (`...`) code is stripped first, so that
+    bracket-heavy code (e.g. nested arrays like ``[[{...}]]``) is never
+    mistaken for a wikilink — wikilinks only ever live in prose.
+    """
+    content = re.sub(r"```.*?```", " ", content, flags=re.DOTALL)
+    content = re.sub(r"`[^`]*`", " ", content)
     return re.findall(r"\[\[([^\]]+)\]\]", content)
 
 
 def wiki_article_exists(link: str) -> bool:
-    """Check if a wikilinked article exists on disk."""
-    path = KNOWLEDGE_DIR / f"{link}.md"
-    return path.exists()
+    """Check if a wikilinked article exists on disk.
+
+    Accepts both authoring styles agents use interchangeably: the bare slug
+    ([[slug]], as written in CLAUDE.md / MEMORY) and the path-qualified form
+    ([[concepts/slug]]), each with an optional ``.md`` suffix or ``#section`` /
+    ``|display`` anchor. All articles live in flat sub-dirs with unique
+    basenames, so a bare slug is resolved by basename match.
+    """
+    # drop #section / |display anchors, surrounding whitespace, and .md suffix
+    link = link.split("#", 1)[0].split("|", 1)[0].strip()
+    if link.endswith(".md"):
+        link = link[:-3]
+    if not link:
+        return False
+    # path-qualified: resolve directly under knowledge/
+    if (KNOWLEDGE_DIR / f"{link}.md").exists():
+        return True
+    # bare slug: match by basename across article dirs (slugs are unique)
+    base = link.rsplit("/", 1)[-1]
+    return any(p.stem == base for p in list_wiki_articles())
 
 
 # ── Wiki content helpers ──────────────────────────────────────────────

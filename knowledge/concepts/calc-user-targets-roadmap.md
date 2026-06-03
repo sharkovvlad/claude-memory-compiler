@@ -40,7 +40,7 @@ Living document. **P0 = active sprint** (focus). **P1+ = backlog** (defer until 
   - **EA > 30 ккал/кг LBM (RED-S protection)** — rationale в [[concepts/energy-availability-design-decision]]. Зависит от P2.1 waist + P2.5a workout tracking.
 - **Coordination protocol:** [[concepts/agent-collaboration-protocol]] (10 правил)
 - **UX-pattern:** [[concepts/safety-guard-ux-pattern]] v2 (5-tier severity + L1/L2 cultural review + auto-reset variants)
-- **Banner injection pattern:** [[mig 252]] family-agnostic — auto-renders new families когда переводы appear под `warning.<family>.<enum>.banner_*`. No code change needed для bmi/min_kcal/maternal once copy ready.
+- **Banner injection pattern:** mig 252 family-agnostic — auto-renders new families когда переводы appear под `warning.<family>.<enum>.banner_*`. No code change needed для bmi/min_kcal/maternal once copy ready.
 
 ---
 
