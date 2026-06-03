@@ -43,9 +43,9 @@ _EDIT_LOCATION_STATUSES = {"edit_country", "edit_timezone", "editing:country", "
 _LOCATION_HANDLER_STATUSES = _ONBOARDING_LOCATION_STATUSES | _EDIT_LOCATION_STATUSES
 ```
 
-Если пользователь зарегистрирован (`status='registered'`) и роняет геопин — `router.py` всё равно даёт `target=location` (секция 1 в коде — безусловная). Но `handle_location()` на строке 111 проверяет `ctx.status not in _LOCATION_HANDLER_STATUSES` → возвращает `_forward_to_legacy_envelope(f"status:{ctx.status}")`.
+**PR #300 гейтит на уровне РОУТЕРА** (секция 1 `route()`): `if status in _LOCATION_HANDLER_STATUSES: target=location else: target=error/junk_content`. Набор статусов берётся из `handlers/location.py` ленивым импортом (единый источник, без дрифта). До #300 секция 1 была безусловной (`target=location` всегда) → для registered-юзера `handle_location` уводил в `_forward_to_legacy_envelope` → форвард в n8n `02.1_Location`, который физически DELETE'нут → **вечно висящий thinking-стикер**.
 
-**До PR #300 этот fallback форвардил в n8n `02.1_Location` — который физически DELETE'нут.** Юзер получал вечно висящий thinking-стикер. PR #300 исправил: при статусе вне location-flow роутер уводит геолокацию в `target=error/junk_content` → `messages.spam_protect`.
+**Тонкость индикатора для геолокации (PR #303):** `_content_needs_indicator` возвращает `True` для ЛЮБОЙ геолокации (он без DB, не знает статус — а легитимному location-flow индикатор нужен: резолвер города 200-500мс). Значит для out-of-flow геопина стикер ВСЁ РАВНО улетает, а затем геолокация уходит в junk. Поэтому **junk-ветка webhook (`AUTHORITATIVE_JUNK`) обязана звать `sticker.delete_thinking(chat_id)`** — иначе стикер зомби после help-сообщения (owner-скрин 2026-06-03). Это единственный случай, где indicator=True, но route может быть junk → инвариант контракт-теста для location НЕ проверяется (location исключён из теста, см. §5).
 
 ---
 
