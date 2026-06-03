@@ -164,3 +164,25 @@ ROLLBACK TO SAVEPOINT s1;
 | **v8.3 (canonical)** | [link](https://docs.google.com/spreadsheets/d/1Yi6VyKyPjMm0Et7okGW8NZgSCepQYUZVkGU2flaRa5o/edit) | **WORKS** — все формулы рендерят корректно |
 
 Промежуточные версии оставлены для post-mortem (показывают эволюцию locale-fix).
+
+---
+
+## v13 Digital Twin (2026-06-03) — пересборка под live v13
+
+v8.3 отставала на **5 версий** (прод = v13, mig 429). Twin **пересобран с нуля**: 21 профиль,
+все 13 шагов конвейера, провалидирован **headless (`formulas` lib) + 1:1 против живого RPC**
+(дельты 0, 21/21 PASS). Файлы — `Нутрициолог (аудит расчётов v13)/` (untracked корень NOMS):
+- `Digital_Twin_v13_formulas.xlsx` — 4 листа (README/Constants/Profiles/Analysis), live-движок формулами.
+- `Digital_Twin_v13_values.csv` → нативный Google Sheet (Drive id `1GWSD4YiNkbkN_UQpOTlTNsEnNdKogHOS9STT9BG6zgw`).
+
+**Lesson — version drift:** ВСЕГДА сверяй версию twin против live `pg_get_functiondef('calculate_user_targets')`
+ПЕРЕД использованием. Twin — не источник истины, RPC — источник.
+
+**Gotcha — заливка в Google Drive (MCP `create_file`):**
+- **Бинарный `.xlsx` инлайном НЕНАДЁЖЕН** — 28KB файл = 37.5KB base64 (~36K токенов) не помещается в
+  один Read (cap 25K) и LLM не воспроизводит base64 байт-точно (1 битый символ ломает zip).
+- **Паттерн для нативного Sheet:** `create_file` с `textContent` + `contentMimeType=text/csv` →
+  конвертит в `application/vnd.google-apps.spreadsheet`. Формулы (строки с `=`) **исполняются**, НО
+  запятые внутри формул ломают CSV-разбор (нужны кавычки) + риск EU-locale (`,` vs `;` — баг v8.x).
+- **Вывод:** values-CSV → нативный Sheet (надёжно); формульный движок → отдельный `.xlsx` для ручного
+  импорта владельцем (File→Import; импорт xlsx сам разруливает locale).
