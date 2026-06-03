@@ -289,9 +289,26 @@ html-экранируется (не в `_USER_INPUT_FIELDS`). Чистый SQL+d
 
 **Копирайт:** 10 «голых» экранов (пол/возраст/вес/рост/активность/тренировки/цель/темп/
 страна/таймзона) переписаны под тон Sassy Sage (наука без пафоса, anti-shame, «зачем»).
-Тексты shared → улучшают и профиль-редактирование. **Только RU+EN** (staged); ×13 — после
-sign-off. Страна/таймзона «зачем» = местная кухня (тортилья MX≠ES) + напоминания в твоё
-время; БЕЗ ценообразования (толкало бы врать про страну).
+Тексты shared → улучшают и профиль-редактирование. Страна/таймзона «зачем» = местная кухня
+(тортилья MX≠ES) + напоминания в твоё время; БЕЗ ценообразования (толкало бы врать про страну).
+
+**Перевод на 13 языков — ЗАВЕРШЁН (mig 455, 2026-06-03, PR #320 LIVE).** ru/en — mig 444/454;
+11 langs (`ar,de,es,fa,fr,hi,id,it,pl,pt,uk`) — mig 455. Три части:
+- **A1** 8 headless (`questions.*`) — overwrite копией с literal `{onb_progress}` в начале.
+- **A2** `onboarding.ask_country/ask_timezone` — overwrite как **JSONB-array[1]** (под ru/en),
+  БЕЗ `{onb_progress}` (бар добавляет `location.py:_onb_progress_finish`). 11 langs были string → array;
+  `_resolve_translation_with_variants` поддерживает оба типа.
+- **A3** объект `onboarding.progress` (5 меток) — **его не было в 11 языках**, создан целиком одним
+  `jsonb_set` per lang (родитель `{onboarding}` есть везде). Переводится ТОЛЬКО метка-слово; блоки/
+  эмодзи/`\n\n` собираются из шаблона в генераторе — НЕ отдавать переводчику.
+- **B** idempotent prepend `{onb_progress}` к 13 «хорошим» экранам (waist/diet/maternal×3/cycle×4/
+  phenotype×4) в 11 langs.
+
+**🔑 Durable gotcha (SQL-вставка строки в JSONB):** НЕ `to_jsonb($j$"...\n..."$j$::text)` (двойное
+кодирование — `\n` станет текстом). Правильно: `$j$"<json.dumps(str)>"$j$::jsonb` (`::jsonb` парсит
+`\n` в реальный перенос). Объекты/массивы так же. Dollar-quoting снимает экранирование RTL/кавычек.
+E2E через `services.template_engine._resolve_text` (резолв text_key + template_vars) — настоящий
+финальный текст, не только template_var. Перевод — субагент по [[concepts/copywriter-playbook]].
 
 **FSM-уточнения (сверено с live 2026-06-03):** `maintain`-цель → пропуск `registration_step_speed`
 (сразу phenotype_quiz; lose/gain → speed); `cmd_diet_skip` → omnivore default; waist-шаг
