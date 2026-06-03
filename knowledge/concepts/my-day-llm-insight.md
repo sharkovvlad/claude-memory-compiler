@@ -5,8 +5,9 @@ tags: [llm, openai, stats, sage, architecture, python, cache]
 sources:
   - "daily/2026-05-24.md"
   - "daily/2026-06-01.md"
+  - "daily/2026-06-03.md"
 created: 2026-05-24
-updated: 2026-06-01
+updated: 2026-06-03
 ---
 
 # My Day LLM Insight — cache-on-write для stats_main
@@ -162,6 +163,34 @@ Display format: `NOMS {emoji}: "{text}"` (вместо `💬 Noms:`).
 ## System prompt length reduction (mig 349, 2026-05-25)
 
 Owner feedback: Sage comments too verbose on mobile. Mig 349 reduced `system_prompt_my_day` from 100-250 chars to **80-150 chars** across all 13 languages. Per-lang substring rewrite (not truncation — each was re-authored to fit). Cache invalidation through `app_constants` flag flip.
+
+## Stale-insight-on-delete bug — freshness by TIME not CONTENT (mig 440, 2026-06-03, PR #302)
+
+**Симптом (репро owner'а):** залогировал первый приём → удалил его (кнопка) → открыл «Мой день» → фраза Номса всё ещё описывает удалённую еду, при том что live-цифры показывают 0 ккал. Классическое «число на экране ≠ слова Номса».
+
+**Корень — фундаментальный изъян модели свежести.** `_my_day_cache_fresh` (`menu_v3.py`) считает кэш валидным по трём критериям: текст непустой + локаль совпадает + `my_day_insight_at` в пределах **4 часов**. **Содержимое дня в проверку не входит.** Фраза, сгенерённая 3 минуты назад про приём №1, остаётся «свежей» даже после его удаления → отдаётся как есть. Хуже: на этом открытии regen даже не запускается (кэш ведь «свежий» по времени).
+
+**Почему путь удаления не спасал:**
+1. `_handle_delete_meal_now` (`menu_v3.py:926`) чистил кэш **только в in-memory ctx** запроса (`replace(ctx, my_day_insight_at=None)`) — это НЕ персистится в БД. Следующее открытие грузит ctx из `v_user_context` заново = старое значение.
+2. Реальная инвалидация полагалась на fire-and-forget `regen_my_day_insight_cache`, который **(а)** гонится со следующим тапом юзера и **(б)** молча `return False` (НЕ пишет кэш) при любом сбое — LLM error / JSON parse / text rejected (`sage.py:403, 323, 334, 352`). При любом из этих исходов БД-строка со старой фразой и свежим timestamp остаётся.
+
+**Fix (Решение A, mig 440, RPC-only — Python не трогали):** инвалидировать кэш **атомарно внутри mutation-RPC** `delete_meal_by_id`:
+```sql
+WITH deleted AS (DELETE FROM food_logs WHERE meal_id = p_meal_id RETURNING telegram_id)
+SELECT count(*)::int, max(telegram_id) INTO v_deleted_count, v_telegram_id FROM deleted;
+IF v_telegram_id IS NOT NULL THEN
+    UPDATE users SET my_day_insight_at = NULL WHERE telegram_id = v_telegram_id;
+END IF;
+```
+NULL-им только timestamp (freshness-гейт падает на `at IS NULL` → правдивый static fallback + async regen); stale-текст безвреден, перезапишется. `food_logs` = плоская таблица приёмов (нет отдельной `meals`), FK=`telegram_id bigint`, `meal_id` группирует строки; hard delete. `max(telegram_id)` над удалёнными строками = единственный владелец. Verified ROLLBACK-txn: `deleted_count=2`, `at→NULL`.
+
+**Durable lesson (переносимый на любой кэш):**
+- **Свежесть по времени ≠ свежесть по содержимому.** Если кэш зависит от мутируемого состояния — TTL не гарант корректности. Любая мутация состояния обязана инвалидировать кэш.
+- **In-memory ctx-инвалидация не персистится** — следующий запрос грузит из БД заново.
+- **Fire-and-forget regen ненадёжен** как механизм инвалидации: гонка + silent no-op на ошибке.
+- **Место инвалидации — сама mutation-RPC (атомарно с изменением)**, не Python-хендлер и не фоновая задача.
+
+**Решение B (бэклог) — content-aware freshness:** штамповать кэш «отпечатком дня» (`meals_count`+`last_meal_at`, или day-version счётчик, инкрементящийся на add/edit/delete). `_my_day_cache_fresh` сверяет сохранённый отпечаток с текущим состоянием дня → mismatch=stale. Закрывает ВСЕ пути мутации (add/edit/delete) единым правилом вместо точечной инвалидации в каждой RPC. A достаточно для репорта; B — «сделать правильно».
 
 ## Related Concepts
 
