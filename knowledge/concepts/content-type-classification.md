@@ -25,7 +25,7 @@ status: active
 |---|---|---|---|---|
 | **location-flow** | `message.location` (geo-pin) | `target=location` (если статус ∈ `_LOCATION_HANDLER_STATUSES`) | ✅ ДА (стикер, не текст) | Reverse-geocode занимает 200–500 ms; без индикатора юзер думает, что бот завис. Стикер — geo-контекст, не "Анализирую еду". |
 | **food-media / photo** | `message.photo` | `target=ai`, reason=`food_media` | ✅ ДА | Основной путь vision-распознавания (GPT-4o). |
-| **food-media / image-doc** | `message.document` где `mime_type.startswith('image/')` | `target=ai`, reason=`food_media` | ✅ ДА | Desktop Telegram: галочка «отправить без сжатия» → документ с mime `image/*`. Отличается от фото тем, что нет `message.photo`. |
+| **food-media / image-doc** | `message.document` где `mime_type.startswith('image/')` **И** `file_size ≤ 10 MB` | `target=ai`, reason=`food_media` | ✅ ДА | Desktop Telegram: галочка «отправить без сжатия» → документ с mime `image/*`. Отличается от фото тем, что нет `message.photo`. **Size-cap (PR #300):** `file_size` берётся из апдейта → большой файл отклоняется БЕЗ скачивания (→ junk). Не-image / oversized → help. |
 | **food-media / voice** | `message.voice` (с `file_id`) | `target=ai`, reason=`food_media` | ✅ ДА | OGG-запись → Whisper transcription → AI-распознавание еды. |
 | **unsupported / audio-file** | `message.audio` (mp3/m4a загруженный через «музыка») | `target=error`, reason=`junk_content` | ❌ НЕТ | **НЕ транскрибируется:** файлы до 2 ГБ, Whisper лимит 25 МБ; пользователи присылают не еду-голосом, а треки. Откат (PR #300, 2026-06-03) с audio→AI: false positive + cost. |
 | **unsupported / junk** | `message.video`, `video_note`, `sticker`, `animation`, не-image `document`, `contact`, `poll`, `dice` | `target=error`, reason=`junk_content` | ❌ НЕТ | Не еда, бот не умеет обрабатывать. Python отправляет `messages.spam_protect` (ключ уже ×13 в `ui_translations`). |
@@ -148,8 +148,11 @@ if _is_junk_content(message):
 ### `telegram_proxy.py:_content_needs_indicator`
 
 ```python
+# Single source of truth: reuse the router's image-doc predicate (mime + size
+# cap) instead of an inline check — so this fn and the router can't drift on it.
+from dispatcher.router import _is_image_document   # lazy; router doesn't import this module
 doc = msg.get("document")
-is_image_doc = isinstance(doc, dict) and str(doc.get("mime_type") or "").startswith("image/")
+is_image_doc = _is_image_document(msg)
 
 # Food-media (indicator = True):
 if (msg.get("photo")
@@ -157,11 +160,11 @@ if (msg.get("photo")
     or is_image_doc):
     return True, int(telegram_id)
 
-# Junk (indicator = False):
-if (msg.get("sticker") or msg.get("video") or msg.get("animation")
-    or msg.get("video_note") or msg.get("contact") or msg.get("poll")
-    or msg.get("dice")
-    or (doc is not None and not is_image_doc)):  # non-image document
+# Junk (indicator = False): audio is here (NOT food-media):
+if (msg.get("audio") or msg.get("sticker") or msg.get("video")
+    or msg.get("animation") or msg.get("video_note") or msg.get("contact")
+    or msg.get("poll") or msg.get("dice")
+    or (doc is not None and not is_image_doc)):  # non-image / oversized document
     return False, int(telegram_id)
 
 # Geolocation (indicator = True, sticker mode):
@@ -173,9 +176,13 @@ if msg.get("location"):
 
 ---
 
-## 5. Рекомендация на будущее
+## 5. Защита от дрифта
 
-**Антидрифт рефактор:** Вынести классификацию в единый модуль, например `dispatcher/content_classifier.py`, с функциями `classify_content(message) -> ContentClass` и `needs_indicator(content_class) -> bool`. Импортировать из `router.py` и `telegram_proxy.py`. Сейчас не сделано, потому что потребует координации трёх модулей + тестов + deployment синхронно. Пока действует правило «обнови все три».
+**✅ Контракт-тест (PR #300, есть сейчас):** `tests/test_content_classification_contract.py` пинит инвариант **«индикатор показывается ⟺ контент идёт в распознавание (food_media)»** для всех типов контента (photo/voice/image-doc → recognition+indicator; audio/video/sticker/poll/pdf/oversized-image-doc → unsupported, без indicator). Если кто-то изменит ОДИН классификатор и забудет другой — тест падает в CI/pre-push. **Заметку можно проигнорировать, красный тест — нет.** Запускать при любой правке классификации.
+
+**✅ Частичное объединение (PR #300):** `telegram_proxy._content_needs_indicator` теперь импортирует `_is_image_document` из роутера (mime + size-cap), а роутер лениво импортирует `_LOCATION_HANDLER_STATUSES` из `handlers/location.py`. Эти два предиката больше не дублируются.
+
+**🟡 Полный антидрифт-рефактор (на будущее, НЕ сделано):** вынести всю классификацию в единый `dispatcher/content_classifier.py` (`classify_content(message) -> ContentClass`, `needs_indicator(content_class) -> bool`), импортировать из `router.py` и `telegram_proxy.py`. Пока остаётся правило «обнови все три» + контракт-тест как страховка.
 
 ---
 
