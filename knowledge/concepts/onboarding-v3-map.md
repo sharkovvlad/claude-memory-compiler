@@ -18,7 +18,10 @@
 | `registration_step_1` | любой текст | fallback | `registration_step_1` | — (переспросить gender) |
 | `registration_step_2` | числовой текст | NUMERIC_INPUT_STATUSES | `registration_step_3` | `set_user_age(p_telegram_id, p_input_text)` |
 | `registration_step_3` | числовой текст | NUMERIC_INPUT_STATUSES | `registration_step_4` | `set_user_weight(p_telegram_id, p_input_text)` |
-| `registration_step_4` | числовой текст | NUMERIC_INPUT_STATUSES | `registration_step_5` | `set_user_height(p_telegram_id, p_input_text)` |
+| `registration_step_4` | числовой текст | NUMERIC_INPUT_STATUSES | `registration_step_waist` *(mig 439, было step_5)* | `set_user_height(p_telegram_id, p_input_text)` |
+| `registration_step_waist` *(mig 439)* | числовой текст | NUMERIC_INPUT_STATUSES | `registration_step_5` | `set_user_waist_circumference` — recalc RFM→LBM→Katch (mig 427/438 Pattern B; статус двигает FSM, не сеттер) |
+| `registration_step_waist` *(mig 439)* | `cmd_skip_waist` | callback (BUTTON_ONLY) | `registration_step_5` (без талии) | — |
+| `registration_step_waist` *(mig 439)* | `cmd_back` | callback | `registration_step_4` | — (mig 390 unified back; back-карта: step_5→waist→step_4) |
 | `registration_step_5` | `cmd_select_{sedentary\|light\|moderate\|heavy}` | cbQuery starts `cmd_select_` | `registration_step_training` ИЛИ `registration_step_goal` | `set_user_activity(p_telegram_id, p_activity_text)` |
 | `registration_step_5` | любой текст | fallback | `registration_step_5` | — (переспросить activity) |
 | `registration_step_training` | `cmd_select_{strength\|cardio\|mixed\|training_skip}` | cbQuery starts `cmd_select_` | `registration_step_goal` | `set_user_training_type(p_telegram_id, p_training_text)` |
