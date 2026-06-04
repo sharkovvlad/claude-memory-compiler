@@ -56,6 +56,7 @@
 | **AI Engine cutover / Stage 7 history** | `stage7-global-cutover` (mig 299→373, canary→global blueprint + monitoring metrics) |
 | **Качество vision-распознавания / prompt improvement** | `food-recognition-prompt-lab` — текущие промпты v3, дефекты (схлопывание, пропуск тарелок), варианты патча, дизайн eval golden-set, gotcha _prompt_cache |
 | **Лог по штрихкоду / упакованная еда / OpenFoodFacts / FatSecret** | `barcode-logging-openfoodfacts` — MVP-дизайн (zxing-cpp, OFF, barcode=ветка фото не новый класс); 🔴 находки: orphan `barcode_cache`, фантомный контракт-тест (CI сломан на main), граница с FatSecret-агентом |
+| **Точность макросов / FatSecret enrichment / dormant temperature+cascade** | `cascade-macro-enrichment-fatsecret` — enrichment≠cascade-level семантика, 🔴 temperature был мёртв (фикс PR #322), 🔴 настроенный каскад dormant (config {cascade:[...]} vs код ждёт list → один gpt-4o), FatSecret value-анализ, 2 источника, eval-гейт, координация с barcode |
 | **🚨 ПЕРЕД EOS («готово») — обязательный self-check** | 🔥 `session-close-discipline` — 5-step checklist (daily / handover / KB / MEMORY / size), real failure cases, anti-patterns. **Owner-flagged 29.05: каждая новая сессия = 20-40мин на разбор завалов.** |
 | **Cycle tracking UX / luteal accuracy** | 🔥 `cycle-tracking-ux-and-accuracy` (Phase 3d, 4 design risks closed mig 375 — Decisions implemented section + historical context) |
 
