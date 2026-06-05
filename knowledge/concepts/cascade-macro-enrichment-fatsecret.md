@@ -162,6 +162,18 @@ Basic free: 5000 вызовов/день, OAuth 2.0 client_credentials (server-t
 - **#324 correction memory** — open, base=main, mig 457 LIVE.
 - **#325 location (soft tie-breaker)** — open, base=main.
 
+## 12. FatSecret client + live match-quality preview (PR #335, 2026-06-05)
+
+`services/fatsecret_client.py` — read-only lookup (OAuth2 token-кэш, foods.search → Jaccard-ранг с singular/plural-норм + prefer Generic → парс «Per Ng» → per-100g, fail-open). 7 unit + live-smoke с VPS.
+
+**🔬 Реальные данные (превью эвала, дёшево):**
+- ✅ англ. одиночные: chicken/steak/buckwheat/oatmeal/tortilla/apple → Generic, score 1.0.
+- 🔴 **кириллица (гречка/борщ) → НЕТ матча** — FatSecret search англоцентричен.
+- порция/состояние всё ещё двусмысленны (buckwheat=сухой 343, oatmeal=варёный 62).
+- live-промах сингуляр/плюрал («apple»→«Apples») починен нормализацией.
+
+**🔑 Durable дизайн-инсайт для enrichment:** lookup делать по **АНГЛ. каноническому имени**, не по локализованному (LLM может вернуть `name` для показа + `name_en` для lookup). По кириллице/локали FatSecret не находит → для RU/IR name-enrichment либо через англ-канон, либо регион-источник, либо skip (fallthrough на LLM). Это уточняет региональную карту §9.4.
+
 ## Связанные
 - [[concepts/food-recognition-prompt-lab]] — промпты, дефекты, eval golden-set
 - [[concepts/barcode-logging-openfoodfacts]] — barcode-трек, `barcode_cache`, `lookup_product` pluggable
