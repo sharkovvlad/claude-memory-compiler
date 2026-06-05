@@ -4,8 +4,9 @@ aliases: [barcode-logging, barcode-scan, openfoodfacts, off-lookup, ean-decode, 
 tags: [food-log, barcode, openfoodfacts, python-handler, ai-recognition, content-type, mvp-design]
 sources:
   - "daily/2026-06-03.md"
+  - "daily/2026-06-05.md"
 created: 2026-06-03
-updated: 2026-06-03
+updated: 2026-06-05
 status: active
 ---
 
@@ -219,3 +220,38 @@ rebase (база устарела на 447).
 - [[memory-claim-vs-live-verification]] — trust live, не NLM (находка в)
 - [[migration-collision-guard]] — номер миграции, fetch+rebase перед push
 - [[copywriter-playbook]] — ×13 тексты, ≤18 ch/кнопка, anti-shame
+
+---
+
+## 9. 🔴 Critical gotcha: Python AI gate не включал barcode flows (2026-06-05)
+
+**Симптомы:** после успешного сканирования — [Вся упаковка] молчит, текст порции даёт "Мой процессор перегрелся", повторный [🔎 Штрихкод] тоже ошибка.
+
+**Причина:** Python AI gate в `webhook_server.py` проверял:
+```python
+and (ctx.status or "") in ("registered", "editing_meal")
+```
+Статус `waiting_barcode_portion` — не в списке → все barcode-действия падали в n8n.
+Кроме того, reason=`barcode_portion` не входил в `startswith(("food_media","text_food"))` → тоже мимо.
+
+**Fix (PR #341):** добавить `_is_barcode_portion` и `"waiting_barcode_portion"`:
+```python
+_is_barcode_portion = _ai_reason == "barcode_portion"
+if (
+    target == "ai"
+    and (
+        _ai_reason.startswith(("food_media", "text_food"))
+        or _is_edit_recognition
+        or _is_barcode_portion          # ← новое
+    )
+    and (ctx.status or "") in ("registered", "editing_meal", "waiting_barcode_portion")  # ← новое
+):
+```
+
+**Правило для будущих статус-based handlers:** при создании нового `waiting_*` статуса — **обязательно** проверить, что Python gate в `webhook_server._try_authoritative_path` пропускает все reason'ы, которые могут прийти в этом статусе. Паттерн роутера: text/voice в `waiting_X` → reason=`X_portion`; photo → reason=`food_media` но status=`waiting_X`; callback → reason=`X_portion`. Всё это должно матчить gate.
+
+**Дополнительно исправлено:**
+- Стикер "думающий Номс" при нажатии [🔎 Штрихкод] — был зомби (ранний return ПЕРЕД `finally`-блоком). Fix: явный `await sticker_module.delete_thinking(telegram_id)` перед возвратом `_barcode_prompt_envelope`.
+- Нечитаемое фото в `waiting_barcode_portion` → retry message вместо vision fallback → fog "не еда".
+- Тексты `messages.barcode_prompt` (mig 470): "Наведи камеру" → "Сделай фото штрихкода и пришли его." × 13.
+- Новый ключ `messages.barcode_scan_retry` × 13 для retry UX.
