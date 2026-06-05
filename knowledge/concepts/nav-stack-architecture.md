@@ -13,6 +13,8 @@ updated: 2026-04-29
 
 # Nav Stack — Иерархическая навигация Назад (Bug 6)
 
+> ⚠️ **status: stale (2026-06-05)** — n8n-эра, >30д без активности в daily/handover; многое мигрировало в Python. Перепроверь против прода перед использованием.
+
 Архитектурный рефакторинг навигации "Назад" в боте NOMS. Вместо хардкодированных callback'ов (`cmd_back_to_progress`, `cmd_get_profile`) введён универсальный `cmd_back` + JSONB-стек `users.nav_stack` с 4 RPCs. Реализовано за 8 фаз + R1 fix, затронуто 5 workflows, 26 кнопок мигрировано, 13 Push Nav HTTP нод добавлено.
 
 ## Key Points

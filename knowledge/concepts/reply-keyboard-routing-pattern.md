@@ -10,6 +10,8 @@ updated: 2026-04-23
 
 # Reply-Keyboard vs Inline Callback Routing
 
+> ⚠️ **status: stale (2026-06-05)** — n8n-эра, >30д без активности в daily/handover; многое мигрировало в Python. Перепроверь против прода перед использованием.
+
 NOMS 04_Menu_v3 has **two completely separate routing pipelines** for reply-keyboard clicks vs inline callback clicks. Discovered during Stats screen Phase 3A migration (Session 11). Any feature wired only to one pipeline silently fails for the other.
 
 ## Two Paths

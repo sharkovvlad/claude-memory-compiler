@@ -10,6 +10,8 @@ updated: 2026-04-09
 
 # User Profile Personalization
 
+> ⚠️ **status: stale (2026-06-05)** — n8n-эра, >30д без активности в daily/handover; многое мигрировало в Python. Перепроверь против прода перед использованием.
+
 System for keeping user names current and injecting them into notifications and UI. Built across migrations 043–044.
 
 ## Key Points
