@@ -271,6 +271,7 @@ _4 files · 28 incoming refs (30d)_
 _7 files · 14 incoming refs (30d)_
 
 - [[stars-subscriptions-botfather-prereq]] **`🔥 HUB`** — Telegram Stars Subscriptions require BotFather setup before `subscription_period` works. Without setup → client error `PROVIDER_ACCOUNT_INVALID` (P0 2026-05-28). Currently disabled in NOMS; re-enable checklist inside.
+- [[promo-code-ambassador-flow]] **`🔥`** — Promo code full flow: apply_discount_code → pending_promo_code → get_all_plan_prices применяет скидку → Stripe checkout на correct price → activate_subscription передаёт discount_code_id → 25% комиссия. Урок: backend был готов (mig 035/286), кнопка закомментирована из-за отсутствия set_user_status RPC. mig 472 (2026-06-06).
 - [[ambassador-payout-system]] — Squad/Банда UX v2 — расширение реферальной программы до полноценной ambassador-программы с RevShare (25%+5%), системой вывода средств и ручным одобрением CEO. Разбито на 7 незав...
 - [[payment-idempotency-pattern]] — Status:** captured 2026-05-20 после PR #134 (post-first-live-payment audit). Покрывает три ортогональные idempotency-проблемы которые открылись после первого live Stripe платежа.
 - [[payment-integration]] — Three payment methods (Telegram Stars, Stripe card, TON/USDT) integrated without a dedicated "Payments" menu. Entry points are the Profile screen and Shop screen.
