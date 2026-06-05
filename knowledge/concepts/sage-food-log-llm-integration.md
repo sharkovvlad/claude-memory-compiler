@@ -420,3 +420,33 @@ DAY CONTEXT AWARENESS п.2: «high/over/зашкаливает ТОЛЬКО пр
 - [[daily/2026-05-23.md]] — PR #160 (mig 314): Sage v2 — JSON mode, emotion→tg-emoji, macros focus, header prefix swap. PR #161 (mig 315): fallback phrases × 13 langs. Hot DB tuning (temperature 0.9→0.7, max_tokens 80→300). 60 tests.
 - [[daily/2026-05-24.md]] — PR #163: Sage v3 — timeout 2.5→5s, always-fallback `pick_food_log_fallback`, emoji rollback tg-emoji→unicode (😏/🤩/🤨/🧘‍♂️). PR #165: `persist_as_menu=False` for food card (One-Menu fix). PR #164: My Day LLM insight integration (cache-on-write sibling).
 - [[daily/2026-05-25.md]] — PR #194: fog-prompt regression fix (handle_ai_input + _handle_edit_meal_input silent empty envelope for is_food=False → now resolves errors.ai_not_food/ai_failed with variant pick + icon substitution). PR #193: cmd_stress_high TypeError fix (SimpleNamespace dict-spread → dataclasses.replace).
+
+## Реформа «Проактивный навигатор» (2026-06-05, PR #340, mig 468)
+
+Сдвиг тона: вместо критики съеденного («перебрал жиров») Номс **подсказывает что съесть дальше** цельной/доступной/локальной едой, пока есть остаток калорий. Применено к обоим промптам (food-log + My Day).
+
+### Ключевой конфликт и его разрешение
+Навигация «что съесть дальше» **прямо противоречила** выстраданному гардрейлу `you are not a meal planner` (PR #283, правило 5 рубрики `/sage-tov`), который запрещал любые предписания следующей еды. Решение — **не снимать защиту, а сделать навигацию УСЛОВНОЙ:**
+- `kcal_remaining > 0` (бюджет открыт) → один мягкий совет на следующий приём (опция, не команда).
+- `kcal% >= 100` (бюджет закрыт) → старое правило «не толкать еду» сохранено как «тёплое закрытие дня».
+Так навигация и anti-pushing-food сосуществуют без регрессии.
+
+### LOGGED ≠ EATEN (фундаментальное правило, высокий приоритет в обоих промптах)
+Низкие залогированные цифры ≠ недоедание/голодание/диета — юзер мог просто не залогировать всё (free = ~2 лога/день из-за 2 ман; кто-то логирует раз в день, и таких большинство). Промпт запрещает выводить голодание/дефицит из логов и команды «поешь». Реальный РПП ловится отдельной системой по паттерну за дни, не однодневным комментом. Это же правило — чистый шов для будущего IF/голодания (отдельный агент): Номс не угадывает пост, а получит явный флаг позже.
+
+### Payload-обогащение (детерминированно в Python, не LLM-арифметика)
+`_fmt_remaining`/`_macro_remaining_line` дают модели готовую строку `Remaining today: P 45g remaining · F 12g over · C 180g remaining`. Метки **нейтральные** (`remaining`/`over`), НЕ `deficit` — «deficit» подталкивает к «доешь» (конфликт с logged≠eaten). Добавлены `Sex` (для обращения), `Country` (локализация советов), грубый `BMI status` (3-бакетный `_bmi_status`, не число — РПП-safe, как и исключённый weight_kg).
+
+### Пол: безличные/повелительные формы > gender-agreement
+Owner выбрал «передавать пол», но главный рычаг против «Бро женщине» — **приоритет безличных и повелительных форм** («добери», «смести фокус», «зафиксировано»): в RU/UK они бесполы и убирают риск женских окончаний вовсе. `Sex` — подстраховка для редких прилагательных/прошедшего. Запрет «бро/чувак» и мужского рода по умолчанию.
+
+### Бриф A — High Fat threshold
+`_compute_macros_focus` порог жира 0.40→`sage_high_fat_pct` (default 0.50, app_constants hot-reload, mig 468). 40% жира — норма цельной еды (яйца/рыба/орехи/сыр/авокадо), больше не метится «перебором».
+
+### `_compute_day_status` — точечно, не wholesale
+Добавлен `fat_overload` (открытый бюджет kcal%<100 & fat≥140%, protein не drought) → навигация к постному белку уже в обед. Дефицит-HINTS (severe_deficit/under_target_evening/cold_start) смягчены под logged≠eaten. **Порядок проверок и `perfect_unicorn`@100-105% сохранены** — предложенный агентом-Номсом wholesale-rewrite задавливал unicorn веткой target_met (регрессия), отклонён.
+
+### Отклонённые предложения (durable — не переоткрывать без обоснования)
+refeed/Breaking Fast движок (owner отклонял как алярмизм «инсулиновый шок поджелудочной» + вне scope, Бриф B отложен); wholesale-rewrite обоих промптов (стирал биохимию-как-специю, «читай итоги дня», zen-режим — их примеры = «формула из 3 рефлексов» из PR #283); словарь продуктов per-country в app_constants (gpt-4o знает локальную еду по Country — переусложнение).
+
+См. [[daily/2026-06-05.md]] (~22:00) и handover `2026-06-05_sage-proactive-navigator.md`.
