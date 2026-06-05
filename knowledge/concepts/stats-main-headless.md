@@ -5,7 +5,7 @@ tags: [headless, stats, migration, phase-3a, translations, rpc]
 sources:
   - "daily/2026-04-23.md"
 created: 2026-04-23
-updated: 2026-04-27
+updated: 2026-06-05
 status: "DEPLOYED — Migration 124 canonical + migration 125 conditional edit button (Spec §6.6)"
 ---
 
@@ -200,3 +200,35 @@ See: [[concepts/dumb-renderer-interpolation-gotchas]]
 - [[concepts/adversarial-review-protocol]] — pre-apply review process
 - [[concepts/headless-template-substitution]] — `{tr:...}` placeholder resolution
 - [[concepts/supabase-db-patterns]] — migrations 122-123 entry
+
+## Migration 467 — БРИФ E: Ж/У диапазоны + направленный статус-эмодзи (2026-06-05)
+
+«Мой день» теперь показывает жир/углеводы как **коридор «79—105 г»** (em-dash) со статус-эмодзи по направлению, а не одиночный таргет с бинарным ✅/⚠️.
+
+**Поведение:**
+- **Ж/У:** в коридоре [min;max] → ✅ · ниже → ⬆️ (утром до cutoff скрыт) · выше → ⬇️ · выше +`macro_over_alarm_pct`% (15) → ⚠️.
+- **Белок:** нет коридора (цель + научный потолок). <`protein_target_floor_pct`% (90) цели → ⬆️ · ≤потолок → ✅ · >потолок → ⬇️ · >потолок+15% → ⚠️. Закрывает «съел 300г белка — молчок».
+- Утренний gate (mig 368) сохранён, **cutoff 15→12** (`macro_warn_hour_cutoff`, планировать обед). Эмодзи нейтральные (`icon_macro_under` ⬆️ / `icon_macro_over` ⬇️ / `icon_warning` ⚠️ / `icon_check` ✅).
+
+**🔑 Архитектура — 3-RPC цепочка (важно понимать поток данных):**
+```
+calculate_user_targets  → СОХРАНЯЕТ в users: target_{fat,carbs}_{min,max}_g (mig 462) + target_protein_max_g (mig 467 потолок Helms)
+        ↓ (users columns, RAW v15)
+get_day_summary         → читает RAW колонки, отдаёт ADJUSTED коридоры: min/max × (1 + lifestyle_delta_pct/100)
+                          ТА ЖЕ %-дельта, что и точечные таргеты (luteal/сон/стресс) → коридор консистентен с целью
+        ↓ (v_ds JSON)
+get_daily_stats_rpc     → коридор-токены under|in_range|over|over_much + range-строки 'target_f_range'/'target_c_range'
+        ↓ (business_data, полный merge в template_vars)
+render_screen → stats.main_text (×13: {target_f}→{target_f_range}, {target_c}→{target_c_range}; белок {target_p} без изменений)
+        ↓
+Python _maybe_suppress_macro_warn_under_cutoff → гасит токен 'under' до cutoff (только презентация, time-dependent → не в SQL для cache-idempotency)
+```
+
+**Durable-уроки:**
+- **Коридор масштабируется lifestyle-дельтой в get_day_summary**, не берётся сырым — иначе у premium-юзера с luteal/сон/стресс коррекцией коридор разошёлся бы с отображаемой целью. Точка и границы двигаются одной %-дельтой.
+- **Потолок белка для алярма = научный потолок из calc** (Helms 3.1 г/кг FFM / 2.5 ref), сохранён в `users.target_protein_max_g`. Не выдуманный множитель. Нормальный перебор (180-200) = ✅, реальный избыток (300) = ⚠️.
+- **render_screen делает полный merge** `jsonb_build_object(...) || business_data` → новые поля RPC доходят до template без whitelist.
+- **Python-гейт реагирует ТОЛЬКО на токен 'under'** — расширение словаря (ok→in_range, +over_much) его не ломает; нужен был только сдвиг cutoff (через app_constants, не код).
+- Schema: `ui_translations` = headless JSONB (`content` per lang_code), не key-row. Правка шаблона — `jsonb_set(content,'{stats,main_text}', replace(...))` по всем langs сразу.
+
+Verify: 4 сценария токенов в транзакции + render_screen реально отдаёт 'target_f_range' с em-dash. p95 46.8ms (VPS). PR #338, daily 2026-06-05.

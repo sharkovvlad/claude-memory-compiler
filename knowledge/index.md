@@ -150,7 +150,7 @@ _16 files · 79 incoming refs (30d)_
 - [[progress-hub-headless]] — Progress Hub Headless Migration (Phase 3A Iterations 2-4)
 - [[python-vs-n8n-template-grammar]] — Python `services/template_engine.py` vs n8n Dumb Renderer — две грамматики, одно `ui_translations`
 - [[safe-create-or-replace-recipe]] — Safe `CREATE OR REPLACE FUNCTION` Recipe — защита от stale-base regression
-- [[stats-main-headless]] — Stats Main Screen — Headless Phase 3A (Migrations 122–124)
+- [[stats-main-headless]] — Stats Main Screen — Headless Phase 3A (mig 122–124) + **mig 467 БРИФ E: Ж/У диапазоны «79—105» + статус-эмодзи ⬆️/✅/⬇️/⚠️ (3-RPC цепочка calculate_user_targets→get_day_summary adjusted-коридоры→get_daily_stats_rpc токены→render), cutoff 12, белок против научного потолка**. daily/2026-06-05.
 - [[subscription-management-headless]] — Subscription Management Headless
 - [[ui-stickers-headless]] — Sticker Architecture (4 Channels, Single Source of Truth)
 - [[variant-b-cutover]] — Variant B Cutover — паттерн постепенного переноса n8n → Python
