@@ -1,5 +1,8 @@
 # Handover 2026-06-05 — Точность макросов / FatSecret enrichment
 
+> **🔴 ЗАКРЫТО 2026-06-05 (eval-гейт):** FatSecret НЕ строим. Eval (PR #337) → GPT-4o уже даёт медиану 0% откл. на 100г; FatSecret name-search не превосходит. Barcode-источник FatSecret = scope `barcode` платный (free-tier `code 14`). Реальный рычаг точности — порция/состояние (portion_note v5 + память коррекций, LIVE), не плотность. Этот хендовер — исторический контекст; актуальный вывод в KB [[cascade-macro-enrichment-fatsecret]] §13.
+
+
 Брифинг для следующего агента на треке «повысить точность ккал/БЖУ». Полный дизайн
 + находки — KB [[concepts/cascade-macro-enrichment-fatsecret]]. Здесь — стартовый
 5-минутный контекст.
