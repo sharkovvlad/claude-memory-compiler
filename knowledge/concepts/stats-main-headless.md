@@ -232,3 +232,5 @@ Python _maybe_suppress_macro_warn_under_cutoff → гасит токен 'under'
 - Schema: `ui_translations` = headless JSONB (`content` per lang_code), не key-row. Правка шаблона — `jsonb_set(content,'{stats,main_text}', replace(...))` по всем langs сразу.
 
 Verify: 4 сценария токенов в транзакции + render_screen реально отдаёт 'target_f_range' с em-dash. p95 46.8ms (VPS). PR #338, daily 2026-06-05.
+
+> **Owner decision 2026-06-05 (НЕ переоткрывать):** калории остаются ОДНОЙ целью без коридора/допуска. Anti-shame обеспечивается отсутствием алярма; дневной разброс ±5-10% = норма, адекватность судить по недельному среднему. Коридор как у Ж/У калориям НЕ делаем (точка честнее для итогового рычага веса). Развилка «недельное среднее / Adaptive TDEE» — отдельная будущая тема, не дневной экран.
