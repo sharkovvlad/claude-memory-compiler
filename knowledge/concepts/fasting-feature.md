@@ -5,12 +5,29 @@ tags: [features, gamification, fasting, n8n, rpc, translations]
 sources:
   - "daily/2026-04-13.md"
 created: 2026-04-13
-updated: 2026-04-13
+updated: 2026-06-05
 ---
 
 # Fasting / Skip Meal Feature
 
-> ⚠️ **status: stale** — нет упоминаний в `daily/`/`handover/` за последние 30 дней (last activity mtime 2026-04-14). Тема, возможно, заморожена или решена. Перепроверить актуальность перед использованием.
+> 🔄 **status: REBUILT IN PYTHON (2026-06-05)** — фича переписана с нуля на Python (брифы B+D),
+> ВКЛЮЧЕНА в проде (`handler_fasting_use_python=true`). Канонический брифинг —
+> **[[handover/2026-06-05_fasting-skip-python]]** + `daily/2026-06-05.md`. Раздел ниже («n8n-реализация»)
+> описывает СТАРУЮ n8n-версию (mig 057) — она больше НЕ обслуживает `cmd_skip_meal`
+> (роутер ведёт в Python `handlers/fasting.py`); n8n-ветка остаётся лишь как graceful fallback.
+
+## Актуально (Python-rebuild 2026-06-05)
+
+- **Вход:** `cmd_skip_meal` → `dispatcher/router.py` (`FASTING_CALLBACKS`, target `fasting`) → `webhook_server` → `handlers/fasting.py`. Флаг `app_constants.handler_fasting_use_python`.
+- **Поток:** 1-й пропуск → `log_fasting_meal` (экономика КАК ЕСТЬ +15 XP/−1 мана/стрик) → RPP-safe подтверждение «осознанная пауза» + футер XP/стрик (из result). 2-й пропуск → **опрос причины** (пост / нет аппетита / занят / не отвечать) вместо старого блока. Ответ → `record_skip_reason` → ack с последствием / мягкий дисклеймер уязвимым / РПП-чек-ин по паттерну.
+- **Бэкенд (mig 459-461/465):** `food_logs.skip_reason`; `users.fasting_intent_asked/fasting_protocol/window`; RPC `get_fasting_eligibility` (SOFT safety), `record_skip_reason`, `set_fasting_protocol`. Иконка `icon_fasting`=⏸️ (была 🤐). Копирайт 13 языков.
+- **Sage:** `_compute_day_status`→`fasting_logged` (день 0-ккал) — не паниковать «поешь».
+- **🔴 ОТКЛОНЕНО (sage-tov):** Breaking-Fast рефид-оценка + Science-Bytes аутофагия (алярмизм/мед-claims).
+- **🟡 Phase 2 (TODO):** UI протоколов 16:8/18:6, 24ч-голодание, глушение meal-напоминаний в день поста.
+
+---
+
+## n8n-реализация (LEGACY, mig 057, 2026-04-13 — больше не активна для cmd_skip_meal)
 
 The "Skip Meal / Fasting" feature allows users to explicitly mark a period as intentional fasting rather than forgetting to log food. Implemented via a dedicated RPC, inline button on the Add Food prompt, and 4 translation keys.
 

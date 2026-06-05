@@ -78,9 +78,10 @@
 
 ## 🛡 Safety & Clinical Guards
 
-_8 files · 121 incoming refs (30d)_
+_9 files · 121 incoming refs (30d)_
 
 - [[adaptive-modifiers-architecture]] — Adaptive Modifiers Architecture (Phase 3, mig 301+)
+- [[calc-scientific-basis]] **`🔥 HUB`** — Научное обоснование расчёта БЖУ (AMDR/ISSN/Helms/Loucks цитаты) + **консенсус v14** (жир=таргет 1.0г/кг+диапазоны, deficit-aware белок, Extreme-PAL, EA-floor; ABW снят). Источник-обоснование «почему считаем так». Тройной консенсус 2026-06-03. daily/2026-06-03.
 - [[cycle-tracking-ux-and-accuracy]] **`🔥 HUB`** — Cycle tracking UX matrix (mig 334-360, Phase 3d) + nutritional accuracy. **4 design risks closed by mig 375** (2026-05-29): dynamic dates, «Не помню точно» silent skip, menopause gate age≥55, inline cycle length range 21-35. Original historical context сохранён в статье.
 - [[energy-availability-design-decision]] — Energy Availability (EA / RED-S) — Design Decision: defer to P2
 - [[personalized-macro-split]] — Each user receives unique daily protein/fat/carbs targets computed from their body type, training style, and weight goal — replacing the previous one-size-fits-all macro percent...
@@ -290,7 +291,7 @@ _9 files · 7 incoming refs (30d)_
 
 ### 🏛 Archived / legacy / stale
 
-- [[fasting-feature]] **`💤 stale`** — The "Skip Meal / Fasting" feature allows users to explicitly mark a period as intentional fasting rather than forgetting to log food. Implemented via a dedicated RPC, inline but...
+- [[fasting-feature]] **`🔄 rebuilt-python`** — «Осознанная пауза / голодание» (брифы B+D) переписана с нуля на Python и ВКЛ в проде 2026-06-05 (`handler_fasting_use_python=true`): cmd_skip_meal→`handlers/fasting.py`, опрос причины вместо блока, RPP-safe копирайт 13 langs, иконка ⏸️, Sage `fasting_logged`. Канон — [[handover/2026-06-05_fasting-skip-python]]. n8n (mig 057) = legacy fallback. ОТКЛОНЕНО: Breaking-Fast/Science-Bytes (sage-tov).
 - [[league-fomo-push]] **`💤 stale`** — League FOMO Push and Rich League Notifications
 - [[league-ux-v2]] **`💤 stale`** — League UX v2 — Duolingo-style Smart Leaderboard
 - [[squad-referral-screen]] **`💤 stale`** — Экран "Твоя Банда" (Squad) — первый UI для реферальной системы NOMS. Реферальная механика была полностью реализована в БД ещё в Phase 1; этот экран впервые делает её видимой пол...
