@@ -15,6 +15,12 @@ status: golden reference — update when calc v9+ ships
 
 # calculate_user_targets v8 — Golden Test Cases
 
+> ⚠️ **status: stale golden (2026-06-05).** Это v8-эталон (14 кейсов). Прод ушёл на **v15+v16**
+> (mig 462+464). **Актуальный golden = `Нутрициолог (аудит расчётов v13)/Digital_Twin_v15_values.csv`
+> (24 профиля, PAL14+v15)** + runnable-твин `_engine_v15.py`; regression-скрипт `/tmp/verify463.py`
+> (прод == твин 24/24). Этот v8-набор — для исторических safety-guards (maternal/BMI/age), формула
+> макро/энергии в нём УСТАРЕЛА. Формула → [[calc-scientific-basis]] §v15+v16.
+
 > **Назначение:** эталонный набор 14 тест-кейсов для проверки корректности `calculate_user_targets` после любых изменений (v8 → v9 → …). Используется как regression-suite в Google Sheets «Digital Twin» (двойник калькулятора) + как cross-check ground truth для RPC.
 >
 > **Google Sheet:** [NOMS LiveOps Digital Twin v8.3](https://docs.google.com/spreadsheets/d/1Yi6VyKyPjMm0Et7okGW8NZgSCepQYUZVkGU2flaRa5o/edit) (final EU-locale fix).

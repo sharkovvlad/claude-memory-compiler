@@ -81,10 +81,10 @@
 _9 files · 121 incoming refs (30d)_
 
 - [[adaptive-modifiers-architecture]] — Adaptive Modifiers Architecture (Phase 3, mig 301+)
-- [[calc-scientific-basis]] **`🔥 HUB`** — Научное обоснование расчёта БЖУ (AMDR/ISSN/Helms/Loucks цитаты) + **консенсус v14** (жир=таргет 1.0г/кг+диапазоны, deficit-aware белок, Extreme-PAL, EA-floor; ABW снят). Источник-обоснование «почему считаем так». Тройной консенсус 2026-06-03. daily/2026-06-03.
+- [[calc-scientific-basis]] **`🔥 HUB`** — Научное обоснование расчёта БЖУ (AMDR/ISSN/Helms/Loucks цитаты) + **консенсус v15+v16 🟢 LIVE на проде** (mig 462+464): жир=таргет 1.0г/кг+диапазоны, deficit-aware белок+потолки/vegan-cap, reference-вес ожирения (v15 макро Step 7-8); PAL14 sedentary 1.2→1.3…heavy→1.8+extreme-тир (v16 энергия Step 5). Прод == `Digital_Twin_v15_values.csv` 24/24. EA-floor НЕ вошёл. daily/2026-06-05.
 - [[cycle-tracking-ux-and-accuracy]] **`🔥 HUB`** — Cycle tracking UX matrix (mig 334-360, Phase 3d) + nutritional accuracy. **4 design risks closed by mig 375** (2026-05-29): dynamic dates, «Не помню точно» silent skip, menopause gate age≥55, inline cycle length range 21-35. Original historical context сохранён в статье.
 - [[energy-availability-design-decision]] — Energy Availability (EA / RED-S) — Design Decision: defer to P2
-- [[personalized-macro-split]] — Each user receives unique daily protein/fat/carbs targets computed from their body type, training style, and weight goal — replacing the previous one-size-fits-all macro percent...
+- [[personalized-macro-split]] ⚠️ **частично superseded** (v3-логика fat_pct%; жир-сплит теперь = таргет г/кг+коридоры v15, белок deficit-aware+потолки, PAL14 v16) → актуальная формула [[calc-scientific-basis]] §v15+v16. Файл актуален для: 3 оси (training/phenotype/goal_speed), app_constants-паттерн, RFM→LBM→Katch.
 - [[phenotype-quiz]] — Phenotype Quiz (Body Composition Classification)
 - [[pregnancy-lactation-clinical-spec]] — Pregnancy / Lactation — Clinical Spec для P0.6
 - [[safety-banner-ux-redesign-2026-05-18]] — Safety Banner UX Redesign — Multi-Guard Stacking Problem (research)

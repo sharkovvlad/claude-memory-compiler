@@ -15,6 +15,11 @@ updated: 2026-05-17
 
 # calculate_user_targets — Roadmap
 
+> ⚠️ **update 2026-06-05:** крупный блок P1 (deficit-aware белок, жир=таргет+диапазоны, PAL-апгрейд,
+> obese-cap белка) **ОТГРУЖЕН на прод** как v15+v16 (mig 462+464). Актуальная формула/статус →
+> [[calc-scientific-basis]] §«Консенсус v15+v16». Остаток из этого roadmap: EA-guard (НЕ вошёл,
+> [[energy-availability-design-decision]]), Adaptive TDEE (нет в проде). Сверяй пункты ниже с прод-статусом.
+
 Living document. **P0 = active sprint** (focus). **P1+ = backlog** (defer until P0 closed).
 
 Все задачи маркируются по [[concepts/agent-collaboration-protocol]] Rule 1 severity. Migrations apply через mig-engineer ownership (Rule 4). Клинические решения per task — clinical owner (Rule 4).
