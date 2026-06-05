@@ -230,6 +230,10 @@ Pattern detail — [[payment-idempotency-pattern]].
 - **`04_Menu_v3 → Switch Forward To`:** убраны 2 мёртвых case (`02_Onboarding_v3`, `02.1_Location` — без outgoing connections) через Safe PUT. Оставлены `03_AI_Engine` (живой output[0]) и `10_Payment` (payment вне scope — другой агент). Switch теперь 2 правила.
 - **`01_Dispatcher → Route Classifier`:** упоминания `02.1_Location` / `10_Payment` — это **устаревшие комментарии** + живая routing-логика `loc_`/payment (ведёт в Python-таргеты), НЕ dead executeWorkflow. Не трогали (риск без пользы на живом fallback Code-node).
 
+### Edit Meal re-recognition → Python (Phase 5, PR #326, 2026-06-05)
+
+**`reason='editing_meal'` (registered-юзер редактирует приём → новое фото/голос/текст для re-recognition) теперь Python-authoritative** (pending deploy PR #326). Pipeline `handlers/food_log._handle_edit_meal_input` существовал с Stage 7b PR D, но не был подключён к гейту (см. [[stage7-global-cutover]] §поправка-06-05). Это был ПОСЛЕДНИЙ живой food-путь в n8n `03_AI_Engine` → после deploy+monitoring разблокирует Stage 7c (DELETE 03/06). До deploy: edit ещё идёт через n8n (executeWorkflow, игнорирует active=0).
+
 ### Метод деактивации (gotcha n8n 2.17.7)
 
 API `/activate`+`/deactivate` → **Forbidden**; PUT не меняет `active` (read-only). Деактивация только прямым SQLite `UPDATE workflow_entity SET active=0` на `/home/noms/n8n/data/database.sqlite` (bind-mount). Детали + render-endpoint решение — [[stage7-global-cutover]] §7c прогресс.

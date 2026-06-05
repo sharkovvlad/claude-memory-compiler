@@ -112,6 +112,12 @@ INSERT INTO app_constants(key, value, scope, description) VALUES
 
 ## Stage 7c cleanup (после 7д стабильного global)
 
+> **🛑 ПОПРАВКА 2026-06-05 — реальный блокер 7c НЕ календарь, а немигрированный Edit Meal путь (Phase 5):**
+> Verify-first перед удалением 03/06 поймал, что n8n `03_AI_Engine` **ПРОДОЛЖАЛ исполняться** (7 успешных exec 06-03…06-05, последний сегодня), несмотря на `active=0` — потому что **повторное распознавание еды при редактировании (`reason='editing_meal'`) НЕ было в Python**. Это НЕ fallback от ошибки (0 Python AI-failures) и НЕ остаток — живой функциональный путь (registered-юзер редактирует приём → шлёт новое фото/голос/текст → re-recognize). Если бы удалили 03 по календарю — **сломали бы редактирование еды**.
+> - **Корень:** Python edit-pipeline (`handlers/food_log._handle_edit_meal_input`, Stage 7b PR D `d6f4c72`) был СМЕРЖЕН, но **никогда не доходил до прода** — webhook AI-гейт пропускал только `startswith(('food_media','text_food'))`, а роутер ставит `reason='editing_meal'` → не матчит → silently fall through в n8n. Классический «merged-but-unwired» latent bug. `handle_ai_input` уже диспатчил на `_handle_edit_meal_input` по `ctx.status=='editing_meal'` — не хватало только пропустить reason в гейт.
+> - **Fix:** PR #326 (2026-06-05) — расширен reason-предикат гейта на `'editing_meal'` + distinct лог `AUTHORITATIVE_AI_EDIT`. Все RPC (`replace_meal_transaction`/`grant_correction_xp`/`clear_editing_state`/`get_meal_by_id`) уже в проде, миграций нет. Fail-safe сохранён.
+> - **7c РАЗБЛОКИРУЕТСЯ ТОЛЬКО ПОСЛЕ deploy+monitoring PR #326:** `AUTHORITATIVE_AI_EDIT` растёт И n8n `03_AI_Engine` executions → 0 за чистые несколько дней. До этого 03/06 НЕ удалять (они ещё обслуживают edit через executeWorkflow, игнорируя `active=0`). **Урок: «время прошло» ≠ «путь мёртв» — гейт удаления = 0 реальных executions, а не календарь.**
+>
 > **⏩ Прогресс 2026-06-02 (день 4 из 7, частично выполнено досрочно по решению owner'а):**
 > - ✅ **Шаг 2 (deactivate 03_AI_Engine + 06_Indicator_Clear) — СДЕЛАНО.** `active=0` в live SQLite. Verified: SQLite SELECT + API GET оба показывают `active=false`.
 > - ⛔ **Шаг 3 (DELETE `/internal/food_log/render`) — НЕ делали.** Endpoint оставлен живым: 03_AI_Engine хоть и `active=0`, всё ещё вызывается через `executeWorkflow` (fallback) и зовёт этот endpoint для рендера. Удалять только когда 03 будет физически DELETE'нут (шаг 5).
