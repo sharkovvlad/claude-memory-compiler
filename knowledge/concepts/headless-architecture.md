@@ -195,11 +195,13 @@ new_main = [[{"node": correct_mapping[r['outputKey']], "type": "main", "index": 
 
 ### Gotcha 4: `meta.target_screen` mandatory for inline buttons
 
-**Symptom:** Every inline button re-renders current screen → Telegram "Bad Request: message is not modified".
+**Symptom:** Every inline button re-renders current screen → Telegram "Bad Request: message is not modified" OR user sees "nothing happens" (silent).
 
 **Cause:** `process_user_input` resolves `v_next_screen := COALESCE(button.meta->>'target_screen', screen.next_on_submit, current_screen)`. If both NULL, fallback is current_screen (re-render).
 
 **Fix (Migration 088):** populate `ui_screen_buttons.meta` = `{"target_screen": "...", "set_status": "..."}` for every navigating button.
+
+**Real incident (2026-06-06, mig 471):** `cmd_ambassador_stats` and `share_ambassador_code` on `friends_info` screen had empty `meta={}`. PUI found buttons (FOUND path) but `target_screen=NULL` → re-rendered `friends_info` (same screen). To user: buttons appeared dead/broken. Only affected users with `ambassador_tier='active'` due to visible_condition. Fix: added `target_screen:'ambassador_stats'` meta + created the screen; `share_ambassador_code` was converted to url_template button instead.
 
 ### Gotcha 5: Stuck in edit_* status blocks reply-keyboard buttons
 
