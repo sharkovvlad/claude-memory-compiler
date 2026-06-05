@@ -139,6 +139,26 @@ Basic free: 5000 вызовов/день, OAuth 2.0 client_credentials (server-t
 ### 9.7 Канонические тест-кейсы для golden-set (от owner)
 борщ с мясом (RU/UA/BY) · борщ постный · тортилья MX (лепёшка) · тортилья ES (картофельный омлет!) · гречка 100г (сухой/варёный — ×3) · стейк 100г. Region-tagged. Эталон: USDA для сырого западного, рецепт/региональная таблица для блюд, **допуск ±10–15%**, не точное совпадение.
 
+---
+
+## 10. Память коррекций (PR #324, mig 457 LIVE — приоритет owner)
+
+«Один раз поправил — бот запомнил для этого юзера». Edge-case: мексиканец ест испанскую тортилью; локация-подсказка склоняет к лепёшке → промах; жать [Исправить] каждый раз = плохой UX.
+
+- **mig 457:** таблица `user_food_memory(telegram_id, normalized_term, language_code, result_json)` + UNIQUE. **Per-user** (правка не течёт другим). Применена+verified на проде.
+- `services/user_food_memory.py`: `lookup`/`populate` (PostgREST, тот же `ai_cache._normalize` → консистентный ключ), `fetch_origin` (читает исходный термин ДО `replace_meal_transaction`, который затирает `food_logs.raw_user_input` текстом коррекции — **критичный порядок!**), `is_rememberable` (MVP-гейт). Fail-open.
+- `parse_input` (text): память консультируется **до** глобального `ai_food_cache` и LLM. HIT = мгновенно + 0 токенов.
+- `_handle_edit_meal_input`: захват origin до replace + fire-and-forget populate после успешной подходящей коррекции.
+- **Охват MVP:** text/voice, одноайтемные. Vision/мульти-айтем — позже. **Не трогал** `get_meal_by_id`/`replace_meal_transaction` (origin = изолированный select) → миграция = только таблица.
+- **3 слоя защиты от mis-ID** (тортилья): (1) локация=soft tie-breaker PR #325; (2) прозрачный вывод допущения (отдельный PR, план); (3) **память коррекций (этот) = ответ на «не жать каждый день»**.
+- Follow-up: GDPR scrub в `cron_anonymize_deleted_users`.
+
+## 11. Статус PR (2026-06-04)
+- **#322 temperature → MERGED в main.** ✅ (база теперь содержит `_get_temperature`).
+- **#323 location** — ⚠️ авто-mis-merge: GitHub смержил его в уже-удалённую base-ветку #322, НЕ в main → location в main НЕ попал. Урок в [[concepts/stacked-pr-base-change-gotcha]]. Заменён **#325** (те же коммиты, rebase на main, base=main).
+- **#324 correction memory** — open, base=main, mig 457 LIVE.
+- **#325 location (soft tie-breaker)** — open, base=main.
+
 ## Связанные
 - [[concepts/food-recognition-prompt-lab]] — промпты, дефекты, eval golden-set
 - [[concepts/barcode-logging-openfoodfacts]] — barcode-трек, `barcode_cache`, `lookup_product` pluggable

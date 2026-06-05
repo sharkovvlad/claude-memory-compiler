@@ -166,3 +166,21 @@ In the 2026-05-28 incident this was PR #216 (stage2 branch → main).
 * `daily/2026-05-28.md` — incident timeline.
 * `concepts/stars-subscriptions-botfather-prereq.md` — sibling
   P0-incident from same session.
+
+## Case 2026-06-04: stacked PR auto-merged into a DELETED base branch
+
+PR #323 (location-in-prompt) had `base = claude/ai-temperature-wire-ea77` (the
+#322 branch). #322 merged to main first, and its branch was auto-deleted. When
+#323 was then merged, GitHub merged it **into the now-orphaned base branch**, NOT
+into main → the location changes silently never reached main. Symptom: `git show
+origin/main:services/ai_recognition.py | grep _build_location_hint` = 0, while
+`gh pr view 323` showed `MERGED | base: claude/ai-temperature-wire-ea77`. The PR
+could not be reopened ("already merged") nor re-based ("closed PR").
+
+**Lesson:** after the parent of a stacked PR merges, **immediately retarget the
+child PR's base to main** (`gh pr edit <n> --base main`) BEFORE merging it, or it
+merges into a dead branch. Recovery: `git rebase origin/main` the child branch
+(drops the already-merged parent commit by patch-id), push to a **fresh branch**
+(the old one is bound to the void-merged PR), open a new PR with base=main. Did
+this — #323 → #325. Verify the change actually landed in main by grepping
+`origin/main` for a symbol from the diff, not by trusting the "merged" badge.
