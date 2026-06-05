@@ -146,6 +146,7 @@ Basic free: 5000 вызовов/день, OAuth 2.0 client_credentials (server-t
 «Один раз поправил — бот запомнил для этого юзера». Edge-case: мексиканец ест испанскую тортилью; локация-подсказка склоняет к лепёшке → промах; жать [Исправить] каждый раз = плохой UX.
 
 - **mig 457:** таблица `user_food_memory(telegram_id, normalized_term, language_code, result_json)` + UNIQUE. **Per-user** (правка не течёт другим). Применена+verified на проде.
+- **🔑 Реализация = Вариант А (NLM-review 2026-06-04), НЕ «на 100г»:** ключ = ТОЧНАЯ нормализованная строка ввода; `result_json` = ПОЛНЫЙ снапшот скорректированного блюда (абсолютные граммы/ккал), отдаётся как есть. Нет «макросов на 100г», нет регулярок для веса, LLM не зовётся. «тортилья»→HIT; «тортилья 200г»→другая строка→MISS→LLM. Зеркало `ai_food_cache`, но per-user + абсолютный приоритет. (Вариант Б — база на 100г + bias в промпт без пропуска LLM — возможное будущее для «тортилья 150г vs 200г», НЕ в MVP.)
 - `services/user_food_memory.py`: `lookup`/`populate` (PostgREST, тот же `ai_cache._normalize` → консистентный ключ), `fetch_origin` (читает исходный термин ДО `replace_meal_transaction`, который затирает `food_logs.raw_user_input` текстом коррекции — **критичный порядок!**), `is_rememberable` (MVP-гейт). Fail-open.
 - `parse_input` (text): память консультируется **до** глобального `ai_food_cache` и LLM. HIT = мгновенно + 0 токенов.
 - `_handle_edit_meal_input`: захват origin до replace + fire-and-forget populate после успешной подходящей коррекции.
