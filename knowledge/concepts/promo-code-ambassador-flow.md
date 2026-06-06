@@ -67,7 +67,7 @@ updated: 2026-06-06
 
 **Всегда проверяй**: если в `payment.py` есть `# disabled until backend is finished` — ищи что именно не готово, часто это 1-2 простых RPC.
 
-## 100%-скидка / gift-промокод (comp-доступ для тестировщиков) — DECISION 2026-06-06
+## 100%-скидка / gift-промокод (comp-доступ для тестировщиков) — AS-BUILT 2026-06-06 (mig 476/477, PR #348)
 
 **Задача:** друзья-тестеры вводят промокод и получают **месяц премиума бесплатно** (self-serve, через тот же promo-flow). Big-Tech аналог: Duolingo «Extended Free Trial Code» (HOTWINGS → 1 месяц Super, 1 redemption/год).
 
@@ -82,26 +82,30 @@ updated: 2026-06-06
 
 **Технический триггер решения:** 100%-скидка даёт `final_price = 0`, а **ни Stripe, ни Telegram Stars не выставляют счёт на 0** (минимальная сумма платежа). Значит «промокод на 100%» физически не может пройти через checkout — его надо шунтировать **до** платёжки.
 
-### Контракт RPC ↔ Python
+### Контракт RPC ↔ Python (as-built)
 
-Authoritative redeem-RPC сам решает и возвращает Python флаг:
-- `{activated: true, plan_id, expires_at, target_screen}` → уже выдано (`activate_subscription(p_payment_method='comp', p_price_paid=0, p_currency='NONE', p_discount_code_id=...)`); Python рендерит success-экран + стикер, **минуя checkout**.
-- `{requires_payment: true, final_price, ...}` → обычная скидка (<100%); Python ведёт на Stripe/Stars как сейчас.
+**RPC = `redeem_gift_code(p_telegram_id, p_code)` (mig 476)** — отдельная тонкая обёртка (НЕ расширение `apply_discount_code`, которая остаётся чистым калькулятором). Валидирует код (active/окно/`max_uses`), проверяет что он 100% (`discount_type='percent' AND discount_value>=100`), проверяет per-user лимит (COUNT `applied_discounts`), затем `activate_subscription(p_plan_id:='monthly', p_payment_method:='comp', p_price_paid:=0, p_currency:='USD', p_discount_code_id:=…)` + чистит `pending_promo_code`. Возвращает jsonb:
+- `{success:true, plan_id:'monthly', expires_at}` — уже выдано;
+- `{success:false, error:'invalid_or_expired'|'not_a_gift_code'|'already_used'|'activation_failed'}`.
 
-Python **не знает «почему»** — знает «что рендерить». Точное имя RPC (новый `redeem_promo_code` vs расширение `apply_discount_code`) финализируется на impl-шаге после live-верификации promo-flow (mig 472 / PR #343 может быть ещё не смержен).
+**Python (`handlers/payment.py:_handle_apply_promo`)**: после успешного `apply_discount_code`, если `final_price <= 0` → `_handle_gift_redeem` → вызывает `redeem_gift_code`, рендерит поздравление. Иначе (скидка <100%) — старый путь (re-render планов). Решает SQL; Python ветвится по флагу.
 
 ### Comp-подписка: жизненный цикл
 
-- `payment_method='comp'`, `price_paid=0`, `currency='NONE'`, `is_ambassador_code=FALSE` → **commission НЕ начисляется** (price=0).
+- `payment_method='comp'`, `price_paid=0`, `currency='USD'`, план `'monthly'` (+30 дней) → commission **не начисляется** (price=0 → `v_commission=0`).
 - Истечение: `cron_check_subscription_expiry` ловит всё `payment_method <> 'trial'` → comp откатывается в `free`, мана→2 **автоматически**. Правка крона НЕ нужна (в отличие от `gift`-награды за стрик — та пойдёт через `cron_expire_trials`, см. ниже).
-- `discount_codes` row для тестеров: `discount_value=100`, `discount_type='percent'`, привязка к 30-дневному плану, `max_uses=N` (число тестеров), `max_uses_per_user=1`, `valid_until` (срок акции).
+- `discount_codes` row тестеров (`NOMSTEAM`, mig 476): `discount_value=100`, `discount_type='percent'`, `max_uses=25`, `max_uses_per_user=1`, `valid_until=now()+90d`, `is_ambassador_code=false`.
 
-### Поздравительный стикер + текст (Channel A)
+### Поздравительный стикер + текст — INLINE Python render (НЕ headless-экран)
 
-После comp-активации юзер получает **поздравляющий стикер + текстовое сообщение** через headless success-экран:
-- Стикер — **Channel A** (UI content, Trophy): `bot_stickers` row `gift_premium_celebration_1` / category `gift_premium_celebration`, success-экран с `meta.show_sticker=true` (см. [[concepts/ui-stickers-headless]] «Как добавить новый стикер»). file_id поставляется владельцем → placeholder-паттерн (`file_id LIKE 'TODO_%'`, `is_active=false`) до получения.
-- Текст — `ui_translations` ключ `gift.premium_activated` × 13 langs (copywriter playbook: Telegram SRE ≤35char/line, gender-neutral, anti-shame, culture-adapt). Тон проходит ревью через `/sage-tov` агента перед локализацией.
-- **Не Python.** Стикер и текст — через `ui_screens.meta` + `ui_translations`, никаких `sendSticker`/хардкод-строк в хендлере (headless invariant).
+> ⚠️ Поправка к первоначальному решению: premium-успех в payment-flow **не** идёт через `render_screen`/`ui_screens` (payment.py намеренно избегает re-entry в render_screen pipeline — см. `_render_my_subscription_screen` комментарий). Поэтому gift-успех рендерится **inline в Python**, как остальной payment-flow.
+
+- **Текст** — `ui_translations` ключ `gift.premium_activated` × 13 langs (скаляр, не variant-array). RU/EN — Sage ToV; 11 остальных — copywriter-playbook + L1-ревью (AR: `السحر`→нейтральное `كله اشتغل وبيلمع` из-за оккультного оттенка sihr; FA: `بلیت`→`بلیط`). Рендер: `_lookup_translation(ctx, "gift.premium_activated")` + `OutboundItem(send_new)`.
+- **Стикер** — опционален: `stickers_cache.lookup("gift_premium_activated")` → если есть `OutboundItem(send_sticker)` перед текстом, иначе graceful-skip. `bot_stickers` row `gift_premium_activated_1` заведён placeholder'ом (`file_id='TODO_…'`, `is_active=false`, channel B). Владелец активирует позже **одной SQL-строкой** (`UPDATE … SET file_id=…, is_active=true`) + reload — **без правок Python** (стикер появится сам). Это и есть «sticker = one SQL line later».
+
+### Gotcha: двойной инкремент `current_uses` (fix mig 477)
+
+`activate_subscription` §8 **явно** делал `UPDATE discount_codes SET current_uses=current_uses+1`, а триггер `trigger_increment_discount_uses` (AFTER INSERT на `applied_discounts`) делает то же. → каждое погашение = **+2**. Безвредно для амбассадорских кодов (`max_uses=NULL`, uncapped), но **ополовинивало лимит** у первого capped-кода (NOMSTEAM 25→~12). **Fix (mig 477):** убран явный инкремент, триггер — единственный источник; `updated_at` поддерживает `set_updated_at_discount_codes`. **Durable: любой новый capped discount-код — проверь фактический инкремент `current_uses` (был баг до mig 477).**
 
 ### Отличие от «gift-награды за стрик» (Фаза 2, отложено)
 
@@ -117,4 +121,4 @@ Python **не знает «почему»** — знает «что рендер
 - [[concepts/subscription-management-headless]] — entitlement logic
 - [[concepts/ambassador-payout-system]] — payout flow for ambassadors
 - [[concepts/headless-architecture]] §Gotcha4 — target_screen meta pattern
-- [[concepts/ui-stickers-headless]] — Channel A sticker registration (gift celebration)
+- [[concepts/ui-stickers-headless]] — sticker registration + placeholder pattern (gift celebration sticker, Channel B graceful-skip)
