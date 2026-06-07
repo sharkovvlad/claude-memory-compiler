@@ -40,10 +40,10 @@ re.search(r'\bPet\b', s) or 'Пет' in s
 
 Правило теперь **статически проверяется** в CI: `.github/workflows/pr-phantom-pet-guard.yml` фейлит PR, если добавленная строка в `migrations/*.sql` содержит `\bPet\b` или `Пет` в контексте строкового литерала / `ui_translations` (SQL-комментарии вырезаются → упоминание правила в `--`-комменте не флагается). Зеркалит структуру `pr-jsonb-merge-guard.yml` (grep changed migrations → коммент + fail). **Override** для будущего экрана с реальным визуальным питомцем (см. §Правило п.3) — тег `-- pet-ok: <reason>` на той же строке.
 
-## Действие (открыто)
+## Действие (закрыто 2026-06-07)
 
-- **DRAFT `tools/sage_guarded_draft_2026-06-07.json`** уже Pet-free на всех 13 языках (вкл. исправленные en/ru, которые ЗАМЕНЯЮТ прод-строки с Pet).
-- Прод en/ru `sage.guarded.*` всё ещё содержат Pet → правятся в той же миграции, что и L1/L2-локализация (held). Бриф — `handover/2026-06-07_sage_guarded_l1l2_brief.md`.
+- ✅ **mig 482 (PR #354, MERGED):** sage.guarded.* на 13 языках Pet-free, en/ru прод-строки заменены. **Pet вычищен из всей `ui_translations` (0 вхождений, проверено).**
+- ✅ **CI-guard** `pr-phantom-pet-guard.yml` теперь блокирует повторное появление (см. выше).
 
 ## Связано
 - [[concepts/sassy-sage-multilingual-glossary]] §1 (персонаж — нет отдельного Pet), §2 (constraints).
