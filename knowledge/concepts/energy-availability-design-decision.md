@@ -9,7 +9,7 @@ sources:
   - "concepts/calc-user-targets-roadmap.md (P2.5b)"
   - "Session 2026-05-18 nutritionist owner triage"
 created: 2026-05-18
-updated: 2026-05-18
+updated: 2026-06-07
 ---
 
 # Energy Availability — Design Decision
@@ -149,6 +149,36 @@ Mig 246 v7 закрывает три из четырёх path'ов к опасн
 - (d) FTC/California laws эволюционируют в сторону mandated RED-S screening
 
 Owner на 2026-05-18 принял решение **отложить до P2** на основании анализа выше. Decision rationale зафиксирован для следующих сессий — не пересматривать без новых evidence.
+
+## 6a. Re-triage 2026-06-07 + interim educational disclaimer (mig 484, PR #359)
+
+Owner **подтвердил defer-to-P2** на свежих live-данных. Снимок аудитории (`is_bot=false`):
+14 живых юзеров; 6 женщин; goal `lose`=3, `maintain`=10; **нет ни одного `goal_speed='fast'`**;
+**нет heavy/extreme activity**; **группа риска Ж/15-35/lose = 0 человек**; `waist_circumference`
+заполнен 2/14. Таблиц трекинга тренировок — **нет ни одной** (P2.5a отсутствует). Вывод: носителей
+риска в текущей когорте физически ноль → строить guard не от кого, фейковый EA-lite по-прежнему
+вреден.
+
+**Вместо guard — честный информационный дисклеймер** (не претендует на расчёт EA):
+- Дом — **экран Women's Health** (`personal_metrics_women_health`), НЕ Safety Center. Причина: Safety
+  Center (`get_safety_center_data`) — динамическое табло сработавших calc-гардов, и mig 263 ЯВНО прячет
+  severity `informational`/`silent_accuracy`; справочная заметка туда либо не попадёт, либо потребует
+  фейкового non-info severity. Women's Health — женский, информационный, тематически про гормоны.
+- Ключ `ui_translations.profile.women_health_red_s_note` (13 языков, мастер RU+EN; 11 — без native L1).
+- Placeholder `{red_s_note}` в `profile.women_health_text`; `get_women_health_business_data` возвращает
+  `red_s_note` под условием **`goal_type='lose' AND NOT is_pregnant AND NOT is_lactating`**.
+- Текст: «💛 Энергия и цикл» — без чисел, без жаргона RED-S, anti-shame, самонацеливающийся, врач при
+  пропавшем цикле. Эмодзи 💛 встроен в текст (как 🌸 в существующих ключах).
+
+**🔴 Durable gotcha (поймано здесь):** беременность/кормление/underage в `calculate_user_targets`
+форсят `effective_goal_type='maintain'`, но **НЕ меняют сохранённый `users.goal_type`** (остаётся
+`lose`). Любой UI/гейтинг по `goal_type='lose'` ОБЯЗАН доп. исключать `is_pregnant`/`is_lactating`,
+иначе беременная увидит контент для худеющих. Это причина двойного условия в RPC.
+
+**Сторож разморозки — measurable (admin-алерт owner отклонил, только документация):** поднять приоритет
+настоящего EA-гарда (ручной лог тренировок → P2.5a → guard P2.5b), когда в БД появится **профиль
+Ж / 15-35 / `goal_type='lose'` / (`goal_speed='fast'` ИЛИ activity heavy/extreme)**, ЛИБО юзер сообщит
+про пропавший/сбившийся цикл (escalate immediately). Сейчас таких 0.
 
 ## 7. Связанные
 
