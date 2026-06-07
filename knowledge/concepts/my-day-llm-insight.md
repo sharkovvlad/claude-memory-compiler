@@ -204,3 +204,22 @@ NULL-им только timestamp (freshness-гейт падает на `at IS NU
 
 - [[daily/2026-05-24.md]] — PR #164 (mig 319+320): cache-on-write architecture, 10-enum day_status, _normalise_day_summary, 40 tests. PR #166 (mig 322): normaliser P0 fix (nested stats shape). PR #167 (mig 323): prompt guardrails (4 rules). PR #163: emoji rollback + timeout bump 2.5→5s.
 - [[daily/2026-05-25.md]] — Mig 349 (PR #197): system_prompt_my_day length reduction 100-250→80-150 chars × 13 langs.
+
+## Фазы свежести кэша выровнены под meal_period (2026-06-07, PR #355)
+
+`_day_phase` (menu_v3.py — фаза свежести my_day insight) и `_local_time_context`
+(sage.py — `meal_period`, по которому Sage пишет «завтрак/обед/ужин») — **две
+функции про одно и то же время суток**, и они РАСХОДИЛИСЬ. Старые границы
+`_day_phase` (6/12/17/22) противоречили meal_period: 05:xx был «night», но Sage
+звал завтраком; 17:xx «evening» vs afternoon_snack; 22:xx «night» vs dinner.
+Следствие коллизии: инсайт мог остаться «свежим» через смену формулировки и
+показать, напр., ужинную фразу в 23:00.
+
+**Фикс — единый источник правды.** `_day_phase` теперь = union'ы meal_period-бакетов:
+`morning=breakfast [5,11) · day=lunch+afternoon [11,18) · evening=dinner [18,23) ·
+night=late_night [23,5)` (оборот через полночь, night-wrap из репорта 417002669
+сохранён). 
+
+**Durable:** правишь meal_period в `_local_time_context` → ОБЯЗАТЕЛЬНО синхронь
+`_day_phase`. В коде обеих функций стоит крест-комментарий. Это частный случай
+durable-урока «freshness-фаза должна совпадать с тем, как Sage генерит время суток».
