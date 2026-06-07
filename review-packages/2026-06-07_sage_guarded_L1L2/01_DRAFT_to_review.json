@@ -1,10 +1,10 @@
 {
   "_meta": {
-    "status": "DRAFT — NOT APPLIED",
-    "gate": "L1 (nutritionist anti-shame) + L2 (native, min AR/FA/HI) before deploy",
+    "status": "L1/L2-REVIEWED — ready to apply (mig 482)",
+    "gate": "L1 (nutritionist anti-shame) + L2 (native) — DONE 2026-06-07; agent-vetted merge",
     "namespace": "sage.guarded.{maternal,underweight,underage} — JSONB array[3] per family",
-    "scope": "13 langs incl. en+ru — DRAFT en/ru REPLACE the current prod strings (which still contain «Pet»).",
-    "pet_rule": "NO «Pet»/«Пет» — NOMS has no separate Pet entity; bot itself is the companion. Removed from maternal[0,1], underweight[0], underage[0,2] vs prior draft. KB [[phantom-pet-entity]].",
+    "scope": "13 langs incl. en+ru — en/ru REPLACE the prod strings (which still contain «Pet»).",
+    "pet_rule": "NO «Pet»/«Пет» — NOMS has no separate Pet entity; bot itself is the companion. KB [[phantom-pet-entity]].",
     "source_en_corrected": {
       "maternal": [
         "You're feeding two — every bite counts.",
@@ -22,10 +22,10 @@
         "Eat like a champ. That's the way."
       ]
     },
-    "open_questions": [
-      "AR underweight/underage use generic-masc imperatives (كُلْ/اعتنِ) — gender-leak on unknown-sex cohort; L2(ar) to rewrite as verbal-noun/passive (glossary §3 AR).",
-      "AR/FA bidi: strings are now fully Arabic-script (no Latin island left after Pet removal) → bidi risk eliminated.",
-      "it/underweight[0] 'godere' double-meaning already removed (no 'gode' in current draft)."
+    "review_notes": [
+      "L2 accepted: ru underage[0] gender, pl underage[2] mistrz→mistrzowsko, hi underweight[2] anti-РПП (no 'eat to fullness'), ar ×4 generic-masc→nominal.",
+      "L2 REJECTED: (a) hallucinated 'Cyrillic in Polish' — my pl was clean, reviewer patch itself injected Cyrillic 'раз' (verified). (b) 5 'champion'-simile gender WARNs — not real leaks (en/ru/hi keep champion); kept uniform.",
+      "AR/FA bidi: fully Arabic-script (no Latin island after Pet removal) → bidi risk eliminated."
     ]
   },
   "translations": {
@@ -58,7 +58,7 @@
         "Поешь от души — это работа на пользу."
       ],
       "underage": [
-        "Растёшь крепким — ты на верном пути.",
+        "Набираешь сил — ты на верном пути.",
         "Энергия есть — учёба и спорт скажут спасибо.",
         "Ешь как чемпион. Так держать."
       ]
@@ -162,7 +162,7 @@
       "underage": [
         "Rośniesz w siłę — jesteś na dobrej drodze.",
         "Energia do szkoły i sportu. Mocno.",
-        "Jedz jak mistrz. O to chodzi."
+        "Jedz mistrzowsko. O to chodzi."
       ]
     },
     "uk": {
@@ -208,7 +208,7 @@
       "underweight": [
         "पौष्टिक — हर निवाला फ़ायदे का.",
         "अच्छे चुनाव. अपना ख्याल रखो.",
-        "भरपेट खाओ — यह तुम्हारे हक़ में काम कर रहा है."
+        "सही आहार — यह तुम्हारे हक़ में काम कर रहा है."
       ],
       "underage": [
         "मज़बूत बन रहे — तुम सही राह पर हो.",
@@ -224,13 +224,13 @@
       ],
       "underweight": [
         "مُغذٍّ — كل لقمة مكسب.",
-        "اختيارات جيدة. اعتنِ بنفسك.",
-        "كُلْ جيدًا — هذا يصبّ في مصلحتك."
+        "اختيارات جيدة. العناية بالنفس مهمة.",
+        "تغذية جيدة — هذا يصبّ في مصلحتك."
       ],
       "underage": [
-        "تكبر بقوة — أنت على الطريق الصحيح.",
+        "نموّ قوي — الطريق الصحيح دائمًا.",
         "طاقة للمدرسة والرياضة. متين.",
-        "كُلْ كبطل. هكذا تماماً."
+        "أسلوب الأبطال. هكذا تماماً."
       ]
     },
     "fa": {
