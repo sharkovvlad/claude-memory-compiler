@@ -159,3 +159,7 @@ Could have been prevented by:
 - Code review of mig 359 SQL before authorizing subagent's `apply LIVE` (this is the human-side fix → see [[agent-collaboration-protocol]])
 - CI grep check (preventative, TODO above)
 - Knowing this anti-pattern at write-time (this concept doc).
+
+## Gotcha: CI guard грепает и комментарии (2026-06-07, mig 487)
+
+CI-чек «Scan migrations for `content || payload`» — это **текстовый grep**, не SQL-парсер. Он фейлит PR, если паттерн `content ||` встречается в файле **где угодно**, включая SQL-комментарии. mig 487 имел строку-комментарий `-- … NEVER content || … (shallow-merge guard)` (описывал, что мы НЕ делаем) → чек упал, хотя сам SQL чист (`jsonb_set`). Фикс — переформулировать комментарий без литерала `content ||` («no whole-object shallow merge»). **Durable: не упоминай запрещённый паттерн дословно даже в комментарии-объяснении.**
