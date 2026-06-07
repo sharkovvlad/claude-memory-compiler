@@ -148,3 +148,8 @@ updated: 2026-06-06
 2. `process_referral_payment_reward`: Stars-база = `stars_paid × stars_payout_rate_usd`, не цена плана DEFAULT.
 3. Решение по валюте комиссии (EUR vs USD) + FX-нормализация в `get_ambassador_balance`.
 4. Коррекция backfill: строка $3.25 за sub `cc711c9a` (Евгения) завышена ~вдвое → ~$1.9.
+
+### Решения owner (2026-06-07) — реализовать
+- Stars: комиссия с **NET** (после удержания Telegram); card/USDT — с **полной** оплаты.
+- Валюта комиссии и **выплат = EUR** (юрлицо Испания; USDT был случайным дефолтом `payout_requests.currency`, не решением, 0 выплат).
+- Полный план реализации — handover `2026-06-07_ambassador-commission-currency.md`.
