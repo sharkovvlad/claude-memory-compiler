@@ -1,0 +1,254 @@
+{
+  "_meta": {
+    "status": "DRAFT — NOT APPLIED",
+    "gate": "L1 (nutritionist anti-shame) + L2 (native, min AR/FA/HI) before deploy",
+    "namespace": "sage.guarded.{maternal,underweight,underage} — JSONB array[3] per family",
+    "scope": "13 langs incl. en+ru — DRAFT en/ru REPLACE the current prod strings (which still contain «Pet»).",
+    "pet_rule": "NO «Pet»/«Пет» — NOMS has no separate Pet entity; bot itself is the companion. Removed from maternal[0,1], underweight[0], underage[0,2] vs prior draft. KB [[phantom-pet-entity]].",
+    "source_en_corrected": {
+      "maternal": [
+        "You're feeding two — every bite counts.",
+        "Nourishing and steady. Just right.",
+        "Listening to your body. That's what matters now."
+      ],
+      "underweight": [
+        "Nourishing — every bite is a win.",
+        "Solid food choices. Take care of yourself.",
+        "Eat well — this is working for you."
+      ],
+      "underage": [
+        "Growing strong — you're on track.",
+        "Fuel for school and sport. Solid.",
+        "Eat like a champ. That's the way."
+      ]
+    },
+    "open_questions": [
+      "AR underweight/underage use generic-masc imperatives (كُلْ/اعتنِ) — gender-leak on unknown-sex cohort; L2(ar) to rewrite as verbal-noun/passive (glossary §3 AR).",
+      "AR/FA bidi: strings are now fully Arabic-script (no Latin island left after Pet removal) → bidi risk eliminated.",
+      "it/underweight[0] 'godere' double-meaning already removed (no 'gode' in current draft)."
+    ]
+  },
+  "translations": {
+    "en": {
+      "maternal": [
+        "You're feeding two — every bite counts.",
+        "Nourishing and steady. Just right.",
+        "Listening to your body. That's what matters now."
+      ],
+      "underweight": [
+        "Nourishing — every bite is a win.",
+        "Solid food choices. Take care of yourself.",
+        "Eat well — this is working for you."
+      ],
+      "underage": [
+        "Growing strong — you're on track.",
+        "Fuel for school and sport. Solid.",
+        "Eat like a champ. That's the way."
+      ]
+    },
+    "ru": {
+      "maternal": [
+        "Заботишься о двоих — каждый кусочек в дело.",
+        "Питательно и без суеты. То что нужно.",
+        "Ты слушаешь себя — это главное сейчас."
+      ],
+      "underweight": [
+        "Питательно — каждый укус в плюс.",
+        "Хороший выбор продуктов. Заботься о себе.",
+        "Поешь от души — это работа на пользу."
+      ],
+      "underage": [
+        "Растёшь крепким — ты на верном пути.",
+        "Энергия есть — учёба и спорт скажут спасибо.",
+        "Ешь как чемпион. Так держать."
+      ]
+    },
+    "de": {
+      "maternal": [
+        "Du versorgst zwei — jeder Bissen zählt.",
+        "Nährend und ruhig. Genau richtig.",
+        "Du hörst auf deinen Körper. Das zählt jetzt."
+      ],
+      "underweight": [
+        "Nährend — jeder Bissen ein Gewinn.",
+        "Gute Essensauswahl. Pass auf dich auf.",
+        "Iss gut — das tut dir gut."
+      ],
+      "underage": [
+        "Wirst stark — du bist auf Kurs.",
+        "Energie für Schule und Sport. Stark.",
+        "Iss wie ein Profi. So geht's."
+      ]
+    },
+    "es": {
+      "maternal": [
+        "Alimentas a dos — cada bocado cuenta.",
+        "Nutritivo y tranquilo. Justo lo necesario.",
+        "Escuchas a tu cuerpo. Eso importa ahora."
+      ],
+      "underweight": [
+        "Nutritivo — cada bocado suma.",
+        "Buenas elecciones. Cuídate.",
+        "Come bien — esto te funciona."
+      ],
+      "underage": [
+        "Creciendo fuerte — vas por buen camino.",
+        "Energía para clase y deporte. Bien.",
+        "Come como un campeón. Así se hace."
+      ]
+    },
+    "fr": {
+      "maternal": [
+        "Tu nourris pour deux — chaque bouchée compte.",
+        "Nourrissant et tranquille. Juste ce qu'il faut.",
+        "Tu écoutes ton corps. C'est ça qui compte maintenant."
+      ],
+      "underweight": [
+        "Nourrissant — chaque bouchée est un plus.",
+        "De bons choix. Prends soin de toi.",
+        "Mange bien — ça marche pour toi."
+      ],
+      "underage": [
+        "Tu prends des forces — tu es sur la bonne voie.",
+        "De l'énergie pour l'école et le sport. Solide.",
+        "Mange comme un champion. C'est comme ça."
+      ]
+    },
+    "it": {
+      "maternal": [
+        "Nutri per due — ogni boccone conta.",
+        "Nutriente e tranquillo. Proprio così.",
+        "Ascolti il tuo corpo. È questo che conta adesso."
+      ],
+      "underweight": [
+        "Nutriente — ogni boccone è un punto a favore.",
+        "Buone scelte. Abbi cura di te.",
+        "Mangia bene — sta funzionando per te."
+      ],
+      "underage": [
+        "Cresci forte — sei sulla strada giusta.",
+        "Energia per scuola e sport. Solido.",
+        "Mangia da campione. Così si fa."
+      ]
+    },
+    "pt": {
+      "maternal": [
+        "Você nutre por dois — cada garfada conta.",
+        "Nutritivo e tranquilo. Na medida certa.",
+        "Você escuta o seu corpo. É o que importa agora."
+      ],
+      "underweight": [
+        "Nutritivo — cada garfada é um ganho.",
+        "Boas escolhas. Cuide de você.",
+        "Coma bem — isto está funcionando."
+      ],
+      "underage": [
+        "Crescendo forte — você está no caminho certo.",
+        "Energia para a escola e o esporte. Firme.",
+        "Coma como campeão. É assim mesmo."
+      ]
+    },
+    "pl": {
+      "maternal": [
+        "Karmisz dwoje — każdy kęs się liczy.",
+        "Odżywczo i spokojnie. W sam raz.",
+        "Słuchasz swojego ciała. Teraz to się liczy."
+      ],
+      "underweight": [
+        "Odżywczo — każdy kęs na plus.",
+        "Dobre wybory. Zadbaj o siebie.",
+        "Jedz dobrze — to działa na twoją korzyść."
+      ],
+      "underage": [
+        "Rośniesz w siłę — jesteś na dobrej drodze.",
+        "Energia do szkoły i sportu. Mocno.",
+        "Jedz jak mistrz. O to chodzi."
+      ]
+    },
+    "uk": {
+      "maternal": [
+        "Ти живиш двох — кожен шматочок у діло.",
+        "Поживно й спокійно. Саме те.",
+        "Ти слухаєш своє тіло. Зараз це головне."
+      ],
+      "underweight": [
+        "Поживно — кожен шматочок у плюс.",
+        "Гарний вибір. Дбай про себе.",
+        "Їж добре — це працює на тебе."
+      ],
+      "underage": [
+        "Набираєш сил — ти на правильному шляху.",
+        "Енергія для навчання і спорту. Міцно.",
+        "Їж як чемпіон. Так тримати."
+      ]
+    },
+    "id": {
+      "maternal": [
+        "Kamu memberi makan untuk dua — tiap suapan berarti.",
+        "Bergizi dan tenang. Pas sekali.",
+        "Kamu mendengarkan tubuhmu. Itu yang penting sekarang."
+      ],
+      "underweight": [
+        "Bergizi — tiap suapan nilai plus.",
+        "Pilihan yang baik. Jaga dirimu.",
+        "Makan yang cukup — ini bekerja untukmu."
+      ],
+      "underage": [
+        "Tumbuh kuat — kamu di jalur yang benar.",
+        "Energi untuk sekolah dan olahraga. Mantap.",
+        "Makan seperti juara. Begitu caranya."
+      ]
+    },
+    "hi": {
+      "maternal": [
+        "तुम दो के लिए पोषण दे रहे — हर निवाला मायने रखता है.",
+        "पौष्टिक और सुकून भरा. बिलकुल सही.",
+        "तुम अपने शरीर की सुन रहे — अभी यही मायने रखता है."
+      ],
+      "underweight": [
+        "पौष्टिक — हर निवाला फ़ायदे का.",
+        "अच्छे चुनाव. अपना ख्याल रखो.",
+        "भरपेट खाओ — यह तुम्हारे हक़ में काम कर रहा है."
+      ],
+      "underage": [
+        "मज़बूत बन रहे — तुम सही राह पर हो.",
+        "स्कूल और खेल के लिए ऊर्जा. बढ़िया.",
+        "चैंपियन की तरह खाओ. ऐसे ही."
+      ]
+    },
+    "ar": {
+      "maternal": [
+        "تُغذّين اثنين — كل لقمة لها قيمة.",
+        "مُغذٍّ وهادئ. تماماً كما ينبغي.",
+        "تستمعين إلى جسدك. هذا ما يهم الآن."
+      ],
+      "underweight": [
+        "مُغذٍّ — كل لقمة مكسب.",
+        "اختيارات جيدة. اعتنِ بنفسك.",
+        "كُلْ جيدًا — هذا يصبّ في مصلحتك."
+      ],
+      "underage": [
+        "تكبر بقوة — أنت على الطريق الصحيح.",
+        "طاقة للمدرسة والرياضة. متين.",
+        "كُلْ كبطل. هكذا تماماً."
+      ]
+    },
+    "fa": {
+      "maternal": [
+        "برای دو نفر تغذیه می‌کنی — هر لقمه ارزش دارد.",
+        "مغذی و آرام. دقیقاً همین خوب است.",
+        "به بدنت گوش می‌دهی. الان همین مهم است."
+      ],
+      "underweight": [
+        "مغذی — هر لقمه یک امتیاز.",
+        "انتخاب‌های خوب. مراقب خودت باش.",
+        "خوب بخور — این به نفع توست."
+      ],
+      "underage": [
+        "قوی می‌شوی — در مسیر درستی.",
+        "انرژی برای مدرسه و ورزش. محکم.",
+        "مثل قهرمان بخور. همینه."
+      ]
+    }
+  }
+}
