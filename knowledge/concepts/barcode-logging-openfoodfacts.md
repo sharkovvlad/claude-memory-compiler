@@ -5,8 +5,9 @@ tags: [food-log, barcode, openfoodfacts, python-handler, ai-recognition, content
 sources:
   - "daily/2026-06-03.md"
   - "daily/2026-06-05.md"
+  - "daily/2026-06-07.md"
 created: 2026-06-03
-updated: 2026-06-05
+updated: 2026-06-07
 status: active
 ---
 
@@ -255,3 +256,55 @@ if (
 - Нечитаемое фото в `waiting_barcode_portion` → retry message вместо vision fallback → fog "не еда".
 - Тексты `messages.barcode_prompt` (mig 470): "Наведи камеру" → "Сделай фото штрихкода и пришли его." × 13.
 - Новый ключ `messages.barcode_scan_retry` × 13 для retry UX.
+
+---
+
+## 10. Регионализация / crowd correction (2026-06-07, PR #341)
+
+Три улучшения для LATAM (Spain уже #3 среди real users) и для weak-coverage regions (RU/IR/IN/AR). Без миграций БД.
+
+### 10.1 Локализованные имена продуктов
+
+OFF отдаёт `product_name_<lc>` для каждого языка, где community локализовала продукт. Раньше мы брали `product_name` (default) + `product_name_en` — для LATAM/RU юзеров часто приходило французское/английское имя.
+
+**Реализация:**
+- `_OFF_FIELDS` запрашивает все 13 lang-полей (`product_name_es`, `product_name_pt`, ...)
+- `_pick_localized_name(product, lang_code)`: приоритет `product_name_<user-lang>` → default → English
+- `_parse_off_product` принимает `lang_code=` параметр и вызывает `_pick_localized_name`
+
+### 10.2 Региональный фильтр (lc + cc)
+
+OFF API поддерживает `lc` (язык) и `cc` (страна) query params. Для barcode v2 endpoint основные эффекты:
+1. Server-side приоритизация локализованных полей в ответе
+2. Если у продукта есть региональные варианты рецептуры (Coca-Cola Mexico vs EU) — OFF выбирает регионально-релевантный
+
+**Реализация:** `fetch_openfoodfacts(barcode, *, lang_code, country_code)` → `params["lc"]=lang_code; params["cc"]=country_code.lower()`. Подцеплено к `users.language_code` + `users.country_code` через `_try_barcode_lookup`.
+
+**Замечание про источник региональности:** Telegram стрипает EXIF из фото (privacy), поэтому GPS-координаты съёмки до нас не доходят. Источник правды — `users.country_code` из онбординга. Эту параллель часто хотят установить — нет, не работает.
+
+### 10.3 Self-learning кэш — crowd correction (как Yuka/MyFitnessPal)
+
+Когда юзер делает «Исправить» на блюде с `input_source='barcode'` И **не меняет порцию** (только КБЖУ) — исправленные значения пересчитываются в per-100g и upsert'ятся в `barcode_cache` с `source='user_corrected'`. Следующий юзер в любой стране, отсканировавший тот же штрихкод, получает выверенные данные.
+
+**🔑 Критичная защита — `is_macro_correction(original_portion, corrected_grams)`:**
+- Same-portion edit (±10%) → пишем в кэш (юзер исправил данные продукта)
+- Different-portion edit → НЕ пишем (юзер исправил порцию, его per-portion math нерелевантен для per-100g shared base)
+- Unparseable original portion → НЕ пишем (defensive)
+
+**Дополнительные guard'ы:**
+- Только single-item meals (`len(result.items) == 1 and len(old_items) == 1`) — multi-item обычно name-only correction
+- Только GTIN-checksum-valid `origin_raw_text` (defensive — не любой текст в raw_user_input принимаем как штрихкод)
+- `p_serving_size_g=None` в upsert — НИКОГДА не перетирать manufacturer pack weight юзерским вводом
+- `p_brand=None` — user edit не сообщает бренд
+- Fire-and-forget везде (`asyncio.create_task`) — не блокирует confirmation envelope
+- Если хоть что-то пошло не так — silently skip, никаких user-facing errors
+
+**Где в коде:** `services/barcode.py::upsert_user_correction()` + хук в `handlers/food_log.py::_handle_edit_meal_input` секция 5c, параллельно с уже существующим 5b `_ufm.populate` (per-user memory). Это два независимых пути: per-user (личная коррекция) и shared crowd-base (коррекция продукта).
+
+### 10.4 Что НЕ сделано (roadmap)
+
+- USDA FoodData Central как второй источник для US/глобальных брендов в LATAM (free, no auth) — следующий PR
+- GPT-fallback по EAN для weak-coverage regions (RU/IR/IN/AR) — следующий PR
+- Nutritionix (~$5/мес при росте) для US/UK brand coverage — отложено
+- OCR этикетки как ultimate fallback — отложено (нужен дополнительный UI flow)
+- OFF write-back (contribute corrected data into OFF community) — отложено (требует OFF API key и consent flow)
