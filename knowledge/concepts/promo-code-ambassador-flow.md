@@ -122,3 +122,29 @@ updated: 2026-06-06
 - [[concepts/ambassador-payout-system]] — payout flow for ambassadors
 - [[concepts/headless-architecture]] §Gotcha4 — target_screen meta pattern
 - [[concepts/ui-stickers-headless]] — sticker registration + placeholder pattern (gift celebration sticker, Channel B graceful-skip)
+
+## ⚠️ Stars commission base + currency normalization — OPEN ISSUE (2026-06-07)
+
+**Design B (mig 479) считает Stars-комиссию неверно — переплата.** Owner поймал на live.
+
+**Что сейчас (mig 479/483):** для Stars-оплаты база комиссии = **USD-цена плана DEFAULT-региона** (`subscription_prices.amount`, напр. quarterly $12.99). Комиссия = 25% × $12.99 = $3.25.
+
+**Почему это переплата:**
+- Прайс-лист ≠ выручка. Telegram платит разработчику **developer payout ~$0.013/⭐** (берёт ~30%, на мобиле + Apple/Google 30%).
+- 580 ⭐ (реальная quarterly-оплата) → NOMS получает ≈ 580×$0.013 ≈ **$7.5**, а не $12.99.
+- Комиссия $3.25 / реальные $7.5 = **~43%** вместо 25%.
+- **Правильная база Stars = net developer payout, не прайс-лист.** 25%×$7.5 ≈ $1.9.
+
+**Источники курса (durable):**
+- ✅ Telegram developer payout rate (~$0.013/⭐, уточнять — плавает) — авторитетно.
+- ✅ Реальные выписки вывода (Fragment/TON) — ground truth.
+- ❌ Курс ПОКУПКИ звёзд юзером (~1.66–1.82 ₽/⭐ из Telegram buy-dialog) — gross с маржой Telegram, НЕ наша выручка.
+- ❌ Среднее по пакетам покупки — не нужно; нужен один payout-курс.
+
+**Валюта (Испания/EUR):** юрлицо в Испании → учёт EUR. Сейчас комиссия в смешанных валютах (Stars→USD, Stripe→валюта оплаты), `get_ambassador_balance` складывает наивно. Нужна нормализация к ОДНОЙ валюте. Решение owner: EUR (юрлицо) vs USD (выплаты в USDT).
+
+**TODO (до реальных амбассадоров, не хотфикс):**
+1. `stars_payout_rate_usd` константа в `app_constants` (~0.013), крутить без миграций.
+2. `process_referral_payment_reward`: Stars-база = `stars_paid × stars_payout_rate_usd`, не цена плана DEFAULT.
+3. Решение по валюте комиссии (EUR vs USD) + FX-нормализация в `get_ambassador_balance`.
+4. Коррекция backfill: строка $3.25 за sub `cc711c9a` (Евгения) завышена ~вдвое → ~$1.9.
