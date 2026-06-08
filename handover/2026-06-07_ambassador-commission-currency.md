@@ -1,5 +1,9 @@
 # Handover: Ambassador commission — Stars net-base + EUR normalization (2026-06-07)
 
+> ✅ **RESOLVED 2026-06-08 (mig 493 LIVE on prod, PR #369).** Реализовано полностью: per-method commission base (Stars=net via `stars_payout_rate_usd` placeholder 0.013, card/USDT=full), валюта учёта+выплат=EUR с ECB FX snapshot на дату операции, backfill Евгении $3.25→€1.63, formula transparency inline в `get_ambassador_detail`, daily ECB cron `FxRateUpdateCron`. Архитектура и durable уроки — в KB [[fx-policy-revshare]]. Сессия 2026-06-08, см. `daily/2026-06-08.md`. Раздел ниже — исторический контекст для будущих ревизий.
+> 
+> **Открытое OPEN для следующего:** `stars_payout_rate_usd=0.013` — placeholder. Калибровать после первой реальной выплаты Fragment (формула: `получено_USDT / выведено_звёзд`). До тех пор Stars-комиссия амбассадора может быть на ±20% неточной (зависит от platform mix юзеров: desktop vs mobile с Apple/Google split).
+
 **Для агента, который подхватит.** Design B (комиссия по реферальному дереву) уже LIVE и работает, НО экономика курса/валюты неверна. Owner принял решения — нужно реализовать. **Это касается реальных денег → не хотфикс, делать аккуратно с rollback-тестами + явным go owner на apply.**
 
 ## Контекст (что уже LIVE на 2026-06-07)

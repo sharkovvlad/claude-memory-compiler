@@ -123,7 +123,7 @@ updated: 2026-06-06
 - [[concepts/headless-architecture]] §Gotcha4 — target_screen meta pattern
 - [[concepts/ui-stickers-headless]] — sticker registration + placeholder pattern (gift celebration sticker, Channel B graceful-skip)
 
-## Stars commission base + EUR normalization — RESOLVED 2026-06-08 (mig 492)
+## Stars commission base + EUR normalization — RESOLVED 2026-06-08 (mig 493)
 
 См. отдельный концепт [[fx-policy-revshare]]. Кратко: Stars-комиссия теперь считается с **NET** (XTR × `stars_payout_rate_usd` placeholder $0.013), card/USDT — с полной суммы; **валюта учёта и выплат = EUR** (юрлицо Испания); snapshot курса ЕЦБ на дату операции хранится на каждой строке `referral_rewards` (`fx_used`, `fx_date`, `base_amount`, `base_currency`). Backfill Евгении $3.25 → €1.63. Daily cron `FxRateUpdateCron` тянет ECB reference rate. Полная архитектура и Big-Tech ссылки — в [[fx-policy-revshare]].
 
@@ -131,7 +131,7 @@ updated: 2026-06-06
 
 ## ⚠️ Stars commission base + currency normalization — OPEN ISSUE (2026-06-07, RESOLVED 2026-06-08)
 
-> Раздел ниже сохранён как исторический контекст. Решение реализовано в mig 492 — см. секцию выше.
+> Раздел ниже сохранён как исторический контекст. Решение реализовано в mig 493 — см. секцию выше.
 
 **Design B (mig 479) считает Stars-комиссию неверно — переплата.** Owner поймал на live.
 
