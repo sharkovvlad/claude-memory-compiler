@@ -172,6 +172,7 @@ _12 files · 61 incoming refs (30d)_
 - [[content-type-routing-gotchas]] — Content-type routing gotchas: image/* document (desktop «как файл») → vision AI, message.audio → transcription, junk→messages.spam_protect reuse (уже ×13 в БД), полный список junk-типов. PR #294.
 - [[content-type-classification]] **`🔥 HUB-кандидат`** — Канонический паттерн классификации контента (photo/image-doc/voice/audio/junk/location-flow). **3 независимых классификатора** (router.py/telegram_proxy.py/location.py), обязаны быть синхронны — рассинхрон = 3 регрессии за 1 день (2026-06-03). Таблица классов + правило «меняешь один — обнови все три» + хроника инцидентов.
 - [[sage-food-log-llm-integration]] — Sassy Sage LLM one-liner (gpt-4o-mini) после каждого food log. Первый OpenAI call в NOMS. 5 safety paths, pre-baked fallback, asyncio parallel + timeout. PR #156, mig 312. **v2 (23.05):** JSON mode, emotion→tg-emoji, macros focus, fallback × 13 langs (mig 314-315). **v3 (24.05):** timeout 5s, always-fallback, emoji rollback unicode, persist_as_menu fix.
+- [[sage-payload-meta-override-pattern]] **`🔥 HUB-кандидат`** — Паттерн правки тона Sage **БЕЗ** правки системного промпта (owner-mandate «промпт=бренд»). 4 живых META: time_meta_warning (vечер≥16:00), closed-budget directive, VARIATION GUARD (репит штампа курица/творог), RULE 7 HARD GUARD (≥20г Б приём). Порядок в payload = возрастание специфичности. Fail-safe = пустая строка при любом сбое источника. PR #375 + mig 496 (2026-06-08).
 - [[my-day-llm-insight]] — My Day LLM Insight — cache-on-write gpt-4o-mini insight для stats_main. 10-enum `day_status` tone anchor, prompt guardrails (4 rules), normaliser shape fix. PR #164 mig 319-320, PR #166 mig 322, PR #167 mig 323.
 - [[meals-picker-two-stage]] — 2-stage meal edit/delete flow (meals_picker → meal_action). Dynamic per-meal buttons, parametric `cmd_select_meal_<uuid>`, 4 RPCs. PR #168 mig 324.
 - [[food-recognition-prompt-lab]] — Текущие промпты GPT-4o vision/text/recalculate (v3, mig 336), каталог дефектов качества (схлопывание позиций, пропуск тарелок, нестабильные макросы), варианты промпта для теста, дизайн оффлайн eval golden-set, `_prompt_cache` gotcha (нет hot-reload → нужен restart noms-webhooks).
@@ -205,6 +206,7 @@ _8 files · 53 incoming refs (30d)_
 - [[project-structure]] — Project Structure & Tech Stack
 - [[release-protocol]] — Release Protocol — Auto-deploy через GitHub Actions, manual fallback
 - [[tls-caddy-nomsbot]] — TLS edge: Caddy + Let's Encrypt на `nomsbot.com`
+- [[worktree-vs-main-clone-edit-confusion]] **`⚠️ gotcha`** — `Edit`/`Write` по absolute path `/Users/vladislav/Documents/NOMS/...` уходит в **основной клон**, а не в worktree (`.claude/worktrees/<name>/...`). Тесты из основного клона зелёные, но `git status` в worktree чист — правки в чужом месте. Защита: префикс path всегда с worktree, sanity-check `git status` перед commit. Live incident PR #375 (2026-06-08).
 
 ### 🏛 Archived / legacy / stale
 
