@@ -398,11 +398,14 @@ Button labels shortened for conversion per Номсова правка (DE/ES/FR
 - **Текст-обещание = действие.** Любое cron-сообщение «added +N» / «applied X» требует, чтобы код перед `sendMessage` записал то самое действие, и проверил что запись применилась. Иначе годами шлёшь ложь и узнаёшь об этом случайно.
 - **Hard-coded цифры в i18n-переводах ломаются при изменении business-логики.** «+175» в 13 языках не покрывало `luteal_early=100`. Placeholder `{kcal_delta}` решает раз и навсегда.
 
-### Open tech debt (2026-06-08)
+### Closed tech debt (mig 495, 2026-06-08, PR #371)
 
-- **Вынести 100/175/3/7 в `app_constants`** (owner подтвердил 2026-06-08). Ключи: `modifier_luteal_early_kcal_delta`, `modifier_luteal_early_fat_pct`, `modifier_luteal_late_kcal_delta`, `modifier_luteal_late_fat_pct`. Сейчас захардкожены в `apply_daily_modifier` (mig 474:801-810). Не строгий брейч конвенции (медицинская дельта, не UI), но вынесение упростит калибровку без миграции функции.
-- **Решение по `follicular` / `ovulation` в CHECK-констрейнте** (mig 301:110). Рекомендация: сузить CHECK до `IN ('luteal_early','luteal_late')` — защита от случайного вызова с baseline=0, при будущей фазе 3e расширим миграцией. Альтернатива — оставить и задокументировать как «reserved».
-- **`get_day_summary` + `compute_daily_modifier_stack` cap ±500** уже работает (mig 467) — luteal delta уважает общий потолок.
+- ✅ **Hoist luteal деталей в `app_constants`** (4 ключа: `modifier_luteal_early|late_kcal_delta|fat_pct`). RPC читает через `COALESCE` с fallback на 100/175/3/7. Hot-reload работает (live-verified). Калибровка значений теперь — `UPDATE app_constants SET value=...`, без миграции функции.
+- ✅ **CHECK сужен до `IN ('luteal_early','luteal_late')`** + RPC валидация синхронно. Backfill не понадобился (0 строк с follicular/ovulation за всё время). Будущая Phase 3e расширяет осознанной миграцией.
+
+**Остающееся:** `get_day_summary` + `compute_daily_modifier_stack` cap ±500 уже работает (mig 467) — luteal delta уважает общий потолок.
+
+**Durable pattern (mig 474 + mig 495):** medical-дельты модификаторов живут в `app_constants` как `modifier_<type>_<trigger>_<kind>` ключи, RPC читает через `COALESCE((SELECT value::<type> FROM app_constants WHERE key='...'), <hardcoded_fallback>)`. Следующая фаза модификаторов должна следовать этому паттерну.
 
 ## My Day wellbeing line (mig 410, 2026-06-01)
 
