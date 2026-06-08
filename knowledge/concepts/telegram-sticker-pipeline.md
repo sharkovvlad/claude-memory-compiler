@@ -654,6 +654,55 @@ make_sticker.py --input /tmp/pingpong.mp4 ...
 [ ] Если source не даёт уникальной фазы → озвучить пользователю, не «прятать» под фильтрами
 ```
 
+### 7.8 Rescue pattern: `--mode clean` для source с gradient-фоном (lesson 2026-06-08, gift_premium_activated)
+
+> Дефолт `--mode scene` хорош для большинства случаев. Но если Veo рендерит **gradient фон** (не solid #FF1493) — `scene` chromakey ломается, на выходе **розовая подложка вокруг всего Номса** (не только под ножками — а целиком плашка). Переключение на `--mode clean` (rembg-only нейросеть) решает за один прогон, без перегенерации source.
+
+**Симптом — distinguishable от других проблем:**
+- Не «pink halo тонкий вокруг контура» (это §7.3 — magenta despill miss).
+- Не «розовая полоска ТОЛЬКО под ножками» (это alpha-blended contact shadow §7.5).
+- Это **полная розовая подложка вокруг ВСЕГО силуэта Номса**, плотная, не translucent. Часто с vertical gradient (сверху темнее, снизу светлее).
+
+**Diagnose source:**
+
+```python
+import numpy as np
+from PIL import Image
+im = np.array(Image.open('<source_frame>.png'))
+# Sample фона в 4 углах
+h, w = im.shape[:2]
+for name, (y, x) in [('top-left', (50, 50)), ('top-right', (50, w-50)),
+                     ('bottom-left', (h-50, 50)), ('bottom-right', (h-50, w-50))]:
+    print(f'{name}: RGB = {im[y, x][:3]}')
+# Если top vs bottom разница >40 в R-канале → gradient, scene не сработает
+```
+
+**Когда переключаться на `--mode clean`:**
+1. Pipeline `scene` прошёл без ошибок, но финальный webm содержит pink-подложку вокруг всего силуэта.
+2. Diagnose показал: фон source — gradient (top R<160, bottom R>200, или похожий vertical bias).
+3. В source нет декораций **снаружи** силуэта Номса, которые нужно сохранить (огонь в руке, конфетти, sparks вне тела). Если есть — rembg их потеряет (KB §7.4 rembg-loses-fire).
+   - Для gift_premium_activated: sparkle peaks были **на банте коробки внутри силуэта** → rembg сохранил их вместе с Номсом и коробкой. ✅
+
+**Команда (только меняется `--mode`):**
+
+```bash
+make_sticker.py --input <src.mp4> --output <out.webm> \
+  --start <N> --duration 3 \
+  --mode clean \
+  --bg-color 0xFF1493 \
+  --scene-tightness tightest --air-percent 2
+# (--scene-fps в clean mode не используется)
+```
+
+`--bg-color` всё равно нужен — он работает в clean как chroma-aware despill (убирает halo в contour band 6px). См. §7.3.
+
+**Когда `--mode clean` НЕ спасёт:**
+- Source имеет декорации снаружи силуэта (огонь, sparks за пределами тела) — rembg их выкинет. Лучше перегенерировать source с solid magenta.
+- Source имеет direction-specific motion (танец, walking) — это не проблема mode, а проблема loop (§7.6).
+- Source имеет splash / реальную лужу — alpha-blended, unfixable обоими mode'ами (§7.5).
+
+**Анти-урок:** не «переходи на clean при любых проблемах». Сначала diagnose причину — если корень в gradient фоне, clean спасёт. Если корень в чём-то другом (rembg-loses-fire, splash, motion) — clean только усугубит.
+
 ---
 
 ## 8. Генерация исходников через Nano Banana / Veo
@@ -923,6 +972,49 @@ without pulsation
 - v2 жёсткие негативы без явного разрешения glow → silhouette стабильнее, **но glow умер**. Отказ.
 - v3 с TWO LAYERS pattern → silhouette deformation ±9% но **проходящий peak** (норма → надулся → норма за 1с, читается как hover) + **glow активен 9-11% green-pixels постоянно**. Принят.
 
+### 8.4e Veo realistic-scene trap on transparent input (lesson 2026-06-08, gift_premium_activated)
+
+> **Никогда не подавать Veo image-to-video transparent PNG как seed.** Даже если у тебя на руках качественный canvas (например прогнал image через remove.bg / иной background-remover), Veo **НЕ умеет** «keep transparency» в image-to-video режиме. Вместо этого он **рендерит realistic scene** — сам выбирает фон, освещение, тень. Это unfixable downstream.
+
+**Симптомы transparent-input в выходном Veo mp4:**
+
+1. **Magenta фон gradient** (не solid #FF1493) — Veo интерпретирует прозрачность как «выбери appropriate background», часто выдаёт vertical gradient (top темнее, bottom светлее на 50-70 R-точек). Pipeline chromakey против solid `#FF1493` это не возьмёт (→ см. §7.8 — rescue через `--mode clean`).
+2. **Реалистичная контактная тень** под персонажем — alpha-blended, unfixable (§7.5).
+3. **Veo watermark** в кадре (обычно нижний правый угол) — Veo «знает» что output не имеет назначенного фона и добавляет свой логотип.
+4. **Auto-pillarbox detect ломается** — нет solid-color рамок → make_sticker.py не понимает где crop.
+
+**Эмпирически подтверждено (gift_premium_activated session):**
+- v1 — magenta image direct → Veo сохранил flat magenta, минимальная тень ✅
+- v2 — `remove.bg` → transparent PNG → Veo gradient + жирная тень + watermark ❌
+- v3 — `remove.bg` + усиленный anti-shadow промпт → тень меньше, gradient остался ❌
+
+**Правило:**
+1. Image для Veo image-to-video — **всегда** flat magenta #FF1493 PNG прямо из Nano Banana / Imagen, **без любой пост-обработки**.
+2. Если в Nano Banana выдача содержит magenta фон — используй как есть.
+3. **Не прогонять через remove.bg / clipdrop / любой background-remover.**
+4. **Не делать chromakey вручную в Photoshop / GIMP.**
+5. Удаление фона — задача фазы 4 (`make_sticker.py` через chromakey/rembg), не фазы 1.
+
+**Rescue если уже подал transparent в Veo и получил gradient-фон mp4:**
+- Перегенерировать с **исходным** magenta image (если он сохранён).
+- Если оригинал утрачен — попробовать `--mode clean` в pipeline (§7.8). Это рабочий rescue, но не идеал — sparkle/decoration вне силуэта могут потеряться.
+
+**Anti-shadow усиление (sub-lesson из той же сессии, для standing-style поз):**
+
+Даже при magenta-input image, Veo всё равно может подложить лёгкую контактную тень под ножками — особенно для standing-style поз (offering объект, hands-on-hips, holding chest-level). Стандартные negatives (`no soft drop shadows`, `no floor`) недостаточно. Решение — **позитивное** утверждение в LAYER 1:
+
+```
+The character is in a fully AIRBORNE FLOATING pose — does NOT stand on
+anything. Must float clearly above empty magenta with VISIBLE EMPTY
+MAGENTA SPACE directly below the feet at all times — at least 50 pixels
+of clear unobstructed magenta between the lowest point of the feet and
+the bottom edge of the frame. NO contact shadow under the feet, NO
+gravity indicator, NO darker magenta patch suggesting weight or contact.
+The character is suspended in mid-air as if in zero gravity.
+```
+
+И в Negative: `no contact shadow under feet, no gravity shadow, no character standing on anything, no implied ground reference, no darker magenta patch under the feet`.
+
 ### 8.5 Тонкости и pro-tips
 
 - **Image stage variants:** Nano Banana / Imagen генерят 1–4 image per request. Запроси 4, отбери 1. Если все четыре «не те» — меняй промпт, а не выбирай «лучший из плохих».
@@ -952,6 +1044,7 @@ without pulsation
 | 2026-05-12 | `noms_streak_3days.webm` v5 (195 KB, 24 fps, ping-pong) | scene | `--scene-tightness tightest --air-percent 2` | **Финал.** Добавлен preset `tightest` (0%/+5%/0% — minimum scene region around Noms). Subject **96% of canvas**, минимальный air 2%. Огонь сохранён на всех кадрах (с лёгким clip на point reverse t=1.5 где у Номса две руки с огнями). Это технический максимум — больше нельзя сжать без обрезки самого силуэта. SHA `c7467568...` |
 | 2026-05-14 | `noms_streak_7days.webm` (183 KB, 24 fps, окно 5–8с) | scene | `--start 5 --duration 3 --mode scene --bg-color 0xFF1493 --scene-fps 24 --scene-tightness tightest --air-percent 2` | «Стрик 7 дней» — Номс в пиксельных очках, обе руки в V-pose, окружён пульсирующим 8-bit пламенем. Окно 5–8с — пик разгорания пламени. **Первое видео, сгенерированное по обновлённому промпт-шаблону (8.4b чеклист):** без пола, без перспективы, без танца → никаких unfixable артефактов. Auto-pillarbox убрал стандартные 280px+280px Veo-bars вместе с watermark. Subject 96% canvas. SHA `b206643c...`. **Lesson:** улучшенные промпт-шаблоны 8.3/8.4/8.4b после Streak 7 первой попытки работают — провалов с reflective floor / dancing уже нет |
 | 2026-05-14 | `noms_streak_14days.webm` (221 KB, 24 fps, ping-pong 2.8-4.3 / 4.3-2.8) | scene | Pre-built ping-pong source (`ffmpeg ss=2.8 t=1.5` + `reverse` + concat) → `--start 0 --duration 3 --mode scene --bg-color 0xFF1493 --scene-fps 24 --scene-tightness tightest --air-percent 2` | «Стрик 14 дней» — расширение нарратива относительно `streak_7days`. Source изначально single-pass 4.0-7.0 (single-pass, 239 KB) → отвергнут пользователем: визуально дублировал 7days (оба стартуют с уже горящего Номса). **Pivot — захватить factor-фазу с факелом (t=2.8) и взрыв пламени (t=4.3) в одном цикле.** Single-pass с этим окном дал бы резкий loop seam (руки опущены ↔ вверх), поэтому собран ping-pong 1.5×2 = 3.0с (как в `streak_3days` v5). Семантика: «факел → разгорается → собирается обратно → факел». Subject 96%, deep purple body, scene mode сохранил пламя внутри и снаружи контура. SHA `a791a6dc...`. **Lesson:** перед выбором окна стикера в серии (streak_3/7/14/30/...) — **сверять с уже одобренными соседними стикерами**, чтобы кадры дифференцировались с первого фрейма; иначе пользователь воспринимает «то же самое». См. секцию 7.7 |
+| 2026-06-08 | `noms_gift_premium_activated.webm` (183 KB, 24 fps, окно 1.75-4.75) | **clean** | `--start 1.75 --duration 3 --mode clean --bg-color 0xFF1493 --scene-tightness tightest --air-percent 2` | «Подарок Premium от Номса» — Номс держит обеими руками 8-bit пиксельную подарочную коробку (deep violet + золотая лента с бантом + звезда на крышке + sparkle peaks 1Hz). Universal для гифт-периодов (NOMSTEAM 30д, future 3д/7д). 3 итерации source: v1 (magenta direct) дал лёгкий contact shadow под ножками — accepted, потом отвергнут; v2/v3 owner прогнал image через **remove.bg** (transparent PNG) → Veo при transparent input рендерит **realistic scene** с magenta-gradient фоном + жирной тенью + watermark — pipeline `scene` chromakey пропустил всё (gradient ≠ pure #FF1493) → розовая подложка вокруг всего Номса. **Rescue: переключение на `--mode clean` (rembg-only)** — нейросеть не зависит от цвета фона, sparkle peaks внутри силуэта сохранены. SHA — см. файл. **3 Lesson'а** (см. секции §7.8 и §8.4e): (1) **НИКОГДА** не прогонять image через remove.bg перед Veo; (2) для offering / standing-style поз обязательно anti-shadow усиление в LAYER 1 промпта; (3) `--mode clean` — rescue pattern для gradient-фоновых source'ов |
 | 2026-05-15 | `noms_streak_30days.webm` (234 KB, 24 fps, окно 1.75-4.75) | scene | `--start 1.75 --duration 3 --mode scene --bg-color 0xFF1493 --scene-fps 24 --scene-tightness tightest --air-percent 2` | «Стрик 30 дней» — Номс с **пиксельной короной** и **электрическим matrix-glow внутри тела** (зелёные молнии binary code). На пиковом кадре (t=1.5 sticker = t=3.25 source) корона выпускает sparks вокруг. **2 итерации source:** (v1) промпт другого агента содержал `subtle breathing (squash and stretch jelly physics)` → Veo интерпретировал буквально, силуэт деформировался ±10-12% по 2с плато («жидкое желе»). Отказ пользователя. (v2) Промпт-фикс — добавлено `body silhouette remains nearly constant — height and width vary by less than 3%` + негативы `no body stretching, no jelly-flow, no shape distortion`. Veo прислушался к деформации, но **убрал заодно и glow** (свечение пропало). Отказ пользователя — для milestone 30 нужно «уровень выше» чем 7/14, статус читается через свечение. (v3, финал) **Промпт с `TWO INDEPENDENT LAYERS` pattern** — body=RIGID отдельным блоком + INTERNAL LIGHT=INTENSE отдельным блоком + явное «light does NOT bleed outward». Veo выдал rigid силуэт большую часть кадров (stretch peak +9% проходящий каждые 1.8с — читается как hover, не как jelly-flow) + мощный glow (9-11% green-pixels постоянно). SHA — см. локальный файл. **Lesson 1 (KB 8.4d):** для стикеров где нужен «эффект без деформации тела» (glow, particles, shake) — использовать pattern `TWO INDEPENDENT LAYERS` в промпте, body и effect описывать **отдельными блоками** с явным разделением, иначе Veo связывает их и портит одно ради другого. **Lesson 2:** для `streak_30days` sample RGB центра тела ≠ эталонный deep purple (R~55, G~25, B~118) — binary-код забивает центр зелёным glow'ом. Это **фича** для «статусных» стикеров с активной анимацией внутри тела, не баг. Эталон применим только к спокойным стикерам |
 
 Чтобы добавить новый сценарий: запустить скрипт, проверить по чек-листу, дописать строку в эту таблицу.

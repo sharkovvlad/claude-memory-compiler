@@ -91,6 +91,9 @@ ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate:forma
 | **Закрытие дыр в маске** | Между лапкой и огнём провал alpha | `binary_fill_holes` только для МАЛЫХ дыр (`MAX_HOLE_PX=1500`). Большие — реальный фон, заполнять ≠ ОК | KB 7.5b |
 | **Серийная схожесть** | Pipeline ОК, но пользователь говорит «выглядит как соседний стикер серии» | До выбора окна — декодировать t=0 соседних `noms_<series>_*.webm` и убедиться что новый отличается **позой/атрибутом**, не только интенсивностью | KB 7.7 |
 | **Body/effect coupling** | Veo связывает body-motion и эффект (glow/sparks/electricity): жёстко ограничишь деформацию → пропадёт эффект; разрешишь squash & stretch → желе течёт | В промпте описывать тело и эффект как `TWO INDEPENDENT LAYERS` отдельными блоками с явным разделением. Layer 1 — RIGID silhouette, Layer 2 — INTENSE effect. | KB 8.4d |
+| **Transparent input в Veo = realistic scene** | Прогнал image через remove.bg перед Veo → Veo сделал gradient magenta фон + жирную тень + watermark; pipeline `scene` дал розовую подложку вокруг всего Номса | НИКОГДА не прогонять image через remove.bg / любой background-remover. Image для Veo — всегда flat magenta direct из Nano Banana. Если случилось — `--mode clean` rescue (rembg-only). | KB 8.4e + 7.8 |
+| **Mode-clean rescue** | Pipeline `--mode scene` дал розовую подложку вокруг ВСЕГО силуэта (не halo, а плотная плашка). Diagnose: фон source gradient (top R<160, bottom R>200) | Перезапустить с `--mode clean` (rembg-only, не зависит от цвета фона). Работает только если все декорации внутри силуэта Номса. | KB 7.8 |
+| **Contact shadow standing-pose** | Veo подкладывает alpha-blended тень под ножками для offering / hands-on-hips / holding-chest-level поз даже с 5+ negatives | Добавить ПОЗИТИВНОЕ AIRBORNE утверждение в LAYER 1 промпта («50px clear magenta below feet», «astronaut floating in zero gravity») + дополнительные negatives | KB 8.4e |
 
 ## 5. Чеклист «перед сдачей»
 
