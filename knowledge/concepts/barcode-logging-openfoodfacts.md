@@ -222,6 +222,9 @@ rebase (база устарела на 447).
 - [[memory-claim-vs-live-verification]] — trust live, не NLM (находка в)
 - [[migration-collision-guard]] — номер миграции, fetch+rebase перед push
 - [[copywriter-playbook]] — ×13 тексты, ≤18 ch/кнопка, anti-shame
+- [[food-data-evals]] — eval-hub: FatSecret done, CIQUAL/BEDCA queued, статистические floors
+- [[regional-food-composition-databases]] — план для CIQUAL/BEDCA на text-path региональных блюд (deferred + readiness criteria)
+- [[cascade-macro-enrichment-fatsecret]] §13.1 — caveat: N=20 → не финальный вердикт
 
 ---
 
