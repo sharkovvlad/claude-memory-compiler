@@ -1,17 +1,17 @@
 ---
-title: "Региональные food-composition databases — CIQUAL/BEDCA/IFCT/USDA-SR (deferred)"
+title: "Региональные food-composition databases — CIQUAL/BEDCA/IFCT/USDA-SR (deferred + 2026-06-08 eval)"
 aliases: [ciqual, bedca, ifct, regional-cuisine-db, food-composition-db, regional-dishes]
-tags: [accuracy, regional, latam, eu, india, russia, deferred, food-database]
+tags: [accuracy, regional, latam, eu, india, russia, deferred, food-database, eval-2026-06-08]
 sources:
   - "daily/2026-06-08.md"
 created: 2026-06-08
 updated: 2026-06-08
-status: deferred
+status: deferred-with-eval-data
 ---
 
-# Региональные food-composition databases — план + readiness criteria
+# Региональные food-composition databases — план + readiness criteria + eval 2026-06-08
 
-> **Status:** deferred. Идея зафиксирована, готовность к реализации определена ниже. Eval может быть сделан в любой момент (cheap), shipping integration зависит от user-base размера.
+> **Status:** eval сделан 2026-06-08 (см. §4.6 ниже). **CONDITIONAL GO для ES + RU**, NO-GO для IN/BR/MX. **Shipping integration deferred** — user-base threshold (≥20 active в одной стране) не выполнен. Возвращаться когда выполнится.
 
 ---
 
@@ -152,6 +152,34 @@ Reference values — из BEDCA (она сама ground truth).
 ### 4.5 ⚠️ Statistical caveat
 
 **N=50 на одну страну — всё ещё малая выборка.** Wide CI. Вывод направления, не вердикт. См. [[food-data-evals]] §1. После активной базы в Испании ≥20 — пересмотреть с N=200+.
+
+### 4.6 ✅ Eval сделан 2026-06-08 — направление найдено
+
+Прогон: 39 dishes / 5 regions (~8 per region). GPT-4o vs reference values из BEDCA / TBCA / IFCT / FGBNU / USDA-SR.
+
+**Полный отчёт:** `tools/macro_eval/results_regional_2026-06-08.md`.
+
+**Headline (median kcal deviation, lower = GPT знает лучше):**
+
+| Регион | kcal dev | Решение по §3 threshold (≥15%) |
+|---|---|---|
+| IN (Indian) | 5.8% ✅ | NO-GO — IFCT не оправдан |
+| BR (Brazilian) | 7.7% ✅ | NO-GO — TBCA не оправдан |
+| MX (Mexican) | 11.1% 🟡 | NO-GO (под порогом) |
+| **RU (Russian)** | **15.9%** | **CONDITIONAL GO** (gate user-base) |
+| **ES (Spanish)** | **16.9%** | **CONDITIONAL GO** (gate user-base) |
+
+**Outliers:** винегрет 67%, horchata 32%, croquetas 31% — GPT-4o уверенно ошибается, видимо путая с близкими блюдами.
+
+**Surprise:** macros (protein/fat/carbs) отклоняются СИЛЬНЕЕ kcal во всех регионах (RU protein 25%, fat 29%; ES protein 21.6%, fat 22.5%). Гипотеза — GPT знает энергетическую плотность ОК, но split хуже. Аргумент для **macro-split-only eval** в будущем (особенно для премиум-юзеров с macro-tracking).
+
+**Decision (owner-pending, default action):**
+- Зафиксировать ES + RU в watchlist
+- Ship НЕ сейчас (user-base gate не выполнен: 3 ES active, 0 RU active)
+- Re-eval с N=50+ когда регион достигнет 20+ active users
+- Документация в KB обновлена; интеграция отложена
+
+**Caveat:** N=8/region даёт CI ~±10pp. Real-world median может быть {ES: 7-27%, RU: 6-26%}. Direction reliable, magnitude — нет.
 
 ---
 

@@ -25,12 +25,15 @@ status: active
 | Дата | Eval | Результат | Detail |
 |---|---|---|---|
 | **2026-06-05** | FatSecret name-enrichment vs GPT-4o per-100g (PR #337) | 🔴 **NO-GO** (FS не превзошёл GPT-4o + покрытие хуже) | [[cascade-macro-enrichment-fatsecret]] §13 |
+| **2026-06-08** | Региональные блюда (ES/MX/BR/IN/RU, N=39) vs GPT-4o | 🟡 **CONDITIONAL GO** для **ES (16.9%) + RU (15.9%)** — гэт user-base. NO-GO для IN/BR/MX (kcal dev <12%). Outliers: винегрет (67% off), horchata (32%), croquetas (31%). Macros отклоняются СИЛЬНЕЕ kcal во всех регионах. Детали: `tools/macro_eval/results_regional_2026-06-08.md` | [[regional-food-composition-databases]] §4 |
 
 ### 🟡 Planned / queued
 
 | Когда | Eval | Цель | Брифинг |
 |---|---|---|---|
-| **Next session** | CIQUAL/BEDCA/IFCT vs GPT-4o на региональных блюдах | Определить, есть ли value в локальных food-composition-БД для региональных кухонь | [[regional-food-composition-databases]] §4 (план + golden-set) |
+| Spain achieves 20+ active users | Re-eval ES golden-set с N=50+ для stat-significance | Подтвердить direction-finding 2026-06-08 на репрезентативной выборке | [[regional-food-composition-databases]] §3.1 user-base gate |
+| Russia achieves 20+ active users | Re-eval RU golden-set с N=50+ | То же для RU | [[regional-food-composition-databases]] §3.1 |
+| Premium-юзеры с macro tracking ≥10 | Macro-split-only eval (kcal-агностик) | Понять, нужен ли БД-lookup для людей кому важен точный split | следующая итерация food-data-evals |
 
 ### 🔮 Future (по triggers)
 
