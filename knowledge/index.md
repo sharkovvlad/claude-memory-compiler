@@ -200,6 +200,7 @@ _8 files · 53 incoming refs (30d)_
 - [[cron-silent-failure-alerting]] — Cron Silent Failure Pattern + Centralized BaseCron Alerting
 - [[cron-reminder-suppression-tunables]] — Tunables для cron reminder suppression (mute-windows, hour cutoffs) живут в `app_constants`, не в RPC body
 - [[cron-pushed-callback-fallback-pattern]] — Любая cron-pushed inline button MUST иметь row в `_global_floating_actions` virtual screen (mig 372 P0 lesson — без fallback callback fails molча, F3 mutex не срабатывает)
+- [[cron-user-local-tz-pattern]] — Биоритмы решаются hourly cron + per-user local-hour фильтр в RPC, не scheduler timezone. Subscription Lifecycle + League Weekly — реальный tech-debt (шлют всем сразу). MSK quirk: VPS=Europe/Moscow, AsyncIOScheduler(timezone='UTC') unhonored — для UTC-bound cron'ов передавать timezone='UTC' в CronTrigger явно.
 - [[noms-architecture]] — Telegram nutrition tracking bot with AI food recognition, gamification (XP, leagues, quests, NomsCoins), 13-language support, and subscriptions. Character: "Sassy Sage" — helpfu...
 - [[project-structure]] — Project Structure & Tech Stack
 - [[release-protocol]] — Release Protocol — Auto-deploy через GitHub Actions, manual fallback
