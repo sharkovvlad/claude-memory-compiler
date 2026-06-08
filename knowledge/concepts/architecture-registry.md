@@ -1,6 +1,6 @@
 # Architecture Registry — Python authoritative vs n8n fallback
 
-**Status:** live-аудит обновлён **2026-06-02** (см. секцию «Состояние на 2026-06-02» внизу — осталось 7 n8n workflows, 03_AI_Engine + 06_Indicator_Clear деактивированы). Таблицы аудита от 21.05 ниже — исторические. **Source of truth для агентов:** какой target обслуживает Python authoritative, какой fallthrough'ит на legacy n8n.
+**Status:** live-аудит обновлён **2026-06-08** — **Stage 7c ЗАВЕРШЁН**: n8n `03_AI_Engine` + `06_Indicator_Clear` УДАЛЕНЫ, осталось **5 n8n workflows** (active: `01_Dispatcher`, `04_Menu`, `04_Menu_v3`, `04.2_Edit_StatsDaily`; inactive: `08.3_Friends`). Edit Meal re-recognition + весь AI Engine — теперь полностью Python. Python endpoint `/internal/food_log/render` удалён (PR #374). Секции с датами ниже — исторические. **Source of truth для агентов:** какой target обслуживает Python authoritative, какой fallthrough'ит на legacy n8n.
 
 > **Как обновлять:** при cutover'е каждого нового target (см. [variant-b-cutover](variant-b-cutover.md)) — добавить строку в таблицу 1, удалить из таблицы 2, обновить раздел «Флаги фич».
 >

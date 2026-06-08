@@ -112,6 +112,15 @@ INSERT INTO app_constants(key, value, scope, description) VALUES
 
 ## Stage 7c cleanup (после 7д стабильного global)
 
+> **✅ ВЫПОЛНЕНО 2026-06-08 — Stage 7c ЗАВЕРШЁН, AI Engine полностью выпилен из n8n.**
+> GATE OPEN подтверждён: 72ч+ нулевых n8n `03_AI_Engine` executions после Edit Meal cutover (#326/#327). Последнее касание 03 — 2026-06-05 19:07 UTC (render-хит), после — 0 exec / 0 render-хитов; Python обслужил 13 edit'ов. Мониторинг — `daily/stage7c_monitor.log`.
+> Выполнено (n8n-side, API):
+> 1. Safe PUT `01_Dispatcher` — удалена нода `Go to 03_AI` (executeWorkflow→03).
+> 2. Safe PUT `04_Menu_v3` — удалена нода `Go to 03_AI_Engine` + Switch-правило `03_AI_Engine` (Switch теперь только `[10_Payment]` — dead payment-case, вне scope).
+> 3. **n8n DELETE** `03_AI_Engine` (`kjw4kkKMD0IqNALg`) + `06_Indicator_Clear` (`jQn0nTxThFal4Kpe`). Снапшоты `/tmp/s7c_*.json` (для отката в день операции).
+> 4. **PR #374** — удалён мёртвый Python endpoint `/internal/food_log/render` (звал только n8n 03). `render_food_log_confirmation` НЕ тронут (нужен Python-пути).
+> **n8n теперь 5 workflow** (было 7): active `01_Dispatcher`, `04_Menu`, `04_Menu_v3`, `04.2_Edit_StatsDaily` + inactive `08.3_Friends`. Smoke: `/health` ok, 0 ошибок, ни один workflow не ссылается на 03/06/render. Урок (durable): **гейт необратимого удаления = 0 РЕАЛЬНЫХ executions, не календарь** — verify-first поймал живой edit-трафик в n8n несмотря на день 7 и `active=0` (executeWorkflow игнорирует active). Деталь Edit Meal cutover — ниже §поправка-06-05.
+
 > **🛑 ПОПРАВКА 2026-06-05 — реальный блокер 7c НЕ календарь, а немигрированный Edit Meal путь (Phase 5):**
 > Verify-first перед удалением 03/06 поймал, что n8n `03_AI_Engine` **ПРОДОЛЖАЛ исполняться** (7 успешных exec 06-03…06-05, последний сегодня), несмотря на `active=0` — потому что **повторное распознавание еды при редактировании (`reason='editing_meal'`) НЕ было в Python**. Это НЕ fallback от ошибки (0 Python AI-failures) и НЕ остаток — живой функциональный путь (registered-юзер редактирует приём → шлёт новое фото/голос/текст → re-recognize). Если бы удалили 03 по календарю — **сломали бы редактирование еды**.
 > - **Корень:** Python edit-pipeline (`handlers/food_log._handle_edit_meal_input`, Stage 7b PR D `d6f4c72`) был СМЕРЖЕН, но **никогда не доходил до прода** — webhook AI-гейт пропускал только `startswith(('food_media','text_food'))`, а роутер ставит `reason='editing_meal'` → не матчит → silently fall through в n8n. Классический «merged-but-unwired» latent bug. `handle_ai_input` уже диспатчил на `_handle_edit_meal_input` по `ctx.status=='editing_meal'` — не хватало только пропустить reason в гейт.
