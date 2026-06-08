@@ -37,3 +37,7 @@ ssh root@89.167.86.20 'docker cp noms-n8n:/home/node/.n8n/database.sqlite /tmp/n
 - **Улучшения Python edit vs n8n:** поддержка фото-edit (n8n деградировал в текст); edit без mana-gate (n8n блокировал mana=0). `edit_count`/`raw_user_input` closed-loop — follow-up.
 
 Детали — daily/2026-06-05.md, KB [[concepts/stage7-global-cutover]] §поправка-06-05, [[concepts/architecture-registry]] §Phase5.
+
+---
+## ✅ ЗАКРЫТО 2026-06-08
+Stage 7c выполнен полностью: n8n `03_AI_Engine`+`06_Indicator_Clear` DELETED; refs убраны Safe PUT (01_Dispatcher, 04_Menu_v3); render-endpoint удалён (PR #374 merged+deployed). n8n 7→5 workflow. Owner verified распознавание (786301802). AI Engine полностью в Python. Делать по этой теме больше нечего.

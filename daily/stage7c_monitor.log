@@ -4,3 +4,4 @@
 2026-06-08T18:52Z | 80 | 0 | 0 | 2026-06-05T19:07Z(render-hit) | 13 | CLOSED | last n8n-03 touch ~71.8h ago (<72h, нужно ≥72ч чистых). 2 editing_meal skip были PRE-deploy (TZ-сдвиг --since), не пост-деплой. ждём ~15мин до 06-08 19:07Z
 2026-06-08T19:09Z | 72 | 0 | 0 | 2026-06-05T19:07Z(last) | 13 | OPEN | ровно 72ч чистоты, 0 exec/render с 06-05 19:07Z → GATE OPEN, начинаю Stage 7c (snapshot→remove refs→DELETE 03/06→PR render-endpoint)
 2026-06-08T19:25Z | STAGE7C EXECUTED | n8n 03_AI_Engine+06_Indicator_Clear DELETED; refs убраны (01_Dispatcher,04_Menu_v3); render-endpoint→PR #374. n8n: 7→5 workflows. GATE was OPEN. LOOP COMPLETE.
+2026-06-08T19:35Z | TERMINAL | 03_AI_Engine GET=404 (DELETED), n8n=5 workflows, /health ok. Stage 7c complete. LOOP STOPPED (gate satisfied + actioned).
