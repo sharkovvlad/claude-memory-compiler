@@ -18,6 +18,33 @@ status: active
 
 ---
 
+## 🚀 Quick re-run (для owner и агента)
+
+### Если owner говорит «перезапусти FatSecret eval» / «FatSecret eval»
+
+```bash
+ssh root@89.167.86.20  # FatSecret IP-whitelisted с VPS
+cd /home/taskbot/noms && git pull
+venv/bin/python tools/macro_eval/run_eval.py
+```
+
+Сравнить с `tools/macro_eval/results_2026-06-05.md`. Если direction поменялся → новый snapshot в `results_YYYY-MM-DD.md` + обновить §«Completed» ниже.
+
+### Если owner говорит «перезапусти региональный eval» / «regional eval»
+
+```bash
+cd /Users/vladislav/Documents/NOMS
+python3 tools/macro_eval/run_regional_eval.py
+```
+
+Работает локально (только OpenAI key из `.env`). Сравнить с `tools/macro_eval/results_regional_2026-06-08.md`. Сохранить новый snapshot.
+
+### Полная навигация по eval-каталогу
+
+`tools/macro_eval/README.md` — landing page со всеми invocation-командами + структурой каталога + триггерами re-eval.
+
+---
+
 ## Каталог evals
 
 ### ✅ Completed
