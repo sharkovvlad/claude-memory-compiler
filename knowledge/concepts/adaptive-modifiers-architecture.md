@@ -348,6 +348,62 @@ Anti-РПП reframe per language — critic 5/5:
 
 Button labels shortened for conversion per Номсова правка (DE/ES/FR/PT/UK — «короткие глаголы конвертят лучше»).
 
+### Scientific basis для +100/+175 ккал (audit 2026-06-08)
+
+Цифры долго жили в коде без явной цитаты. Audit 2026-06-08 закрыл этот пробел:
+
+- **Первоисточник:** *Resting metabolic rate fluctuations across the menstrual cycle: a systematic review* — PMC13066135 (2024). Прирост RMR в лютеиновой фазе vs фолликулярной: **+5–10 %**, абсолют **+100…+300 ккал/день**.
+- **Поддержано локальными нутрициологическими аудитами** в `~/Documents/NOMS/Нутрициолог (другой ИИ)/`:
+  - `Глубокий анализ формулы расчета целей NOMS.md:91` — «Фундаментально обосновано, прогестерон термогенез, +150–200 kcal + fat +5–10%», прямая ссылка на PMC13066135.
+  - `диетолог_Оптимизация расчета калорий...docx:567` — «100–300 ккал/сутки, +5–10% жиров».
+  - `Разработка алгоритмов питания...docx:446` — то же.
+- `~/Documents/NOMS/Нутрициолог (аудит расчётов v13)/` — про цикл не пишет (фокус на EA-floor, MSJ vs Cunningham).
+
+**Вердикт по trigger_value:**
+
+| trigger_value | kcal_delta | fat_pct | обоснованно? |
+|---|---|---|---|
+| `follicular` | 0 | 0 | да, baseline; в коде dead-branch — RPC `apply_daily_modifier` ветки `IF p_trigger_value = 'follicular'` нет, проходит мимо `IF/ELSIF` с нулями |
+| `ovulation` | 0 | 0 | да, кратковременный пик не значим для дневной нормы; тоже dead-branch |
+| `luteal_early` (15–21) | +100 | +3 % | да, нижняя половина научного коридора; консервативно, защищает lose-юзеров от overshoot |
+| `luteal_late` (22–28) | +175 | +7 % | да, центр диапазона; совпадает с PMC13066135 и тремя локальными доками |
+
+Поднимать до 150/200 (как предлагает `Глубокий анализ`) **не нужно** — текущие значения осознанно консервативны.
+
+### 2026-06-08 incident & defence-in-depth (mig 491 + 494)
+
+**Что случилось:** male admin (`telegram_id=417002669`) получил пуш «🌸 Лютеиновая фаза активна. Добавил +175 ккал». Те же сутки настоящая женщина 786301802 (cycle_day=20) получила тот же текст. Аудит: 0 luteal-строк в `daily_modifiers` за 30 дней — `apply_daily_modifier` ни разу не вызывался, дневная норма ни у кого не сдвигалась.
+
+**Три независимых root cause:**
+
+1. **Stale data.** Owner ранее тестировал смену пола → `cycle_tracking_enabled=true` + `cycle_start_date` остались на male-юзере. Нигде в БД не было каскада «при смене пола обнулить женские поля».
+2. **Нет gender-гейта в `compute_cycle_day_for_user` (mig 375).** Проверял `cycle_tracking_enabled`, `is_pregnant`, `is_lactating`, возраст ≥55 — но не `gender='female'`. Возвращал валидный cycle_day для мужчины.
+3. **Cron luteal_morning — info-only.** Шёл с комментарием «нет screen'а, юзер не отвечает» — но текст «added +175» обещал действие, которого не было. Плюс цифра 175 жёстко зашита, хотя для `luteal_early` правильный delta = 100.
+
+**Fix:**
+
+- **mig 491 (PR #367, MERGED 2026-06-08):** `cron_get_reminder_candidates` JSON output расширен — добавлены `luteal_phase` и `luteal_kcal_delta` per candidate. `crons/reminders.py` — для `luteal_morning` сначала зовёт `apply_daily_modifier(tid, 'luteal', luteal_phase)`, шлёт текст **только при `applied=true`**. Replace `+175` / `+۱۷۵` на `+{kcal_delta}` placeholder в 13 переводах.
+- **mig 494 (PR #366, MERGED 2026-06-08):** trigger `trg_users_cascade_clear_female` на `BEFORE UPDATE OF gender, birth_date, is_pregnant, is_lactating` — обнуляет 11 женских полей при невалидных переходах. `compute_cycle_day_for_user` — добавлен `gender='female'` гейт. Backfill: 1 строка (тот самый admin).
+
+**Defence layers в порядке исполнения:**
+1. `gender='female'` гейт в `compute_cycle_day_for_user`
+2. Аудиторный фильтр в `cron_get_reminder_candidates` (Premium + day 15–28)
+3. `apply_daily_modifier` валидирует cycle_tracking + pregnancy/lactation, возвращает `suppressed=true` для непригодных
+4. Python проверяет `applied is True` перед `sendMessage`
+
+**Durable lessons:**
+
+- **Связанные поля = каскад на уровне БД.** Поля, осмысленные только при определённом значении другого поля (cycle_* при gender='female', pregnancy_* при is_pregnant=true), требуют либо triggered cascade clean-up, либо CHECK constraint. Доверять «никто не оставит грязное состояние» нельзя.
+- **`applied=false` ≠ `error` в Postgres jsonb-RPC.** RPC часто возвращают `{"applied":false,"suppressed":true,"reason":"..."}` для «мягких» отказов. Python-проверка только по `error` — ложно-положительный success. Всегда проверять `applied is True`.
+- **Текст-обещание = действие.** Любое cron-сообщение «added +N» / «applied X» требует, чтобы код перед `sendMessage` записал то самое действие, и проверил что запись применилась. Иначе годами шлёшь ложь и узнаёшь об этом случайно.
+- **Hard-coded цифры в i18n-переводах ломаются при изменении business-логики.** «+175» в 13 языках не покрывало `luteal_early=100`. Placeholder `{kcal_delta}` решает раз и навсегда.
+
+### Open tech debt (2026-06-08)
+
+- **Вынести 100/175/3/7 в `app_constants`** (owner подтвердил 2026-06-08). Ключи: `modifier_luteal_early_kcal_delta`, `modifier_luteal_early_fat_pct`, `modifier_luteal_late_kcal_delta`, `modifier_luteal_late_fat_pct`. Сейчас захардкожены в `apply_daily_modifier` (mig 474:801-810). Не строгий брейч конвенции (медицинская дельта, не UI), но вынесение упростит калибровку без миграции функции.
+- **Решение по `follicular` / `ovulation` в CHECK-констрейнте** (mig 301:110). Рекомендация: сузить CHECK до `IN ('luteal_early','luteal_late')` — защита от случайного вызова с baseline=0, при будущей фазе 3e расширим миграцией. Альтернатива — оставить и задокументировать как «reserved».
+- **`get_day_summary` + `compute_daily_modifier_stack` cap ±500** уже работает (mig 467) — luteal delta уважает общий потолок.
+
 ## My Day wellbeing line (mig 410, 2026-06-01)
 
 До mig 410 залогованное самочувствие в карточке «Мой день» (`stats_main`) **не
