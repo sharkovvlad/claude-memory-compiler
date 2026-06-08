@@ -239,6 +239,37 @@ git diff origin/main..HEAD --stat
 - Защита 1 ловит при создании / push в PR (серверный аудит).
 - Защита 3 ловит уже-существующие PR, созданные до того, как защита 1 появилась в main (backup).
 
+## Lesson 2026-06-08: rebase нужен и ПЕРЕД force-push (mig 493 PR #369)
+
+### Что произошло
+
+Агент в worktree поправил миграцию (renumber 492→493 после CI collision-guard), сделал `git commit --amend` + `git push --force-with-lease`. Между первым push (с rebase) и force-push'ем в main вмёржилось 3 PR (#365/#367/#368, миграции 490/491/492-i18n). CI «PR Sanity Audit» поймал: **+696 / −1031**, 12 файлов, удаления 3 migrations not in scope. Mergeable=true, но семантически = откат чужих миграций.
+
+### Корневая причина
+
+Защита §12.1 (rebase перед commit) выполняется **один раз** — перед первым commit'ом. Если потом делаешь `--amend` + `force-push` (например для renumber или fix), `--amend` сохраняет тот же snapshot worktree, который уже мог устареть за время от первого push до второго. Force-push не триггерит rebase автоматически.
+
+### 4-е правило (дополнение к §12 global CLAUDE.md)
+
+**Перед каждым `force-push` — повторный rebase + sanity-check.**
+
+```bash
+git fetch origin main
+git rebase origin/main                              # подтянуть свежие мерджи
+git diff origin/main..HEAD --stat                   # sanity — только мой scope?
+git push --force-with-lease origin <branch>
+```
+
+Применимо ко всем сценариям force-push: amend после CI feedback, rename миграции, fix commit message, squash.
+
+### Спасло
+
+Существующая защита 1 (CI sanity-check workflow, PR #32) — поймала за 30 секунд после force-push, до того как owner успел нажать merge. Лечение: повторный `git rebase origin/main` + `git push --force-with-lease`. Diff схлопнулся до +693/−0.
+
+### Durable
+
+§12 global CLAUDE.md формально требует rebase «перед commit». На практике для длинной PR-сессии нужно **rebase перед каждой write-операцией на remote**: commit, force-push, amend-push. Worktree устаревает не календарно, а с каждым merge в main другого агента.
+
 ## Lesson 2026-05-17: smoke-test grep ловил INFO/WARNING как ERROR (run #60)
 
 **Симптом:** deploy после merge mig 241 упал (run #60, exit code 1) на строке:
