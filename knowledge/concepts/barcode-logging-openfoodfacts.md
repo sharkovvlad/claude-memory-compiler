@@ -6,8 +6,9 @@ sources:
   - "daily/2026-06-03.md"
   - "daily/2026-06-05.md"
   - "daily/2026-06-07.md"
+  - "daily/2026-06-08.md"
 created: 2026-06-03
-updated: 2026-06-07
+updated: 2026-06-08
 status: active
 ---
 
@@ -308,3 +309,74 @@ OFF API поддерживает `lc` (язык) и `cc` (страна) query pa
 - Nutritionix (~$5/мес при росте) для US/UK brand coverage — отложено
 - OCR этикетки как ultimate fallback — отложено (нужен дополнительный UI flow)
 - OFF write-back (contribute corrected data into OFF community) — отложено (требует OFF API key и consent flow)
+
+---
+
+## 11. Каскад источников: USDA + GPT-fallback (2026-06-08, PR #364, mig 488 LIVE)
+
+Расширили одноисточниковый lookup (только OFF) до 4-tier cascade под weak-coverage regions и брендов которых нет в OFF.
+
+```
+cache → OpenFoodFacts → USDA FoodData Central → GPT-fallback по EAN
+```
+
+### 11.1 USDA FoodData Central (`services/usda_client.py`)
+
+- Free API от US Department of Agriculture
+- Силён для **американских и глобальных брендов** (Coca-Cola, Pepsi, Kraft) которые широко распространены в LATAM, но в OFF покрыты неровно
+- Поиск по UPC в Branded foods: `GET /fdc/v1/foods/search?query=<UPC>&dataType=Branded&api_key=...`
+- Активация: owner делает signup на https://fdc.nal.usda.gov/api-signup.html (30 сек, без карты), `USDA_API_KEY=...` в `/home/taskbot/noms/.env` + рестарт `noms-webhooks`. **Без env → слой no-ops silently** (caller → next tier)
+- Free tier rate limit: 1000 req/hour
+- Nutrient IDs (per USDA dictionary): 1008=kcal, 1003=protein, 1004=fat, 1005=carbs
+- `_extract_per_100g` обрабатывает обе формы ответа: search endpoint `{nutrientId, value}` vs food endpoint `{nutrient:{id}, amount}`
+- **Защитная эвристика:** `servingSize` в граммах → используем как `package_grams`; в `ml`/прочих → `package_grams=None` (плотность неизвестна, мл≠г)
+
+### 11.2 GPT-fallback по EAN (последний резерв)
+
+Когда штрихкод прочитан, но **нигде не найден** — спрашиваем `gpt-4o-mini` через structured output. Для weak-coverage regions (RU/IR/IN/AR) — главный спасатель.
+
+**Защита от мусора в кэше:**
+- Confidence floor 0.7 (`_GPT_FALLBACK_CONF_FLOOR`) — ниже → discard
+- `is_known=false` → discard
+- `kcal_100g=0` → discard (defensive — модель сказала `is_known=true` но не дала макросов)
+- Промпт-инструкции: «угадывать категорию (`молоко`/`сок`) хуже чем сказать "не знаю"»
+
+**EAN-prefix → country mapping (`_EAN_PREFIX_COUNTRY`):** ~85 GS1 ranges. Префикс → ISO alpha-2 (например 460-469→RU, 626→IR, 890→IN, 482→UA, 750→MX, 789-790→BR, 84→ES, 380-440→DE, ...). Это hint для модели — _не_ user country (брендовый продукт может быть импортным).
+
+```python
+# Пример промпта:
+# Barcode: 4607097960058
+# EAN prefix country (manufacturer GS1 origin): RU
+# User country hint: RU
+# What product is this? Reply via the structured schema.
+```
+
+**Гейт:** `gpt_barcode_fallback_enabled` (default `'false'`) — копейки за запрос (~250 токенов), но не нули. Toggle в `app_constants` → hot-reload через `v_user_context` без рестарта.
+
+### 11.3 Каскад в `lookup_product`
+
+- **Cache hit short-circuit** — не идёт в OFF/USDA/GPT
+- **Cache warming на каждом не-cache hit** — `source` метка ('openfoodfacts' / 'usda' / 'gpt_inferred'). Следующий скан = cache hit мгновенно
+- **Layer exceptions изолированы** — USDA упал → caught и каскад продолжается на GPT. Pattern: `try: product = await fetch_X(...) except Exception: product = None; continue`
+- **Flags гейтят слои:** `usda_enabled` (default True; `fetch_usda` no-ops без env), `gpt_fallback_enabled` (default False; cents per call)
+
+### 11.4 🔑 Durable принципы каскадных интеграций
+
+1. **Каждый tier независимо отключаем флагом** + miss/exception одного НЕ ломает остальных. Mocking в тестах элементарный (patch один tier, проверить fallthrough на следующий).
+
+2. **External-API tier ships disabled-by-default через env-gate:** `if not api_key: return None`. Owner активирует «строчкой в .env + рестартом» без code change. **НЕ raise, НЕ warning spam** на каждом запросе.
+
+3. **GPT-угадывание = confidence-gated structured output**, никогда free-form. Free-form → модель «уверенно врёт» («просто молоко» вместо конкретного бренда → poison cache).
+
+4. **Cache-warming на каждом hit** — превращает любой источник в O(1) для повторных сканов. Свежий контракт `barcode_cache.source` поле = audit trail (можно делать аналитику «сколько hits через USDA vs GPT»).
+
+### 11.5 EAN-prefix таблица — потенциальное переиспользование
+
+`_EAN_PREFIX_COUNTRY` сейчас только в `services/barcode.py` для GPT-fallback hint. Если понадобится в других местах (биас vision-распознавания, регионализация уведомлений) — выделить в `services/ean_prefix.py` с публичной функцией `country_from_ean(barcode) -> str | None`. Пока КИСС.
+
+### 11.6 Активация (для следующего агента / для прода)
+
+- **PR #364 готов**, mig 488 LIVE
+- **USDA включается** установкой `USDA_API_KEY` в `.env` на VPS + рестарт noms-webhooks (флаг уже ON)
+- **GPT-fallback включается** `UPDATE app_constants SET value='true' WHERE key='gpt_barcode_fallback_enabled'` — hot-reload, без рестарта
+- Метрика мониторинга: `SELECT source, COUNT(*) FROM barcode_cache GROUP BY source` — увидеть в каких регионах USDA/GPT реально помогают
