@@ -160,3 +160,29 @@ FROM ui_screen_buttons WHERE screen_id = '<screen>' ORDER BY row_index, col_inde
 ## Sources
 
 - [[daily/2026-05-18.md]] — Mig 271 (Phase B0 my_plan settings submenu) + mig 272 (hotfix: double emoji + dead button) + mig 273 (hotfix: phenotype back nav FSM hardcode). 3 bugs discovered + fixed within 2 hours of deploy, all 3 = pre-flight-checkable.
+
+---
+
+## Gotcha: новый reply-kb root → process_user_input fast-path (mig 114), НЕ button.meta (2026-06-09, mig 497)
+
+Синтетические callback'и от **главных reply-кнопок** (☀️ stats, 🚀 progress, 👤 profile, 🍽 add_food) НЕ резолвятся в экран через `ui_screen_buttons.meta.target_screen` — они идут через **жёстко зашитый CASE в `process_user_input`** (Migration 114 «top-level fast-path»):
+
+```sql
+IF v_callback IN ('cmd_get_profile',...,'cmd_get_stats','cmd_progress',...,'cmd_add_food') THEN
+    v_next_screen := CASE v_callback
+        WHEN 'cmd_get_stats'  THEN 'stats_main'
+        WHEN 'cmd_add_food'   THEN 'add_food_prompt'   -- mig 497
+        ...
+    END;
+```
+
+**Чтобы перенести reply-кнопку из legacy n8n в Python (пример: 🍽 add_food, mig 497):**
+1. `router.py` секция 4c: `if icon_X in text → target=menu_v3, synth_callback='cmd_X', cb_context={is_inline:False}`.
+2. `process_user_input`: добавить `cmd_X` в **двух** местах — fast-path `IN`-list (строка ~136) И `CASE` (иначе v_next_screen=NULL → fallback на root). **Аддитивно** — старые callback'и не затрагиваются.
+3. `ui_screens` + `ui_screen_buttons` для нового экрана. `render_strategy=replace_existing` (edit меню на месте, нет накопления старых меню — именно поэтому legacy требовал pre-delete мост TD-#18 в webhook_server, который слал НОВОЕ сообщение). `meta.reply_kb_entry=true`.
+4. Переводы — часто уже есть (legacy и Python делят `ui_translations`); проверь `content->ns ? key` count = 13 перед написанием новых.
+
+**Gotcha при CREATE OR REPLACE в миграции:** `pg_get_functiondef()` НЕ добавляет `;` после `$function$` → перед `COMMIT;` вставить `;` вручную, иначе `syntax error at or near "COMMIT"`. База функции — ТОЛЬКО из живого `pg_get_functiondef`, не из git (stale-base guard).
+
+## Sources (addendum)
+- [[daily/2026-06-09.md]] + [[handover/2026-06-09_add-food-python-migration]] — mig 497, 🍽 add_food n8n→Python.
