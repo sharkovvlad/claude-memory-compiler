@@ -6,9 +6,10 @@ sources:
   - "daily/2026-05-29.md"
   - "daily/2026-06-07.md"
   - "daily/2026-06-08.md"
+  - "daily/2026-06-09.md"
   - "handover/2026-06-08_sage-payload-meta.md"
 created: 2026-06-08
-updated: 2026-06-08
+updated: 2026-06-09
 ---
 
 # Sage payload-meta override — паттерн
@@ -83,7 +84,17 @@ u786301802 (en, ES, female), 19:57:41 food_log на «Grilled chicken 825 кка
 - META: `RULE 7 HARD GUARD` приклеена (`payload['protein'] >= 20`).
 - LLM-ответ: **«Protein landed! 🍗 Now, how about some leafy greens to round out the day?»** — модель **дословно** скопировала формулировку «protein landed» из META + выбрала другой lever (leafy greens), не курицу. Подтверждение, что МETA работает.
 
-🟡 Известная open issue: `VARIATION GUARD` не виден в `journalctl` payload даже когда recent_reactions очевидно должны иметь штамп — гипотеза, что supabase Python SDK возвращает RPC TABLE как APIResponse с `.data` атрибутом (unit-тесты мокали `list[dict]`). Spawn task `task_7839624f`.
+✅ **Resolved 2026-06-09 (PR [#376](https://github.com/sharkovvlad/noms-bot/pull/376))** — `VARIATION GUARD` не появлялся в `SAGE_MY_DAY_PROMPT`, потому что [services/sage.py:569](services/sage.py:569) `regen_my_day_insight_cache` вызывал `generate_my_day_insight(ctx, day_summary)` **без** пробрасывания `rpc_caller`. Default `rpc_caller=None` (был помечен `# reserved`) → `_fetch_recent_sage_reactions` сразу возвращал `[]` → META не приклеивалась. food_log-путь не страдал (handler прокидывал явно). Гипотезы из вчерашнего handover (SDK shape, фильтр `success=true`) **обе отметены**: `SupabaseClient.rpc` возвращает `response.json()` нативно, `success=t` для всех sage-логов на проде.
+
+## Wiring gotcha — gотча pattern для всего семейства META
+
+Любая новая META, которая зависит от RPC-данных (как `VARIATION GUARD`), требует:
+
+1. **Optional `rpc_caller` параметр в leaf-функции** (`generate_*_comment`/`generate_*_insight`) — стандарт уже принят.
+2. **ВСЕ оркестраторы выше по стеку** (`regen_*_cache`, handler-уровневые вызовы) пробрасывают `rpc_caller=rpc_caller` **явно**. Не «когда вспомнится», а с момента введения параметра.
+3. **Wiring test, не leaf test.** Unit-тест с `rpc_caller=AsyncMock(...)` прямо в leaf-функцию доказывает «лист работает». Это **не доказывает**, что вызывающий код передаёт `rpc_caller`. Канонический шаблон — `test_regen_my_day_cache_forwards_rpc_caller_for_repeat_meta` (один моковый rpc-каллбэк отвечает на оба RPC, ассертится содержимое финального OpenAI-промпта).
+
+Это конкретное применение общего правила из `feedback_integration_tests_rpc.md` (auto-memory): «unit-моки скрывают contract drift». Здесь drift был на уровне call-site, а не контракта RPC, но симптом тот же — все тесты зелёные, прод тихо отключён.
 
 ## Related Concepts
 
