@@ -1,6 +1,6 @@
 # Architecture Registry — Python authoritative vs n8n fallback
 
-**Status:** live-аудит обновлён **2026-06-08** — **Stage 7c ЗАВЕРШЁН**: n8n `03_AI_Engine` + `06_Indicator_Clear` УДАЛЕНЫ, осталось **5 n8n workflows** (active: `01_Dispatcher`, `04_Menu`, `04_Menu_v3`, `04.2_Edit_StatsDaily`; inactive: `08.3_Friends`). Edit Meal re-recognition + весь AI Engine — теперь полностью Python. Python endpoint `/internal/food_log/render` удалён (PR #374). Секции с датами ниже — исторические. **Source of truth для агентов:** какой target обслуживает Python authoritative, какой fallthrough'ит на legacy n8n.
+**Status:** live-аудит обновлён **2026-06-09** — осталось **3 n8n workflows** (все active: `01_Dispatcher`, `04_Menu`, `04_Menu_v3`). **2026-06-09:** удалены `04.2_Edit_StatsDaily` (все триггеры в Python) + `08.3_Friends` (сирота, payout в Python). **2026-06-08 (Stage 7c):** удалены `03_AI_Engine` + `06_Indicator_Clear`; Edit Meal + весь AI Engine — полностью Python; endpoint `/internal/food_log/render` удалён (PR #374). Секции с датами ниже — исторические. **Source of truth для агентов:** какой target обслуживает Python authoritative, какой fallthrough'ит на legacy n8n.
 
 > **Как обновлять:** при cutover'е каждого нового target (см. [variant-b-cutover](variant-b-cutover.md)) — добавить строку в таблицу 1, удалить из таблицы 2, обновить раздел «Флаги фич».
 >
@@ -35,7 +35,7 @@
 | ~~`location`~~ | ~~`02.1_Location` (`7EqiiwUwlGs7dcHT`)~~ | **MIGRATED 2026-05-14 → Python `handlers/location.py`.** Workflow active=0, не вызывается в проде. Cleanup в Phase 6.4 (DELETE workflow + Route Classifier patch). | — |
 | ~~`payment`~~ | ~~`10_Payment` (`T9753zO3ZyiYsgkp`)~~ | **MIGRATED 2026-05-19 (Stage 6) → Python `handlers/payment.py`.** Workflow `active=0` через SQLite UPDATE. Stripe live setup на `https://nomsbot.com/webhooks/stripe`. Cleanup (DELETE workflow + executeWorkflow refs) — TODO. | — |
 | ~~`pre_checkout` / `successful_payment`~~ | ~~inline в `01_Dispatcher`~~ | **MIGRATED 2026-05-19 в Python безусловно (нет флага)** — Telegram Payments lifecycle нельзя терять. См. handlers/payment.py + handover `2026-05-19_stage6_payment_python.md`. | — |
-| `admin_payout` | `08.3_Friends`/payout chain | Regex match `admin_payout_(approve|reject)_*` — handled в n8n payout_handler. `_try_authoritative_path` возвращает False для этого target, fallthrough на n8n. | router.py:388-391 |
+| `admin_payout` | **Python `handlers/admin_stars.py`** | Regex match `admin_payout_(approve|reject)_*` — обрабатывается в Python (НЕ в n8n; 08.3 удалён 2026-06-09). `_try_authoritative_path` диспатчит в admin_stars payout_handler. | router.py:388-391 |
 | `error` / unknown | legacy 01_Dispatcher | sentinel — что-то непонятное, пусть n8n решает | router.py: default branch |
 
 **Структурное ограничение** (см. [variant-b-cutover](variant-b-cutover.md)): legacy sub-workflows (`04_Menu`, `02.1_Location`, `03_AI_Engine`) НЕЛЬЗЯ просто перевести на Webhook entry — внутри они используют `$('Telegram Trigger').item.json.X` runtime-ссылки. Variant B расширяется только когда конкретный sub-workflow переписан в Python (как сделали для menu_v3 и onboarding_v3).
@@ -53,8 +53,8 @@
 | `7jVRdAvVlzOqIMEi` | **01_Dispatcher** | Webhook from Python (legacy fallback) | 🟢 KEEP |
 | `kjw4kkKMD0IqNALg` | **03_AI_Engine** | 01_Dispatcher → "Go to 03_AI" | 🟢 KEEP — GPT-4o Vision pipeline, не переписан |
 | `0xJXA5M4wQUSiGXT` | **04_Menu_v3** | 01_Dispatcher → "Go to 04_Menu_v3" + Python forward (`menu_v3` target в TARGET_TO_PATH) | 🟢 KEEP — headless dispatcher |
-| `JQsipPWxijse3F0b` | **04_Menu** (legacy) | 01_Dispatcher → "Go to 04_Menu" | 🟡 KEEP — обслуживает Edit Meal flow → 04.2_Edit_StatsDaily |
-| `wgY05rXde1PbszSk` | **04.2_Edit_StatsDaily** | 04_Menu → "Go to 04.2" | 🟡 KEEP — depends on 04_Menu |
+| `JQsipPWxijse3F0b` | **04_Menu** (legacy) | 01_Dispatcher → "Go to 04_Menu" | 🟡 KEEP — живой fallback (96 событий/2нед): `cmd_wellbeing_today`, `cmd_diet_*` (diet picker), `cmd_cycle_view`, `cmd_edit_waist`, главные reply-кнопки. **НЕ** про Edit Meal (тот в Python). Ветка "Go to 04.2" удалена Safe PUT 2026-06-09 (124→122 ноды). |
+| ~~`wgY05rXde1PbszSk`~~ | ~~**04.2_Edit_StatsDaily**~~ | — | 🔴 **DELETED 2026-06-09**. Все триггеры в Python: `cmd_show_meals`→menu_v3 (`meals_picker`/`get_meals_picker_data`); meal detail=`meal_action`/`get_meal_action_data`; daily stats=`stats_main`/`get_daily_stats_rpc`; `cmd_view_meal_`/`del_`/`start_edit_`=0 трафика/30д (Edit Meal cutover 06-08). Ссылка `04_Menu→Go to 04.2` убрана Safe PUT. Snapshot: `n8n_workflows/04.2_Edit_StatsDaily.json`. |
 | ~~`7EqiiwUwlGs7dcHT`~~ | ~~**02.1_Location**~~ | — | 🔴 **DELETED 2026-05-21**. Был мигрирован в Python `handlers/location.py` (Phase 6.3, 14.05), executeWorkflow ref в `01_Dispatcher` (node `Go to 05_Location`) и `04_Menu` (node `Go to 05`) удалены. Snapshot: `n8n_workflows/02.1_Location.json`. |
 | ~~`T9753zO3ZyiYsgkp`~~ | ~~**10_Payment**~~ | — | 🔴 **DELETED 2026-05-21**. Был мигрирован в Python `handlers/payment.py` (Stage 6, 19.05), executeWorkflow refs в `04_Menu` (node `Go to 10_Payment`) и `04_Menu_v3` (node `Go to 10_Payment`) удалены. Snapshot: `n8n_workflows/10_Payment_final_pre_delete.json`. |
 | `jQn0nTxThFal4Kpe` | **06_Indicator_Clear** | 03_AI_Engine → 3 ноды (Success/Error/Edit) | 🟢 KEEP — clear typing indicator после фото |
@@ -68,10 +68,10 @@
 | `DlWx3ZYnT3xT0tv5` | **06_Indicator_Send** | Python proxy (`webhook_server.maybe_send_indicator`) | 🔴 DELETE безопасно |
 | `uUvHjmfdfrT0Mxsn` | **08.1_Quests** | Headless `quests` экран в 04_Menu_v3 (мигр. 129-139, Phase 3B) | 🔴 DELETE безопасно |
 | `bPQSUEDW2tfsSXR1` | **08.2_League** | Headless `league` экран в 04_Menu_v3 (мигр. 129-139, Phase 3B) | 🔴 DELETE безопасно |
-| `su5JZbUXOgE614Lo` | **08.3_Friends** | Headless `friends_info` экран в 04_Menu_v3 (мигр. 129-139, Phase 3B) | 🔴 DELETE безопасно* |
+| ~~`su5JZbUXOgE614Lo`~~ | ~~**08.3_Friends**~~ | — | 🔴 **DELETED 2026-06-09**. Сирота: 0 executeWorkflow-ссылок, payout НЕ внутри (только RPC Get Referral Info → Build Friends → Edit Friends). Caveat снят. Snapshot: `n8n_workflows/08.3_Friends.json`. |
 | `yhpXMufXs1guvZY5` | **08.4_Shop** | Headless `shop` экран в 04_Menu_v3 (мигр. 129-139, Phase 3B) | 🔴 DELETE безопасно |
 
-> ⚠️ ***DELETE 08.3_Friends caveat:** ambassador payout flow (`admin_payout_approve_*` / `admin_payout_reject_*`) — проверить, не остались ли callbacks в 08.3 которые нужны для admin notifications. Если payout_handler находится в другом месте — DELETE безопасно. Иначе → ARCHIVE.
+> ✅ **08.3_Friends DELETE caveat снят (2026-06-09):** проверено — внутри 08.3 НЕ было ни одной payout-ноды; `admin_payout_(approve|reject)_*` обрабатывается в Python `handlers/admin_stars.py`. DELETE выполнен безопасно.
 
 ### Граф вызовов
 
@@ -157,7 +157,7 @@ Hot-reload: после загрузки UserCtx читается из `ctx.const
 - `TARGET_TO_PATH` (`dispatcher/forward.py:77-80`) сейчас содержит только `menu_v3`. По мере переписывания каждого sub-workflow в Python — добавлять.
 - onboarding гейтится дважды (в `_try_authoritative_path` и в Phase 4 path) — backward compat. После полного перехода на authoritative (когда `dispatcher_python_authoritative=true` для всех юзеров) — Phase 4 path можно удалить.
 - `pre_checkout` / `successful_payment` обрабатываются inline в n8n 01_Dispatcher (не отдельный sub-workflow). При переписывании `payment` target в Python — учесть, что эти два callback-типа имеют свою логику.
-- **04_Menu (legacy) пока нельзя выключить** — он обслуживает Edit Meal flow (через 04.2_Edit_StatsDaily) и старые routing'и Payment. Phase 5 cutover (Edit Meal в Python) разблокирует деактивацию обеих 04_Menu + 04.2.
+- **04_Menu (legacy) пока нельзя выключить** — но уже НЕ из-за Edit Meal (тот в Python, 04.2 удалён 2026-06-09). Остаточный живой трафик (96 событий/2нед, реальные юзеры): `cmd_wellbeing_today`, `cmd_diet_*` (diet picker), `cmd_cycle_view`, `cmd_edit_waist`, `cmd_skip_meal`, главные reply-кнопки меню. Часть из них (cmd_diet_*, cmd_skip_meal, cmd_edit_waist) по комментариям router.py — misrouted «silent fail» (должны были идти в menu_v3/fasting, падают в legacy). Следующий шаг к выключению 04_Menu = разобрать этот остаток: настоящие функции мигрировать в Python, баги-misroute починить в router.py. Это отдельный проект, НЕ удаление.
 - **Smoke-тест mutating RPC через `EXPLAIN` не выявляет runtime-ошибки** (lesson после мигр. 167, исправивший ambiguity в `cron_check_streak_breaks` — мой adversarial review мигр. 166 пропустил баг т.к. EXPLAIN не parse'ит column references на ambiguity). Использовать `SELECT public.<fn>(...)` для actual call даже при ожидаемых 0-row results.
 - **Phase 6.4 (AI Engine migration) — обязательство по `save_bot_message` контракту:** при переписывании `02.1_AI_Engine` на Python агент Phase 6.4 ОБЯЗАН обеспечить вызов `save_bot_message(tid, final_mid, 'menu')` после финального user-visible sendMessage. Иначе orphaned bubble в чате после каждого food log — Tech debt #7 lesson 14.05. Полная спека — [[concepts/save-bot-message-contract]].
 
