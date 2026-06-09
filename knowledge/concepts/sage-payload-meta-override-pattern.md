@@ -96,6 +96,33 @@ u786301802 (en, ES, female), 19:57:41 food_log на «Grilled chicken 825 кка
 
 Это конкретное применение общего правила из `feedback_integration_tests_rpc.md` (auto-memory): «unit-моки скрывают contract drift». Здесь drift был на уровне call-site, а не контракта RPC, но симптом тот же — все тесты зелёные, прод тихо отключён.
 
+## Telemetry coverage gotcha — родственная грабля (PR [#379](https://github.com/sharkovvlad/noms-bot/pull/379), 2026-06-09)
+
+Параллельный класс багов: META **работает**, генерация **работает**, но один из 9 return-путей `generate_food_log_comment` **не пишет в `ai_coach_logs`** → `/sage-tov` судья и `transcripts/sage_*.md` считают эти реакции «отсутствующими», хотя пользователь их видел (pre-baked fallback).
+
+**Инциденты (false positives транскрипта):**
+- 2026-06-07 13:12 u6378579500 — edit-флоу, hard-skip `editing_meal` → `return None`, без telemetry.
+- 2026-06-08 19:29 u520145707 «Борщ» — gpt-4o-mini > 5050ms → handler `pick_food_log_fallback` → pre-baked ru-фраза показана, без telemetry.
+
+**Корневое правило:** если у функции, генерирующей наблюдаемое поведение, **>1 return path**, КАЖДЫЙ user-visible путь обязан писать в общий sink (`ai_coach_logs`) с **различимым маркером**. Иначе observability — лотерея, и одна сессия исследования может пойти по ложной гипотезе («2 пустые реакции за 2 дня») вместо реальной картины («N невидимых fallback'ов в неделю»).
+
+**Канонический шаблон (Sage):**
+
+| Параметр | Happy path | Fallback path | Designed pre-baked (maternal/underage/underweight) |
+|---|---|---|---|
+| `context_type` | `sage_food_log` | `sage_food_log` (тот же — судья видит хронологически) | `sage_food_log` |
+| `success` | `True` | `False` | `True` |
+| `error` | `NULL` | `<branch_tag>` (`openai_err: TimeoutError`, `json_parse`, `sanity_reject`, `closed_budget_leak`, `handler_wait_for_timeout`, `safety_guard_skip`) | `NULL` |
+| `model` | `gpt-4o-mini` | `pre_baked` | `pre_baked_guarded_<namespace>` |
+| `cached` | `False` | `True` (derived from `model.startswith("pre_baked")`) | `True` |
+| `ai_message` | LLM-текст | pre-baked текст, увиденный юзером | pre-baked maternal/etc текст |
+
+**Implementation tip:** `_fire_sage_telemetry` принимает `success`/`error`, шим `_fire_food_log_fallback_telemetry(ctx, error=..., payload=..., pre_baked=...)` сокращает каждую ветку до одной строки. `cached` выводится из `model`, не передаётся отдельно — это держит таблицу консистентной без +1 параметра на каждом callsite. См. `services/sage.py` после PR #379 как референс.
+
+**Wiring test:** unit-тест на каждый branch с `patch.object(sage, "_fire_sage_telemetry", spy)` + ассертом `spy.call_count == 1` и точного `error`-tag'а. Это **не** тест на леф (sage сам по себе уже покрыт), а тест на **observability-contract** — что branch X эмитит ровно одну строку с правильным маркером.
+
+**Связь с wiring gotcha выше:** оба случая — class «leaf работает, oркестратор/обёртка молчит». В META-кейсе молчал `rpc_caller`, в telemetry-кейсе молчал `_fire_sage_telemetry`. Оба ловятся одинаковым подходом: тест на **wiring**, не на лист.
+
 ## Related Concepts
 
 - [[concepts/sage-food-log-llm-integration]] — host архитектура Sage; META — один из её слоёв
@@ -104,7 +131,8 @@ u786301802 (en, ES, female), 19:57:41 food_log на «Grilled chicken 825 кка
 
 ## Sources
 
-- `services/sage.py` — `_repeat_suppression_meta`, `_rule7_hard_guard_meta`, `_budget_directive`, `time_meta_warning`
+- `services/sage.py` — `_repeat_suppression_meta`, `_rule7_hard_guard_meta`, `_budget_directive`, `time_meta_warning`, `_fire_sage_telemetry`, `_fire_food_log_fallback_telemetry`
 - `migrations/496_sage_recent_reactions_rpc.sql` — RPC за `VARIATION GUARD`
 - `tests/services/test_sage_repeat_suppression.py` — coverage META-плумбинга
+- `tests/services/test_sage.py` § «Telemetry on user-visible fallback paths» — wiring-тесты для каждого branch'а (PR #379)
 - `handover/2026-06-08_sage-payload-meta.md` — 5-минутный брифинг
