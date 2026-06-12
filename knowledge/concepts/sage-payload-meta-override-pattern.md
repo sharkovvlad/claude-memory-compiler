@@ -137,16 +137,85 @@ u786301802 (en, ES, female), 19:57:41 food_log на «Grilled chicken 825 кка
 
 **Связь с wiring gotcha выше:** оба случая — class «leaf работает, oркестратор/обёртка молчит». В META-кейсе молчал `rpc_caller`, в telemetry-кейсе молчал `_fire_sage_telemetry`. Оба ловятся одинаковым подходом: тест на **wiring**, не на лист.
 
+## Voice cards as primary tone anchor (PR #392, 2026-06-13)
+
+**Suite of 6 META — но monoculture не лечилась.** К 06-12 у нас 6 META (rule7, variation_guard, ban_list, cold_start_phase, budget_directive, time_meta_warning) + 13 enum'ов `day_status` + сжатый my_day-prompt. Главная метрика «≤25% реакций с предписанием еды» не сдвинулась с 92→91% за месяц cycle'ов. `emotion=smirk` ВЫРОС с 80% → 100% (curse-of-instructions). Live triage 200 реакций показал: 31% «как насчёт», 31% «куриного филе», 30% «чтобы сбалансировать», 72% food emoji.
+
+**Корневая проблема — диспропорция positive vs negative space в промптах.** Системные промпты на ~80% состоят из FORBIDDEN-блоков, DAY STATUS HINTS, anti-pattern-описаний. Positive space (как голос Номса реально звучит) — одна строка про 70/30 bro/scientist + 5 примеров TONE SHAPE — RULE 7b. Модель cargo-cult'ит дефолтный шаблон gpt-4o-mini под «friendly nutritional advice», а не character spec, потому что **примеров character spec в промпте почти нет**.
+
+**Fix:** 8 voice cards между `YOUR CHARACTER` и `GENERATION RULES` в **обоих** системных промптах:
+- food_log (Cards A–C): closed-budget close · Rule 7b balanced · open-budget varied push
+- my_day (Cards D–H): quiet_steady (no push) · cold_start · target_met_fat_heavy · severe_deficit safety · fasting_logged
+
+Cards написаны на русском (single-source per mig 412); output language — payload параметр `Response language`. **Никаких per-language `ui_translations` строк** для voice cards не нужно — это часть Python-промпта, не screen-level UI. Каждая card помечена `emotion=...` чтобы вынудить вариативность (D/E/G/H = sage, A/B/C/F = smirk) — это разрушает 100% smirk monoculture.
+
+**Anti-patterns в эталонах (флагнуты на цикле 06-12):**
+1. **Самореференс character'a** — «метаболическому навигатору тут ловить нечего» = breakage 4-й стены. Никогда не упоминать роль персонажа внутри ответа.
+2. **«лишних калорий» / «лишний жир»** — anti-shame trigger, той же категории что «перебор» (уже в FORBIDDEN). Слово «лишний» в любой форме при еде → shame.
+3. **Псевдонаучные «системы»** — «метаболическая система уходит на ночной покой» — такой системы в физиологии не выделяют. Sage scientist part обязан использовать настоящие термины (метаболизм, обмен веществ) или не использовать никакие.
+4. **Functional medical claims** — «X поддержит мышцы и ЦНС» / «улучшает Y» — псевдомедицинский claim, нарушает FORBIDDEN-блок (anti-medical-claim policy).
+5. **DB-операционные глаголы** — «Творог зафиксирован» звучит как лог-row, не как человек. Живые формулы — «Творог в деле», «Творог пошёл».
+
+**Snapshot test:** `tests/services/test_sage_late_night_close.py::test_food_log_system_prompt_contains_voice_cards` ассертит конкретные строки эталонов в `_DEFAULT_SYSTEM_PROMPT_EN` / `_DEFAULT_SYSTEM_PROMPT_MY_DAY_EN`. Любая случайная правка (кто-то «упрощает» Card B) провалит тест и оповестит code review.
+
+## late_night_close META — owner-mandated h≥22 cutoff (PR #392)
+
+**Owner-фраза 2026-06-12:** «Я бы поправил ещё и то что наш Номс после 10 вечера не рекомендовал бы съесть ещё что-то.»
+
+**Нутрициологическое обоснование:** Sutton 2018 / Cienfuegos 2020 / Chow 2020 (time-restricted eating) — eating window заканчивается за 2-4 часа до сна → улучшение glucose response, insulin sensitivity. NHANES Sun 2021 — energy intake ≥20-21:00 ассоциируется с худшим HbA1c, BMI, особенно при high glycemic load. Crispim 2011 — meals <2h до сна → fragmented sleep, GERD. Для среднего bed-time 23:30-00:30 — **h≥22 правильный default cutoff**.
+
+**Critical safety nuance:** мы **не** говорим «не ешь» (это РПП-trigger для restriction-prone юзеров). Мы перестаём **пушить**. Команда «не ешь» = safety violation. Тишина = безопасно.
+
+```python
+def _late_night_close_meta(local_hour, *, day_status=None, protein_pct=None, kcal_pct=None):
+    if local_hour < 22:
+        return None
+    soft_eligible = (
+        day_status in ("severe_deficit", "under_target_evening")
+        and protein_pct < 60.0 and kcal_pct < 80.0
+    )
+    if soft_eligible:
+        return (SOFT_TEXT, "late_night_soft")    # «творог / йогурт без сахара» — soft
+    return (HARD_TEXT, "late_night_close")        # next_meal_suggested=false принудительно
+```
+
+**Две ветки:**
+- **HARD CLOSE** (default): force `next_meal_suggested=false`, character-driven close. Soft «утром продолжим» note allowed.
+- **SOFT** (rare exception): when `day_status in (severe_deficit, under_target_evening) AND protein_pct<60 AND kcal_pct<80`. Условие срабатывает только если день реально тонкий по калориям И протеину, И юзер только что что-то залогировал. Одна optional фраза «если голод реальный — пара ложек творога» допустима, но `next_meal_suggested` остаётся `false` (условное, не предписание).
+
+**food_log surface не имеет `day_status`** (вычисляется на my_day level через `_compute_day_status`). Поэтому food_log call всегда лендится в HARD CLOSE. SOFT-исключение работает только на my_day. Это acceptable: SOFT для thin-day цикла, который детектится на day level.
+
+**Gate за `app_constants.sage_late_night_close_enabled`** (mig 503, default `true`). Rollback одной командой:
+```sql
+UPDATE public.app_constants SET value='false' WHERE key='sage_late_night_close_enabled';
+```
+
+**Telemetry tags:** `metas_fired` включает `late_night_close` (hard) ИЛИ `late_night_soft` (soft). Никогда оба одновременно.
+
+**Order в META cascade** (по возрастанию специфичности, gpt-4o-mini weighs end-of-context):
+1. `time_meta_warning` (h≥16, my_day only)
+2. `budget_directive` (always)
+3. `variation_guard` (recent reactions push protein)
+4. `cold_start_phase` (0 logs + past breakfast)
+5. `ban_list` (specific foods named recently)
+6. `rule7_hard_guard` (food_log only, just-logged ≥20g protein)
+7. `late_night_close` / `late_night_soft` (h≥22) — **самая специфичная по времени, в конце**
+
 ## Related Concepts
 
+- [[concepts/sage-tone-dry-run-protocol]] **`🔥 MANDATORY pre-merge`** — Любая правка добавляемая в эту страницу (новая META, изменение системного промпта, изменение порядка cascade) обязана пройти dry-run протокол ДО merge. PR #396 = первое применение, поймало 2 critical bug которые unit-тесты не ловили.
 - [[concepts/sage-food-log-llm-integration]] — host архитектура Sage; META — один из её слоёв
 - [[concepts/python-vs-n8n-template-grammar]] — payload-format vs system-prompt-format разница
 - [[concepts/sassy-sage-dialog-variants]] — фоллбэки и вариативность Sage
 
 ## Sources
 
-- `services/sage.py` — `_repeat_suppression_meta`, `_rule7_hard_guard_meta`, `_budget_directive`, `time_meta_warning`, `_fire_sage_telemetry`, `_fire_food_log_fallback_telemetry`
+- `services/sage.py` — `_repeat_suppression_meta`, `_rule7_hard_guard_meta`, `_budget_directive`, `_late_night_close_meta` (PR #392), `time_meta_warning`, `_fire_sage_telemetry`, `_fire_food_log_fallback_telemetry`, voice cards в `_DEFAULT_SYSTEM_PROMPT_EN` / `_DEFAULT_SYSTEM_PROMPT_MY_DAY_EN`
 - `migrations/496_sage_recent_reactions_rpc.sql` — RPC за `VARIATION GUARD`
+- `migrations/503_sage_late_night_close_flag.sql` — флаг late_night_close (PR #392)
 - `tests/services/test_sage_repeat_suppression.py` — coverage META-плумбинга
+- `tests/services/test_sage_late_night_close.py` — coverage late_night branching + snapshot voice cards (PR #392)
 - `tests/services/test_sage.py` § «Telemetry on user-visible fallback paths» — wiring-тесты для каждого branch'а (PR #379)
 - `handover/2026-06-08_sage-payload-meta.md` — 5-минутный брифинг
+- `handover/2026-06-12_sage-tov-cycle.md` — handover циклов 06-08…06-12
+- `daily/2026-06-13.md` — PR #392 closeout
