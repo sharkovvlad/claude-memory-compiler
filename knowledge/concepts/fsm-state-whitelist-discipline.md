@@ -157,3 +157,30 @@ grep -n "fall through to legacy" webhook_server.py
    - location pin ← забывается так же часто
 
    Photo/voice от взрослого юзера — клёвая нагрузка пользовательских ожиданий, и должна работать ВСЕГДА (юзер хочет залогать еду, неважно где он сидит в FSM).
+
+---
+
+## Generalization 2026-06-12 (Этап A n8n-teardown): food-media escape для ВСЕХ статусов
+
+Рецидивы FSM-whitelist (#387 profile-v5, и до того mig 187b/257/276) — все один класс: **новый FSM-статус не в AI-гейте → фото проваливается**. Вместо whitelist-по-одному (вечная гонка) — обобщили принцип в коде:
+
+**Photo/voice/image-doc от взрослого юзера = ЕДА в ЛЮБОМ статусе, КРОМЕ онбординга.**
+
+`webhook_server._try_authoritative_path` (~1633, PR #390):
+```python
+_is_food_media_escape = (
+    target == "ai" and _ai_reason == "food_media"
+    and _status not in ("registered", "editing_meal", "waiting_barcode_portion")
+    and _status not in ONBOARDING_STATUSES   # ← единственное исключение
+)
+```
++ fire-and-forget `set_user_status('registered')` (сброс зависшего picker/quiz).
+
+**Почему онбординг — исключение:** food-фото при регистрации обрабатывается ОТДЕЛЬНОЙ веткой `AUTHORITATIVE_ONB_FOOD` (`handle_onboarding_food` → `log_meal_onboarding`, без XP/streak, возврат на шаг онбординга). Reset в `registered` там НЕ делается — иначе сломал бы регистрацию.
+
+**Почему text_food НЕ обобщён:** текст в edit-статусе может быть числовым вводом («88» в `edit_weight`) — router и так уводит его в menu_v3 (`profile_v5_text_input`). Обобщать только media (однозначный food-сигнал).
+
+**Архитектурный факт:** router классифицирует ЛЮБОЕ фото → `target=ai reason=food_media` в секции 6 (router.py ~1069) ДО онбординг-секции 7 → **AI-гейт в webhook_server = единственное место гейтинга фото по статусу.** Поэтому одна правка там покрывает все FSM-статусы (в отличие от whitelist'ов которые надо править в N местах).
+
+## Git gotcha (process, 2026-06-12)
+Бэктики в `git commit -m "...текст с \`code_identifier\`..."` через **double-quotes** ИСПОЛНЯЮТСЯ zsh как command-substitution → имена переменных молча съедаются из commit-сообщения («command not found»). Для сообщений с code-идентификаторами/backtick → **`git commit -F file`** (heredoc в файл, single-quote delimiter).
