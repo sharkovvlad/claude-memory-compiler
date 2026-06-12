@@ -287,6 +287,26 @@ at least one item. A meal with 3 containers = at least 3 items.
 - **Не раздувать промпт до >150 слов дополнений.** max_tokens=1500 при глубоком описании оставляет меньше места для items → truncation.
 - **Не добавлять порядковые номера items.** ParsedFoodResult — список без нумерации; модель начнёт «объяснять нумерацию» в `food_name`.
 - **Не просить «описывай уверенно»** — это ведёт к галлюцинациям, не к точности.
+- **Не делать blanket culture-default-classification без визуальной проверки** — i.e. «всегда beef для AR-юзера независимо от фото» убивает калории, когда юзер реально ел pork. Honest classification for clearly visible cues — всегда; halal-prior — только в genuinely-ambiguous зоне (см. ниже).
+
+### Disambiguation contract (2026-06-13, обновлён в тот же день)
+
+`_build_location_hint` ([services/ai_recognition.py:460](services/ai_recognition.py:460)) — единственное место, где country влияет на vision. Контракт:
+
+1. **PRIMARY evidence = photo/description.** Country может склонять интерпретацию ТОЛЬКО когда visual cues genuinely ambiguous.
+2. **Country = tiebreaker для омонимов / named dishes** (bare 'tortilla' MX vs ES; 'kebab' SA vs анг. trad; 'pancake' US vs FR).
+3. **Halal-prior для predominantly-Muslim countries** (SA, AE, EG, KW, JO, MA, PK, MY, ID, BH, OM, QA, TR, IR, IQ) **только** для **genuinely ambiguous meat textures** — slow-cooked shredded fillings, sauced ground meat, mystery-meat interior of kebab/shawarma/dumplings, dark stews. Default → chicken/beef/lamb over pork. Эта зона реальна: pork shoulder slow-cooked shredded vs beef brisket shredded в low-res Telegram JPEG могут быть неотличимы (1st draft 2026-06-13 morning ошибочно классифицировал их как «visually distinct» — был walk-back в тот же день).
+4. **Honesty anchor для CLEARLY DISTINGUISHABLE pork** — whole pork chop with bone, ham slice с характерной cured pink texture, bacon strip, salami/pepperoni rounds, visible sausage casing labelled as pork, pulled pork sandwich с visible BBQ context — называть честно regardless of country. **«explicit visible pork must never be reclassified»** — финальная фраза в hint'е, unit-тест `test_location_hint_halal_prior_for_ambiguous_meat_in_muslim_countries` валит сборку если стёрта.
+5. **IN vegetarian-default НЕ применяется.** ~30% Индии non-veg (mutton/chicken-рынок огромный), default «paneer вместо mystery meat» = data-quality regression. Если будет нужен diet-aware prior — это **через `ctx.diet_type`** (omnivore/vegetarian/vegan), не country. Отложено в follow-up.
+
+### Compensating mechanism — correction memory
+
+Когда halal-prior ошибается (юзер был экспат в SA, ел ham), юзер исправляет через [Исправить] → должно запоминаться. Текущее состояние:
+
+- **TEXT/VOICE path:** запоминается через [[cascade-macro-enrichment-fatsecret]]§10 (mig 457 `user_food_memory`, PR #324 LIVE). HIT = 0 токенов, мгновенно. Refinement-vs-replacement gate против trust-killer'а.
+- **VISION path:** НЕ запоминается (MVP не покрыл). Юзер должен исправлять КАЖДОЕ ambiguous фото — критический gap при halal-prior'е, который намеренно вводит мягкое смещение для ambiguous case. **Follow-up sprint:** extend `user_food_memory` на vision (key = hash изображения + telegram_id, или last-corrected-label как mild prior).
+
+Альтернативный compensating mechanism — clarification UX (low-confidence → one-tap «говядина или свинина?») — также remains valid для future, но требует UX-работы (новый screen, handler, i18n × 13 langs).
 
 ---
 
