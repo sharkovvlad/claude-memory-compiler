@@ -1,11 +1,13 @@
 ---
 title: "Subagent Live-Apply Review Rule — SQL human-review BEFORE psycopg2 execution"
-aliases: [subagent-sql-review, live-apply-gate, taskstop-not-rollback]
+aliases: [subagent-sql-review, live-apply-gate, taskstop-not-rollback, parallel-vs-sequential-subagents]
 tags: [agent-collaboration, safety, lessons-learned, p0-prevention]
 sources:
   - "daily/2026-05-26.md — P0 incident postmortem"
   - "migrations/360_recovery_buttons_onboarding.sql — recovery from unreviewed apply"
+  - "daily/2026-06-12.md — parallel-isolation vs sequential lesson (PR #385 vs #386)"
 created: 2026-05-26
+updated: 2026-06-12
 status: active
 severity: P0-prevention
 ---
@@ -99,3 +101,42 @@ The second form pre-constrains the SQL shape, making post-hoc audit possible.
 | 5h later UAT | — | Owner screenshot exposed broken UI | mig 360 recovery (2h work) |
 
 **Lessons codified in this concept** to prevent re-occurrence in next sessions.
+
+## Parallel worktree-isolation vs sequential in-place (2026-06-12 lesson)
+
+Расширение правила — relevant для code-задач (не SQL): когда выгодно spawn'ить субагентов **параллельно с `isolation: "worktree"`** vs **последовательно в текущем worktree без isolation**.
+
+### Incident — утро 2026-06-12 (PR #385)
+
+Главный агент запустил два субагента **параллельно** в worktree-isolation:
+- Subagent A: `cold_start_phase` META — новая функция + триггер.
+- Subagent B: `metas_fired` observability — трекать все существующие META включая ту что добавила A.
+
+Оба родились от чистого `main` (не друг от друга). B попытался искать `cold_start_phase` в коде → 0 hits → НЕ написал тест на её тегирование. Cherry-pick'ом главного агента: 6 conflict markers в `services/sage.py` (одни и те же 3 функции — signatures, docstrings, return-блоки). Manual resolve + добавить 2 missing теста на `cold_start_phase` × `metas_fired` интеграцию.
+
+### Fix — вечер 2026-06-12 (PR #386)
+
+Спавн A→B→C **последовательно в одном моём worktree без isolation**:
+- Каждый subagent видел git log + код предыдущих коммитов.
+- A: trim my_day prompt. B: quiet_steady threshold. C: ban-list META (видит `_fetch_recent_sage_reactions` и тегирование из B).
+- 0 conflicts, 0 manual merge, 194 sage-тестов green.
+
+### Правило
+
+| Сценарий | Стратегия |
+|---|---|
+| Truly-independent изменения в **разных файлах** (например docs + tests + new module) | **Parallel с `isolation: "worktree"`** — speedup от параллелизма, конфликтов нет |
+| B зависит от знания «что добавил A» (например observability трекающая фичу из A) | **Sequential без isolation** — каждый видит предыдущие коммиты в git log |
+| Несколько фич в **одном** файле (`services/sage.py`, `handlers/X.py`) | **Sequential без isolation** — иначе конфликт-маркеры гарантированы |
+| Большие independent рефакторинги в разных директориях | **Parallel с `isolation: "worktree"`** + main agent cherry-pick'ит когда оба готовы |
+
+### Тест перед spawn'ом
+
+Перед `Agent({isolation: "worktree", ...})` спроси себя:
+1. **Будет ли subagent B читать код subagent'а A?** → если да, **не parallel**.
+2. **Будут ли A и B менять одни и те же функции / классы / файлы?** → если да, **не parallel**.
+3. **Если A и B — completely separate scope (например A: миграция SQL, B: правка handler'а), но в одном PR?** → **parallel ok, но cherry-pick в одну ветку, не merge worktree branches**.
+
+### Cleanup после parallel-isolation
+
+Worktree'ы агентов: `/Users/vladislav/Documents/NOMS/.claude/worktrees/agent-<id>/`. Auto-cleanup если subagent ничего не закоммитил; иначе остаются. Чистить вручную: `git worktree remove <path>` после cherry-pick'а.

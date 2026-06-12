@@ -7,23 +7,27 @@ sources:
   - "daily/2026-06-07.md"
   - "daily/2026-06-08.md"
   - "daily/2026-06-09.md"
+  - "daily/2026-06-12.md"
   - "handover/2026-06-08_sage-payload-meta.md"
+  - "handover/2026-06-12_sage-tov-cycle.md"
 created: 2026-06-08
-updated: 2026-06-09
+updated: 2026-06-12
 ---
 
 # Sage payload-meta override — паттерн
 
 Способ скорректировать поведение LLM-генератора Sassy Sage **без правки системного промпта** (`_DEFAULT_SYSTEM_PROMPT_*` в `services/sage.py`). Используется когда системный промпт — это **бренд** и требует owner-approval на каждое изменение, а нужная коррекция — точечная и data-driven.
 
-Применяется в 4 живых местах (по состоянию на 2026-06-08):
+Применяется в 6 живых местах (по состоянию на 2026-06-12):
 
 | META | Условие триггера | Когда добавлен |
 |---|---|---|
-| `time_meta_warning` | `local_hour >= 16` | 2026-05-29 (mig 29.05) — бот говорил «morning» в 18:57 |
-| `closed-budget directive` | `remaining_kcal <= 0` (explicit) | 2026-06-07 (PR закрытого бюджета) |
-| `VARIATION GUARD` | `_PROTEIN_STAMP_RE` совпадает в ≥1 из последних 2 реакций (RPC `get_recent_sage_reactions`) | 2026-06-08 (PR #375) |
-| `RULE 7 HARD GUARD` | `payload['protein'] >= 20` (food_log only) | 2026-06-08 (PR #375) |
+| `time_meta_warning` | `local_hour >= 16` (my_day only) | 2026-05-29 (mig 29.05) — бот говорил «morning» в 18:57 |
+| `closed-budget directive` / `budget_directive` | `remaining_kcal <= 0` (explicit) — всегда тегается в metas_fired | 2026-06-07 (PR закрытого бюджета) |
+| `VARIATION GUARD` / `variation_guard` | `_PROTEIN_STAMP_RE` совпадает в ≥1 из последних 2 реакций (RPC `get_recent_sage_reactions` + race-fix `just_emitted_food_log` PR #383) | 2026-06-08 (PR #375), race-fix 2026-06-12 (PR #383) |
+| `RULE 7 HARD GUARD` / `rule7_hard_guard` | `payload['protein'] >= 20` (food_log only) | 2026-06-08 (PR #375) |
+| `COLD-START PHASE` / `cold_start_phase` | `meals_count == 0 AND meal_period != "breakfast"` | 2026-06-12 (PR #385) |
+| `BAN LIST` / `ban_list` | foods из таблицы `_FOOD_MENTIONS` совпали в последних 2 реакциях (Agent 2's предложение, sharper чем VARIATION GUARD) | 2026-06-12 (PR #386) |
 
 ## Key Points
 
@@ -62,13 +66,23 @@ return (
 
 ## Order of MIGs in user_prompt (закон возрастания специфичности)
 
-Чем специфичнее META, тем ближе к концу. На 2026-06-08 порядок такой:
+Чем специфичнее META, тем ближе к концу. На 2026-06-12 порядок такой:
 
+**food_log path (`_build_user_prompt`):**
 1. `Response language` (вечная строка)
-2. `time_meta_warning` (если evening)
-3. `FINAL DIRECTIVE` (бюджет open/closed — общий)
-4. `VARIATION GUARD` (репит-штамп — узкое)
-5. `RULE 7 HARD GUARD` (≥20 г Б в одном приёме — самое узкое)
+2. `FINAL DIRECTIVE` (бюджет open/closed — общий)
+3. `VARIATION GUARD` (репит-штамп лeверов — узкое)
+4. `COLD-START PHASE` (0 логов + past breakfast — day-framing)
+5. `BAN LIST` (конкретные foods из последних реакций — sharper guard) **NEW PR #386**
+6. `RULE 7 HARD GUARD` (≥20 г Б в одном приёме — самое узкое)
+
+**my_day path (`_build_my_day_prompt`):** rule7 не применим (no single-meal protein); остальное параллельно:
+1. `Response language`
+2. `time_meta_warning` (если `local_hour >= 16`)
+3. `FINAL DIRECTIVE`
+4. `VARIATION GUARD`
+5. `COLD-START PHASE`
+6. `BAN LIST`
 
 Идея: если две META конфликтуют по смыслу, более специфичная (ниже в payload) выигрывает у модели.
 
