@@ -1,5 +1,8 @@
 # Handover 2026-06-09 — Этап 2 n8n→Python: «Добавить еду» мигрирована, Этап 3 ждёт merge
 
+> ✅ **ОБНОВЛЕНИЕ 2026-06-12 — Этап 3 ВЫПОЛНЕН.** 04_Menu УДАЛЁН (n8n 3→2). DELETE блокировался `workflow_published_version` FK → обошли через живую БД (см. [[n8n-data-flow-patterns]]§published_version). Мост TD-#18 удалён (#384). Детали — daily/2026-06-12. Ниже — исходный план (исторический).
+
+
 ## TL;DR
 Reply-кнопка **«🍽 Добавить еду»** — последний живой вход в legacy n8n `04_Menu` — переведена в Python (headless). **mig 497 APPLIED LIVE**, код в **PR #380 (CI green, НЕ merged)**. После merge+deploy → можно выводить сам `04_Menu` (Этап 3).
 

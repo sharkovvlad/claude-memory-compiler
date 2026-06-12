@@ -309,3 +309,33 @@ sqlite3 $DB "SELECT * FROM workflow_published_version WHERE workflowId = '<ID>';
 - Touching `workflow_history` rows — CASCADE сам всё сделает.
 
 Применено 2026-05-21 для удаления `02_Onboarding_v3` (`wzjYmMOurCbp4czk`) и `02.1_Location` (`7EqiiwUwlGs7dcHT`). `10_Payment` (`T9753zO3ZyiYsgkp`) удалился без issue — он был publish'нут позже и видимо имел синхронизированное состояние; не воспроизводимо. Дешевле всегда чистить превентивно для inactive workflows старше пары дней.
+
+---
+
+## Gotcha: DELETE workflow падает HTTP 500 из-за `workflow_published_version` (2026-06-12)
+
+В новой версии n8n (2.17.x) появилась таблица **`workflow_published_version`** с FK на `workflow_entity` и **`on_delete=RESTRICT`**. Если у workflow есть строка-«опубликованная версия», **DELETE через public API падает с `HTTP 500 {"message":"Internal server error"}`**.
+
+**Диагностика:** через API текст ошибки скрыт. Реальная причина видна только в `docker logs noms-n8n`:
+```
+SQLITE_CONSTRAINT: FOREIGN KEY constraint failed
+```
+Найти блокирующую таблицу: `pragma_foreign_key_list(<table>)` где `on_delete=RESTRICT` + есть строка с нужным `workflowId`. У `workflow_published_version` две FK: одна CASCADE, одна **RESTRICT** — RESTRICT и блокирует.
+
+**Что НЕ причина (проверено):** `active=true` (04.2 удалился активным) и наличие webhook-нод (Safe PUT убрал webhook'и 122→120 — DELETE всё равно 500). Блокер именно published_version.
+
+**Fix (owner-approved «дочистить служебную БД»):**
+```bash
+DB=/home/noms/n8n/data/database.sqlite   # bind-mount = живая БД (НЕ только в контейнере!)
+sqlite3 "$DB" ".backup /home/noms/n8n/data/database.backup-YYYYMMDD.sqlite"   # обязательный backup
+# проверить 0 зависимых ссылок: SELECT count(*) FROM workflow_dependency WHERE publishedVersionId=(SELECT publishedVersionId FROM workflow_published_version WHERE workflowId='<id>');
+sqlite3 "$DB" "DELETE FROM workflow_published_version WHERE workflowId='<id>';"
+# затем обычный API DELETE — n8n сам каскадит остальное (workflow_dependency/history/shared = CASCADE)
+curl -X DELETE -H "X-N8N-API-KEY: $KEY" http://127.0.0.1:5678/api/v1/workflows/<id>   # → 200
+```
+Прямой single-row DELETE на живой БД (n8n работает) безопасен: WAL-mode, целевая таблица n8n редко пишется, 0 зависимых ссылок. Стоп n8n не нужен.
+
+**⚠️ Повторится:** ВСЕ workflow с published_version-строкой так блокируются (на 2026-06-12 — все оставшиеся `01_Dispatcher`, `04_Menu_v3`). Перед DELETE любого n8n workflow проверяй `workflow_published_version`.
+
+## Sources (addendum)
+- [[daily/2026-06-12.md]] — DELETE 04_Menu, n8n 3→2, published_version FK gotcha.
