@@ -306,10 +306,27 @@ at least one item. A meal with 3 containers = at least 3 items.
 
 ### Compensating mechanism — correction memory
 
-Когда halal-prior ошибается (юзер был экспат в SA, ел ham), юзер исправляет через [Исправить] → должно запоминаться. Текущее состояние:
+Когда halal-prior или diet-prior ошибаются (юзер был экспат в SA, ел ham; vegetarian юзер логирует мясо у гостя), юзер исправляет через [Исправить] → должно запоминаться. Текущее состояние:
 
 - **TEXT/VOICE path:** запоминается через [[cascade-macro-enrichment-fatsecret]]§10 (mig 457 `user_food_memory`, PR #324 LIVE). HIT = 0 токенов, мгновенно. Refinement-vs-replacement gate против trust-killer'а.
-- **VISION path:** НЕ запоминается (MVP не покрыл). Юзер должен исправлять КАЖДОЕ ambiguous фото — критический gap при halal-prior'е, который намеренно вводит мягкое смещение для ambiguous case. **Follow-up sprint:** extend `user_food_memory` на vision (key = hash изображения + telegram_id, или last-corrected-label как mild prior).
+- **VISION path (PR #399, mig 505 LIVE 2026-06-13):** soft-prior подход вместо exact-hit (hash или label-override отброшены — обоснование ниже). Отдельная table `user_food_corrections_vision (telegram_id, language_code, ai_label_normalized, user_label, correction_count, last_corrected_at)`. RPC `upsert_vision_correction` атомарно UPSERT'ит с инкрементом count'а. На каждый vision call `parse_input` дёргает `lookup_vision_priors(top_n=5)` и передаёт в `_build_location_hint` как soft hint: «Past corrections from this user: pork shoulder → beef brisket (×3); milk → soy milk (×2). Treat as SOFT hint — NEVER use to override clear visual cues; call honestly even when it contradicts a past correction.» GDPR scrub в той же mig 505 (DELETE WHERE telegram_id IN deleted_30d).
+
+### Почему soft-prior вместо hash или label-override
+
+**Hash(image_bytes) отброшен:** Telegram пересжимает каждое фото → bytes hash меняется даже при retry того же блюда. Real-world hit rate ≈0%. Сложность ради мёртвого механизма.
+
+**Label-override отброшен:** «ИИ сказал pork shoulder → юзер поправил на beef brisket → автоматическая подмена в следующий раз» воспроизводит trust-killer из PR #329 (`яблоко → pera` — следующее яблоко возвращает грушу). На vision это будет хуже потому что менее заметно (юзер не увидит подмены если block'а нет в UI).
+
+**Soft-prior выбран:** хранит пары (ai_label, user_label, count), top-N инжектится в location_hint как hint. Модель видит контекст, но финальное решение делает по primary evidence (фото). Тот же двухзональный паттерн как halal/diet prior — soft tiebreaker, never override.
+
+### Production baseline на момент patch (mig 505)
+
+Live measurements 30 дней до запуска:
+- 7 active real users (US/UA/ES — никаких Muslim countries).
+- 203 photo logs, **0 из них были отредактированы**.
+- text/voice memory rows total: 1 (за 9 дней с mig 457).
+
+Это означает фича **dormant до LATAM/EU launch** или первого юзера, который реально активно пользуется [Исправить] на фото. Pre-launch insurance, не текущий фикс активной проблемы.
 
 Альтернативный compensating mechanism — clarification UX (low-confidence → one-tap «говядина или свинина?») — также remains valid для future, но требует UX-работы (новый screen, handler, i18n × 13 langs).
 

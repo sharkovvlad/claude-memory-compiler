@@ -156,6 +156,27 @@ Basic free: 5000 вызовов/день, OAuth 2.0 client_credentials (server-t
 - **🔴 Урок (real-test 2026-06-05): WRITE зависел от edit-флоу в Python.** Изначально правки шли в ЛЕГАСИ n8n (`reason='editing_meal'` не проходил Python-гейт `startswith(food_media|text_food)` → fall-through). Мой populate в `_handle_edit_meal_input` не вызывался → память не наполнялась. Починилось когда ДРУГОЙ агент сделал edit-meal Python cutover (Phase 5, handover `2026-06-05_edit_meal_python_cutover.md`, KB `stage7-global-cutover §поправка-06-05` «merged-but-unwired»). **Урок: проверять РОУТИНГ (не только что хендлер существует) — фича может быть merged, но un-wired.**
 - **🔴 Refinement-vs-replacement (PR #329, real-test): помнить только УТОЧНЕНИЯ, не замены.** Наивный «помнить любую правку» дал `яблоко→pera` → «яблоко» стало выдавать грушу (trust-killer). `is_refinement(origin_term, corrected_name)` = каждое слово ввода юзера есть в исправленном названии (token-subset): `борщ⊆борщ с мясом`✅, `tortilla⊆tortilla española`✅, `стейк=стейк`(порция)✅, `яблоко⊄pera`❌. Гейт = `is_rememberable AND is_refinement`. Best-practice: precision>recall (false-negative безвреден, запомнить замену — вред). Cross-script = safe-negative. **Будущее (Big Tech, не MVP): bias-LLM вместо hard-override (адаптивно к порции + сам разрулит refinement/replacement) + transparency-лейбл «(recordado)» на карточке.**
 
+### Phase 2 — Vision soft-prior memory (PR #399, mig 505 LIVE 2026-06-13)
+
+«Bias-LLM вместо hard-override» из «Будущее» выше — реализовано конкретно для vision-пути как pre-launch insurance под halal-prior (PR #395) / diet-prior (PR #397):
+
+- **Отдельная table** `user_food_corrections_vision (telegram_id, language_code, ai_label_normalized, user_label, correction_count, last_corrected_at)` + atomic RPC `upsert_vision_correction` (INSERT … ON CONFLICT … +=1).
+- **Read**: `services.user_food_memory.lookup_vision_priors(top_n=5)` в `parse_input` для vision branch → передаётся в `_build_location_hint` как `vision_priors` kwarg.
+- **Hint format**: «Past corrections from this user (most-frequent first): pork shoulder → beef brisket (×3); milk → soy milk (×2). Treat as SOFT hint — if photo's evidence is ambiguous and matches a past correction pattern, lean toward the user's label. NEVER override clear visual cues.»
+- **Write**: `handlers/food_log.py` после `replace_meal_transaction` для `input_source='photo'` single-item swap'а → fire-and-forget `populate_vision_correction(ai_label, user_label)`. Self-correction (normalized equal) → skip.
+- **GDPR**: mig 505 extends `cron_anonymize_deleted_users` DELETE на новую table — same telegram_id IN deleted_30d filter.
+
+**Дизайн-решения и почему НЕ:**
+- ❌ hash(image_bytes) — Telegram пересжимает каждое фото, hit rate ≈0%.
+- ❌ label-override — повторяет `яблоко→pera` trust-killer'а (для vision хуже, юзер не видит подмены).
+- ✅ soft-prior — модель сама решает, LLM не bypass'ится. Согласовано с «PRIMARY evidence = photo» контрактом halal/diet prior.
+
+**Production baseline (30д до patch):** 7 active real users US/UA/ES, 203 photo logs, **0 photo edits**. Patch dormant до LATAM/EU launch или первого активного [Исправить]-юзера. Подробности — [[concepts/food-recognition-prompt-lab]]§Compensating mechanism.
+
+**Не сделано в MVP:**
+- Multi-item logs не покрыты (same limitation как text path).
+- `is_refinement` gate (token-subset) НЕ применяется — vision corrections почти всегда replacements (категориальные), token-subset вернёт False почти всегда. Защита от trust-killer вместо этого — на уровне prompt'а «never override clear visual cues».
+
 ## 11. Статус PR (2026-06-04)
 - **#322 temperature → MERGED в main.** ✅ (база теперь содержит `_get_temperature`).
 - **#323 location** — ⚠️ авто-mis-merge: GitHub смержил его в уже-удалённую base-ветку #322, НЕ в main → location в main НЕ попал. Урок в [[concepts/stacked-pr-base-change-gotcha]]. Заменён **#325** (те же коммиты, rebase на main, base=main).
