@@ -101,3 +101,56 @@ text = text.replace("{expires}", str(expires_fmt))
 > «Я добавил Sassy variants — обновил mig 307 (RPC). Кажется всё.»
 
 Нет, не всё. **Python тоже потребляет** эти keys через REST → JSONB → `dict.get()` → `.replace()`. Только RPC-сторону закрыть = баг через 2-4 недели когда random pick попадёт на array из 3 элементов вместо string.
+
+---
+
+## Recurrence 2026-06-12 — `payment.activated_body` (mig 500)
+
+**Третий рецидив того же класса.** Mig 500 переписал phantom-key
+`payment.activated_body` из `null` сразу в JSONB-array (3 Sage-tone variants × 13
+langs). До mig 500 ключ отсутствовал, Python шёл в hardcoded EN fallback. После
+mig 500 он получил `list` и упал бы с `TypeError: list.replace` если бы не
+сделать **тем же PR'ом** Python-fix.
+
+### Симптом
+
+`crons/ton_payment_checker.py:338`:
+```python
+activated_text = (pay_t.get("activated_body")
+    or "✅ Premium Activated!\n\nPayment: {amount} USDT\nPlan: {plan}\n...")
+activated_text = activated_text.replace("{amount}", f"{amount_usdt:.2f}")
+```
+
+Phantom-key → ветка `or` → scalar string → `replace` работает. Mig 500 → `raw` стал
+list → `replace` упадёт.
+
+### Fix (тот же commit что и mig 500)
+
+```python
+raw = pay_t.get("activated_body")
+if isinstance(raw, list) and raw:
+    activated_text = random.choice(raw)
+elif isinstance(raw, str) and raw:
+    activated_text = raw
+else:
+    activated_text = "<scalar EN fallback for defensive>"
+```
+
+### Durable rule (reinforced)
+
+**JSONB-array-миграция (scalar → array, OR null → array) = двойной commit
+SQL+Python в ОДНОМ PR.** Между ними не должно быть деплоя. Иначе:
+- если SQL первая → Python падает с TypeError на следующем cron-tick'е
+- если Python первая → defensive `random.choice(raw or [])` тихо отдаёт пустоту,
+  юзеры получают пустые/fallback тексты до apply SQL
+
+**Pre-flight check** перед каждой scalar→array миграцией: `grep -rn '<key>'
+--include="*.py"` по handlers/ services/ crons/ webhook_server.py main.py. Каждый
+consumer переключи на array-aware в том же diff. Не оставляй TODO «починю позже».
+
+### Ссылки
+
+- mig 306/307 — первый кейс (payment.already_premium_block_body).
+- mig 416/417 — второй кейс (payment.trial_expired).
+- mig 500 (PR #388) — третий кейс (payment.activated_body, отличие — phantom-key
+  не было, идёт null→array а не scalar→array).

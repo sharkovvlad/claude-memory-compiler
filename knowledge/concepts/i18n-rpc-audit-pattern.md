@@ -148,3 +148,66 @@ v_streak_msg := REPLACE(v_streak_template, '{streak}', v_new_streak::text);
 ## Sources
 
 - [[daily/2026-05-20.md]] — Mig 285: streak food-log i18n (2 RU-hardcoded strings → 26 i18n entries). Mig 286: 4 RPCs cleanup (23 keys × 13 langs = 299 entries). Phase 4 i18n cleanup полностью завершён. Lesson: pg_proc scan обязателен отдельно от ui_translations JSONB.
+
+---
+
+## Addendum 2026-06-12 — cron-notifications i18n-coverage audit
+
+i18n surface = `ui_translations` + `pg_proc` (см. выше) **+ Python cron-кода**:
+строки которые код `text.replace("{X}", val)` берёт из `cron_notifications.*`,
+`payment.*` и шлёт юзерам напрямую (без RPC посередине). Это **третий слой**,
+который Phase 4 не сканировал.
+
+### Симптом
+
+`crons/ton_payment_checker.py:338` после успешного USDT/TON-платежа читал
+`payment.activated_body`. Ключ **отсутствовал во всех 13 langs** — все юзеры
+получали hardcoded EN fallback. Тихий 0/13 — нет error log'а, нет CI alert'а.
+Аналогичный случай был с `cron_notifications.reminder_waist_retrofit` (mig 498).
+
+### Recipe (reusable) — `/tmp/cron_i18n_audit*.py`
+
+Простой скрипт psycopg2, ~150 строк. Прогон ~3 сек:
+
+1. **Phase A — Coverage:** для каждого `(namespace, key)` из EXPECTED_KEYS:
+   ```sql
+   SELECT lang_code, content #> %s FROM ui_translations
+   ```
+   Проверь 13/13 → present. Меньше → phantom-key или legacy.
+
+2. **Phase B — Placeholder mismatch:** code expects `{name}`, `{streak}` etc.
+   Регексп `\{([a-z_][a-z0-9_]*)\}` по `collect_strings(val)`. **Внимание:**
+   большинство mismatch'ей — false positives (копирайтер интенциональный:
+   Sage ≤35 chars/line часто без `{name}`). Только missing placeholders в EN
+   (canonical) — настоящий баг.
+
+3. **Phase C — Orphan keys:** `jsonb_object_keys(content->'cron_notifications')`
+   − ключи в коде. Что-то осталось от mig 067/102/338, не показывается юзерам.
+
+4. **Phase D — Fine-grained EN-leak:** per-string set match non-EN vs EN.
+   Допусти cognates (Stress/Cardio/OK/Mana/XP/kcal/Premium).
+
+5. **Phase E — Phantom-Pet:** regex `\b(Pet|Пет)\b`. CI guard
+   `pr-phantom-pet-guard` уже ловит, но скрипт даёт отчёт за один проход.
+
+### Когда запускать
+
+- При добавлении нового cron-уведомления → проверить что новый ключ есть в всех
+  13 langs ДО Python-кода. Не «hardcoded fallback на первое время».
+- Периодически (раз в месяц или после batch i18n-миграций) — поймать orphans.
+- После любого scalar↔array consumer-shift — Phase B mismatch покажет ломаные
+  placeholder'ы.
+
+### Защита от phantom-key fallback
+
+**Pattern:** при добавлении нового user-facing cron-ключа, первая миграция = INSERT
+ключа во все 13 langs (даже как «owner-supplied draft EN + 12 langs TODO»),
+**отдельным PR ДО** Python-кода который читает этот ключ. Никакого
+`get(key) or "..."` hardcoded fallback — иначе тихий regression до следующего
+аудита (8 месяцев в случае luteal/waist_retrofit/activated_body).
+
+### Связанные мигации
+
+- mig 498 (PR #381) — `waist_retrofit` key mismatch fix.
+- mig 499 (PR #382) — `day_close` `{meals_needed}` placeholder.
+- mig 500 (PR #388) — `activated_body` phantom-key 0/13 langs.
