@@ -103,3 +103,57 @@ mig 390 **показал** кнопку «Назад» (снял visible_conditi
 - **Fix:** в suppression добавлен `new` (полное совпадение с гейтом). Плюс контент-исключение для location (ей индикатор нужен — стикер, не food-текст).
 
 **Правило расширено:** когда новый обработчик ловит набор статусов, **все компоненты, фильтрующие по статусу** (router BUTTON_ONLY/ONBOARDING, NO_INDICATOR_STATUSES в proxy, и т.п.) должны покрывать ТОТ ЖЕ набор. Рассинхрон → двойные/потерянные side-effects. Проверяй полный путь, не один компонент.
+
+## Рецидив (2026-06-12): post-registered AI gate в webhook_server, маскированный legacy n8n
+
+**Второй blast-сайт того же класса.** До этого все рецидивы — router'ные frozensets (BUTTON_ONLY_STATUSES / NUMERIC_INPUT_STATUSES / ONBOARDING_STATUSES). Это **первый кейс whitelist'а в `webhook_server._try_authoritative_path`**.
+
+### Симптом (live tid=417002669, 22:24)
+
+User → меню Профиль → ⚙ Настройки → Уведомления (`cmd_edit_notifications_mode` ставит `users.status='edit_notifications_mode'` через `process_user_input`). Шлёт фото еды. В чате — прежний рендер «Настройки», `food_logs` пуст. `journalctl`:
+
+```
+AUTHORITATIVE skip tid=... target=ai reason=food_media — fall through to legacy
+```
+
+### Корень
+
+Stage 7 AI gate ([`webhook_server.py:1631`](webhook_server.py)) принимал `food_media` только при `status in (registered, editing_meal, waiting_barcode_portion)`. Profile-v5 substates (`edit_notifications_mode`, `edit_country`, `edit_lang`, `edit_timezone`, `edit_gender`, `edit_diet`, `edit_weight`, ...) **не в whitelist'е** — фото отвергалось → forward_to_n8n → **n8n `03_AI_Engine` DELETED 06-08** → silent drop.
+
+Router'у не за что винить: он корректно классифицировал `target=ai reason=food_media` (см. `dispatcher/router.py:1070`).
+
+### Почему не было видно раньше
+
+До 06-08 `03_AI_Engine` существовал — `fall through to legacy` означало «n8n обработает». После DELETE — означает «silent drop». **Cutover N+1 правило:** удаление legacy-таргета — это семантическое изменение всех `return False` веток в `_try_authoritative_path`, которые на него рассчитывали. Перед удалением workflow:
+
+```bash
+grep -n "fall through to legacy" webhook_server.py
+```
+
+Для каждого — спроси: «когда сюда попадает, n8n правда умеет обработать?». Если нет (workflow deleted) — fall-through надо ИЛИ закрывать в Python, ИЛИ явно отбрасывать с user-facing ошибкой, НЕ молча.
+
+### Фикс ([#387](https://github.com/sharkovvlad/noms-bot/pull/387))
+
+1. Import `PROFILE_V5_STATUSES` из `dispatcher.router`.
+2. Новый флаг `_is_profile_v5_food_escape` (`target=ai` AND `reason=food_media` AND `status ∈ PROFILE_V5_STATUSES`) → расширяет гейт.
+3. Внутри ветки — fire-and-forget `set_user_status('registered')` чтобы picker не висел для NEXT запроса.
+4. `text_food` ИЗ escape ИСКЛЮЧЁН: numeric input «88» в `edit_weight` мог бы перехватиться как food. Router и так такой текст уводит на `menu_v3 → profile_v5_text_input` — defence in depth.
+5. Лог-метка `AUTHORITATIVE_AI_PROFILE_ESCAPE` для телеметрии.
+
+### Durable правила (расширение HUB)
+
+1. **Whitelist'ов с FSM-статусами — несколько blast-сайтов**, не только router'ные frozensets:
+   - `dispatcher/router.py`: `BUTTON_ONLY_STATUSES`, `NUMERIC_INPUT_STATUSES`, `ONBOARDING_STATUSES`, `PROFILE_V5_STATUSES`.
+   - `webhook_server.py:_try_authoritative_path`: hard-coded tuple в Stage 7 AI gate.
+   - `telegram_proxy.py:NO_INDICATOR_STATUSES`.
+   - Возможно ещё. Перед добавлением нового статуса — `grep -rn '"<status>"\|status\s*==\s*"' --include="*.py" .` чтобы найти все коды-проверки.
+
+2. **«Fall through to legacy» log site = TODO до окончания cutover'а.** Когда конкретный legacy-таргет удаляется, каждое использование должно стать ИЛИ обработкой в Python, ИЛИ user-facing ошибкой. `grep -n "fall through to legacy" webhook_server.py` перед каждым n8n DELETE.
+
+3. **При запуске нового FSM-статуса для уже-существующего реал-юзера** (не онбординг — а profile-edit, payment-wait и т.п.) — тестируй ВСЕ типы input'а из этого статуса:
+   - inline-callback клик ✓
+   - текст (если применимо) ✓
+   - **фото / голос** ← наиболее часто забываемое
+   - location pin ← забывается так же часто
+
+   Photo/voice от взрослого юзера — клёвая нагрузка пользовательских ожиданий, и должна работать ВСЕГДА (юзер хочет залогать еду, неважно где он сидит в FSM).
