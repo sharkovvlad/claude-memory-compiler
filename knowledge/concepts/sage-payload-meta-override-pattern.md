@@ -35,6 +35,8 @@ updated: 2026-06-12
 
 **Generic-паттерн «voice card ≠ META»** (2026-06-13): большинство META ссылаются на **voice card** в системном промпте (Card D для quiet_steady, Card S для silent_presence, Card I-SOFT для late_night). Card = always-in-prompt **reference example** (как звучать). META = conditional **trigger** (когда входить в режим) + ссылка на нужную card. Карточка сама ничего не меняет — без META модель не знает, что пора. При добавлении нового режима тишины/тона — нужны ОБЕ части.
 
+**Context-signal ≠ META, но требует prompt-инструкции** (PR-3c, 2026-06-13): `Goal`, `Last log`, `Recent pattern (7d)` — это НЕ META (не tail-cascade), а **context-строки** в теле payload. Но: **новый context-сигнал, добавленный без directive-инструкции в системном промпте КАК его использовать, под-весится моделью** — сильные rule'ы навигации побеждают. Live-кейс: weekly-pattern строка «large single logs NORMAL (keto)» игнорировалась → модель пушила углеводы кето-юзеру. Fix = блок `WEEKLY PATTERN AWARENESS` в обоих промптах (делает строку actionable). **Правило:** payload context-строка + соответствующая prompt-инструкция = пара (структурно как card+META). unit-тесты под-весивание НЕ ловят → MANDATORY dry-run. См. [[sage-silent-presence-mode]] и weekly-pattern (RPC `get_weekly_pattern`, mig 509, food_log+my_day surfaces).
+
 ## Key Points
 
 - **Место в payload:** в самый конец `user_prompt`, после `Response language` строки и существующих `FINAL DIRECTIVE` / `time_meta_warning`. gpt-4o-mini вешает на end-of-context max weight — это работает.
