@@ -39,7 +39,7 @@
 | **Payment / Stripe / Stars** | `payment-idempotency-pattern`, `payment-integration`, `subscription-management-headless`, `claim-vs-check-idempotency-anti-pattern`, 🔥 `stars-subscriptions-botfather-prereq` (P0 2026-05-28) |
 | **Перевод / 13 langs / Sage** | `copywriter-playbook`, `ui-translations-bulk-update-recipe`, `sassy-sage-multilingual-glossary`, `double-emoji-button-anti-pattern`, `i18n-rpc-audit-pattern` |
 | **Adaptive modifiers (sleep/stress/luteal)** | `adaptive-modifiers-architecture`, `safety-guard-ux-pattern` |
-| **Cron / scheduled jobs** | `cron-silent-failure-alerting`, `cron-reminder-suppression-tunables`, `cron-pushed-callback-fallback-pattern` |
+| **Cron / scheduled jobs** | `reminder-types-inventory` (🔥 HUB), `cron-silent-failure-alerting`, `cron-reminder-suppression-tunables`, `cron-pushed-callback-fallback-pattern`, `cron-user-local-tz-pattern` |
 | **Deploy / TLS / Caddy issue** | `release-protocol`, `tls-caddy-nomsbot` |
 | **Python handler (cutover)** | `phase2-python-menu-v3`, `phase4-onboarding-migration`, `webhook-server-async-patterns` |
 | **Классификация типов контента (photo/doc/audio/junk/location)** | 🔥 `content-type-classification` — 3 независимых классификатора, обязаны быть синхронны; `content-type-routing-gotchas` — предыстория PR #294 |
@@ -203,6 +203,7 @@ _8 files · 53 incoming refs (30d)_
 - [[cron-reminder-suppression-tunables]] — Tunables для cron reminder suppression (mute-windows, hour cutoffs) живут в `app_constants`, не в RPC body
 - [[cron-pushed-callback-fallback-pattern]] — Любая cron-pushed inline button MUST иметь row в `_global_floating_actions` virtual screen (mig 372 P0 lesson — без fallback callback fails molча, F3 mutex не срабатывает)
 - [[cron-user-local-tz-pattern]] — Биоритмы решаются hourly cron + per-user local-hour фильтр в RPC, не scheduler timezone. Subscription Lifecycle + League Weekly — реальный tech-debt (шлют всем сразу). MSK quirk: VPS=Europe/Moscow, AsyncIOScheduler(timezone='UTC') unhonored — для UTC-bound cron'ов передавать timezone='UTC' в CronTrigger явно.
+- [[reminder-types-inventory]] **`🔥 HUB`** — Полный реестр всех 9 user-facing cron'ов (1 reminders с 11 ветками + 8 standalone) + 10 server-only. Какой cron что обещает, что реально делает, какую аудиторию таргетит, уважает ли `notifications_mode`. Источник правды для дайджеста (`cron_get_reminder_digest_payload`, mig 506) и CI guard'а `pr-cron-inventory.yml`. При добавлении нового cron'а — **обязательно** обновить эту таблицу в том же PR.
 - [[noms-architecture]] — Telegram nutrition tracking bot with AI food recognition, gamification (XP, leagues, quests, NomsCoins), 13-language support, and subscriptions. Character: "Sassy Sage" — helpfu...
 - [[project-structure]] — Project Structure & Tech Stack
 - [[release-protocol]] — Release Protocol — Auto-deploy через GitHub Actions, manual fallback
