@@ -165,7 +165,7 @@ _12 files · 61 incoming refs (30d)_
 - [[dumb-renderer-interpolation-gotchas]] — Dumb Renderer Interpolation — Gotchas
 - [[phase2-python-menu-v3]] — Phase 2 — Python `menu_v3` handler + Template Engine
 - [[phase4-onboarding-migration]] — Phase 4: Миграция онбординга n8n → Python (29.04 — 04.05.2026)
-- [[phase6-location-migration-plan]] — Phase 6 — миграция 02.1_Location в Python (план)
+- [[phase6-location-migration-plan]] 🏛 superseded — Phase 6 plan, миграция выполнена → актуальное в [[stage7-global-cutover]] и [[canonical-hybrid-location-picker]]
 - [[python-telegram-adapter]] — Python Telegram Adapter — Replacing Telegram Trigger in n8n
 - [[webhook-server-async-patterns]] — Webhook Server Async Patterns — concurrency + performance
 - [[food-log-python-cutover]] — Stage 7a — food log confirmation rendering migration from n8n to Python (4 PRs, 5 n8n iterations, first callback endpoint)

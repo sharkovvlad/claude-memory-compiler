@@ -1,9 +1,10 @@
 ---
 title: "Phase 6 — миграция 02.1_Location в Python (план)"
 aliases: [location-migration, phase6-location, phase6-plan]
-tags: [phase6, migration-plan, n8n-cutover, location, headless]
-status: PLAN (awaits product sign-off)
+tags: [phase6, migration-plan, n8n-cutover, location, headless, superseded]
+status: superseded — миграция выполнена, план историчен
 created: 2026-05-12
+updated: 2026-06-13
 related:
   - phase4-onboarding-migration
   - variant-b-cutover
@@ -13,9 +14,12 @@ related:
   - ui-stickers-headless
   - one-menu-ux
   - n8n-subworkflow-contract
+  - stage7-global-cutover
 ---
 
 # Phase 6 — миграция 02.1_Location → Python
+
+> ⚠️ **status: superseded (2026-06-13 KB audit)** — план историчен. `02.1_Location` n8n-workflow удалён, `location` входит в **Python authoritative targets для всех юзеров** (см. [[stage7-global-cutover]] и `dispatcher/forward.py:TARGET_TO_PATH`). Канонический actual-state — [[concepts/canonical-hybrid-location-picker]] (UX-паттерн) + [[concepts/stage7-global-cutover]] (cutover status). Этот документ оставлен как исторический контекст «зачем было», не как операционный гайд.
 
 > **Финальный legacy n8n блок Onboarding-pipeline'а.** Phase 4 закрыла онбординг до phenotype quiz (status `new` → `registration_step_phenotype_quiz`); 02.1_Location обслуживает «последнюю милю» — country/timezone picker + первичный location pin + Profile v5 edit-flow для уже зарегистрированных. Phase 6 переводит его в Python authoritative path аналогично `handlers/onboarding_v3.py`.
 
