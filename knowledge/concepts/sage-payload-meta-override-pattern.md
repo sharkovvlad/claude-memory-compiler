@@ -75,6 +75,9 @@ return (
 4. `COLD-START PHASE` (0 логов + past breakfast — day-framing)
 5. `BAN LIST` (конкретные foods из последних реакций — sharper guard) **NEW PR #386**
 6. `RULE 7 HARD GUARD` (≥20 г Б в одном приёме — самое узкое)
+7. `LATE-NIGHT CLOSE` (если `local_hour >= 22` — h-time gate, специфичнее всех meal-guard'ов)
+8. `LANGUAGE LOCK` (always-on, max end-of-context salience)
+9. `STREAK NAMING LOCK` (PR #402, 2026-06-13 EOD — самый last META; `lang != en` AND `streak_n > 0` AND lang ∈ {ru,uk,ar,es,fr,it,de,pt,pl})
 
 **my_day path (`_build_my_day_prompt`):** rule7 не применим (no single-meal protein); остальное параллельно:
 1. `Response language`
@@ -83,6 +86,10 @@ return (
 4. `VARIATION GUARD`
 5. `COLD-START PHASE`
 6. `BAN LIST`
+7. `LATE-NIGHT CLOSE`
+8. `QUIET STEADY NO PUSH` (если `day_status == 'quiet_steady'`)
+9. `LANGUAGE LOCK`
+10. `STREAK NAMING LOCK` (PR #402)
 
 Идея: если две META конфликтуют по смыслу, более специфичная (ниже в payload) выигрывает у модели.
 
@@ -199,7 +206,26 @@ UPDATE public.app_constants SET value='false' WHERE key='sage_late_night_close_e
 4. `cold_start_phase` (0 logs + past breakfast)
 5. `ban_list` (specific foods named recently)
 6. `rule7_hard_guard` (food_log only, just-logged ≥20g protein)
-7. `late_night_close` / `late_night_soft` (h≥22) — **самая специфичная по времени, в конце**
+7. `late_night_close` / `late_night_soft` (h≥22)
+8. `quiet_steady_no_push` (my_day only, `day_status == 'quiet_steady'`)
+9. `language_lock` (always-on, PR #392 cascade — primes output language at end)
+10. `streak_naming_lock` (PR #402, 2026-06-13 EOD — **самая last META**, lexical guard поверх language-lock)
+
+## STREAK NAMING META — token-copy defence (PR #402, 2026-06-13 EOD)
+
+**Owner-observed bug:** 4/5 RU my_day реакций за 24h писали «Стreak»/«стрика»/«стрике» вместо canonical «серия» из KB-glossary. Root cause: payload-line `Streak: 42 days` сидит **рядом** с числом, gpt-4o-mini под heavy non-EN context копирует/транслитерирует токен. System-prompt FORBIDDEN clause существует (line 2322, 2437 services/sage.py), но погребена в ~500 токенах CULTURE GUARD + VOICE EXAMPLES — низкая salience для end-of-context-weighted модели.
+
+**Двухчастный fix:**
+1. **Payload rename** — убрать буквальный токен из data-section: `«Streak: N days»` → `«Day streak count: N»` в обоих `_build_user_prompt` (food_log) и `_build_my_day_prompt` (my_day). Не дать модели начать «копировать соседнее слово».
+2. **`_streak_naming_meta(language, streak_n)`** — HARD GUARD приклеивается AFTER `_language_lock_meta` (самый tail). Содержит конкретное native-слово на языке юзера + явный банлист («стрик/стрика/стрике/Стreak/стрік/ستريك/استریک/Streak») + warning про mixed-script. Покрывает 9 langs из Sage-prompt FORBIDDEN clause: `ru/uk/ar/es/fr/it/de/pt/pl`. FA/HI/ID — fallback на existing FORBIDDEN clause (Sage prompt не пинит native для них; KB-glossary даёт mixed signals).
+
+**Verification** (dry-run + ad-hoc):
+- Dry-run × 2 на 8 baseline сценариях: **16/16 ✓ clean**. Scenario 2 (RU/quietsteady/streak=12) оба раза вернул «**серия**». Scenario 4 (AR/coldstart/streak=7) использовал «**سلسلة**» в pass-2.
+- Ad-hoc 5× принципиальный repro owner-сценария (RU/streak=42/my_day/19h): **0/5 bad** (vs baseline 4/5).
+
+**Durable lesson:** промпт-side FORBIDDEN clause **недостаточен** для gpt-4o-mini когда конкретный токен-источник сидит в payload рядом с ключевым числом. Reliable fix = **payload rename** (убрать токен) + **per-language tail-anchored HARD GUARD** (конкретное native + банлист). Pattern composable со всеми остальными META (language_lock, quiet_steady, late_night). Если в будущем добавится новая meaningful поле, рядом с которой может появиться меняющий tone token — повторить этот шаблон.
+
+**Apply этого шаблона к будущим bug-классам:** любой случай «модель копирует токен из payload-name field вместо переписать его на target language» лечится этим pattern'ом. Tell-tale sign в `ai_coach_logs`: текст содержит токен из payload буквально или транслитерированно.
 
 ## Related Concepts
 
@@ -210,9 +236,12 @@ UPDATE public.app_constants SET value='false' WHERE key='sage_late_night_close_e
 
 ## Sources
 
-- `services/sage.py` — `_repeat_suppression_meta`, `_rule7_hard_guard_meta`, `_budget_directive`, `_late_night_close_meta` (PR #392), `time_meta_warning`, `_fire_sage_telemetry`, `_fire_food_log_fallback_telemetry`, voice cards в `_DEFAULT_SYSTEM_PROMPT_EN` / `_DEFAULT_SYSTEM_PROMPT_MY_DAY_EN`
+- `services/sage.py` — `_repeat_suppression_meta`, `_rule7_hard_guard_meta`, `_budget_directive`, `_late_night_close_meta` (PR #392), `_language_lock_meta` / `_quiet_steady_no_push_meta` (PR-3a), `_streak_naming_meta` + `_STREAK_NATIVE_WORD` mapping (PR #402, 2026-06-13 EOD), `time_meta_warning`, `_fire_sage_telemetry`, `_fire_food_log_fallback_telemetry`, voice cards в `_DEFAULT_SYSTEM_PROMPT_EN` / `_DEFAULT_SYSTEM_PROMPT_MY_DAY_EN`
 - `migrations/496_sage_recent_reactions_rpc.sql` — RPC за `VARIATION GUARD`
 - `migrations/503_sage_late_night_close_flag.sql` — флаг late_night_close (PR #392)
+- `migrations/507_streak_native_words_audit.sql` — UI-хардкоды `progress.skip_streak_chip` для UK/FA/HI/ID, native-слова из KB (PR #402)
+- `tools/audit_streak_literal.py` — reusable audit для streak-токенов в `ui_translations` (case-insensitive cyr-транслитерации)
+- `tools/sage_dry_run_streak_only.py` — 5× repro owner-сценария RU/streak=42 (тип теста для аналогичных tone-bugs)
 - `tests/services/test_sage_repeat_suppression.py` — coverage META-плумбинга
 - `tests/services/test_sage_late_night_close.py` — coverage late_night branching + snapshot voice cards (PR #392)
 - `tests/services/test_sage.py` § «Telemetry on user-visible fallback paths» — wiring-тесты для каждого branch'а (PR #379)
