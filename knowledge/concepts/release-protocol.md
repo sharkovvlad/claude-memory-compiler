@@ -186,6 +186,26 @@ git diff origin/main..origin/<pr-branch> --stat
 
 **Запрет N в конце файла:** `./deploy.sh` из feature-веток или worktrees. Единственный путь = merge в main → deploy из main. SCP одного файла — emergency only. Подробности в секции «Запрещено» в начале этого документа.
 
+## Confirmation 2026-06-13: PR Sanity Audit поймал тот же класс на чужой mig
+
+**Контекст.** Агент работал над PR #400 (reminder-digest + KB hub). В начале сессии `git fetch+rebase origin/main` сделал — main был на `549e47a`. Спустя ~2 часа работы вмёржился PR #399 с **mig 505** (vision soft-prior memory). Агент закоммитил + push — без второго rebase прямо перед push'ом.
+
+**Что поймало.** GitHub Actions workflow `pr-sanity` ⇒ check `Diff sanity audit` ⇒ **fail**: «Deleted 1 migration file(s): migrations/505_user_food_corrections_vision.sql». На PR появилась русскоязычная плашка с рецептом «git fetch + rebase + diff stat + push --force-with-lease». [PR #400 разговор](https://github.com/sharkovvlad/noms-bot/pull/400).
+
+**Фикс.** Та же команда что в lesson 2026-05-08:
+```bash
+git fetch origin main
+git rebase origin/main      # подтянул PR #399 в base
+git diff origin/main..HEAD --stat  # → 7 файлов, +692, 0 удалений ✓
+git push --force-with-lease
+```
+
+После rebase все 6 CI чеков зелёные.
+
+**Закрепление §12.1** (rebase ПЕРЕД commit, не после) — refinement: **rebase ещё раз ПЕРЕД push**, даже если уже rebase'ил в начале сессии. Между rebase и push может пройти 2+ часа активной работы, за это время чужие PR'ы успевают смержиться. Это не «дополнительный шаг», это **тот же §12.1 на финальном плече**.
+
+**Урок про CI:** sanity-audit стал страховкой для случаев когда §12.1 пропустил. Не полагайся **только** на CI, но рассчитывай что если §12.1 нарушил по случайности — CI всё равно поймает. Гораздо хуже было бы если бы PR смерджился молча и откатил чужую работу. (Историческая параллель: pre-push migration collision guard работает аналогично — 6+ раз спас от того же класса.)
+
 ## Lesson 2026-05-08: stale worktree + git commit -a → catastrophic откат
 
 ### Что произошло
