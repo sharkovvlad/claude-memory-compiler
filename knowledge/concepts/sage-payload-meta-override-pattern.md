@@ -18,7 +18,7 @@ updated: 2026-06-12
 
 Способ скорректировать поведение LLM-генератора Sassy Sage **без правки системного промпта** (`_DEFAULT_SYSTEM_PROMPT_*` в `services/sage.py`). Используется когда системный промпт — это **бренд** и требует owner-approval на каждое изменение, а нужная коррекция — точечная и data-driven.
 
-Применяется в 6 живых местах (по состоянию на 2026-06-12):
+Применяется в **10 живых местах** (по состоянию на 2026-06-13). Порядок в payload = возрастание специфичности; `language_lock` ВСЕГДА последний (end-of-context salience):
 
 | META | Условие триггера | Когда добавлен |
 |---|---|---|
@@ -28,6 +28,12 @@ updated: 2026-06-12
 | `RULE 7 HARD GUARD` / `rule7_hard_guard` | `payload['protein'] >= 20` (food_log only) | 2026-06-08 (PR #375) |
 | `COLD-START PHASE` / `cold_start_phase` | `meals_count == 0 AND meal_period != "breakfast"` | 2026-06-12 (PR #385) |
 | `BAN LIST` / `ban_list` | foods из таблицы `_FOOD_MENTIONS` совпали в последних 2 реакциях (Agent 2's предложение, sharper чем VARIATION GUARD) | 2026-06-12 (PR #386) |
+| `late_night_close` / `late_night_soft` | `local_hour >= 22` (flag `sage_late_night_close_enabled`); soft-ветка на my_day при severe_deficit+protein<60%+kcal<80% | 2026-06-12 evening (PR #392, mig 503) |
+| `quiet_steady_no_push` | `day_status == 'quiet_steady'` (my_day only) — HARD guard no-push | 2026-06-13 (PR #396) |
+| `silent_presence` | food_log: master flag `sage_silent_presence_enabled` + meal balanced (fat≤45% kcal) + day kcal ∈ [40,95]% + wellbeing не красное; suppressed при budget_closed/late_night. **food_log-параллель quiet_steady_no_push.** Default flag `false`. | 2026-06-13 (PR #401, mig 507) — [[concepts/sage-silent-presence-mode]] |
+| `language_lock` | любой язык (always-on, always-LAST) — пинит output language под heavy context | 2026-06-13 (PR #396 hotfix Hindi→RU leak) |
+
+**Generic-паттерн «voice card ≠ META»** (2026-06-13): большинство META ссылаются на **voice card** в системном промпте (Card D для quiet_steady, Card S для silent_presence, Card I-SOFT для late_night). Card = always-in-prompt **reference example** (как звучать). META = conditional **trigger** (когда входить в режим) + ссылка на нужную card. Карточка сама ничего не меняет — без META модель не знает, что пора. При добавлении нового режима тишины/тона — нужны ОБЕ части.
 
 ## Key Points
 

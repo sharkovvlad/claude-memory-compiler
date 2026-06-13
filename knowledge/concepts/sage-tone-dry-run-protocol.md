@@ -140,9 +140,28 @@ Cost dry-run = $0.05 + 5 минут wall-clock. Cost скрытого регре
 
 **Поэтому это HARD GATE pre-merge,** не optional.
 
+## Gotcha — hardcoded `sys.path` в `tools/sage_dry_run.py` (2026-06-13, PR-3b)
+
+`tools/sage_dry_run.py:40` содержит `sys.path.insert(0, "…/worktrees/vigorous-cray-157241")`
+— абсолютный путь к **конкретному** worktree того агента, который продвинул скрипт
+в repo (PR #398). Если ты в **другом** worktree, скрипт импортнёт `services.sage`
+из ЧУЖОГО (устаревшего) кода → dry-run прогонит НЕ твои изменения, и ты увидишь
+ложно-зелёный результат.
+
+**Workaround** (пока скрипт не починен): сделай локальный wrapper в `/tmp/`, который
+делает `sys.path.insert(0, "<ТВОЙ worktree>")` **ДО** `from services import sage`,
+и добавь `assert hasattr(sage, "<твоя новая функция>")` сразу после импорта —
+это поймает импорт из чужого worktree немедленно. Образец — `/tmp/dry_run_pr3b_wrapper.py`
+(daily 2026-06-13).
+
+**Правильный fix на будущее** (todo): заменить hardcoded путь на
+`sys.path.insert(0, str(Path(__file__).resolve().parents[1]))` — тогда скрипт всегда
+импортит sage из СВОЕГО repo, в каком бы worktree ни лежал.
+
 ## Related Concepts
 
 - [[concepts/sage-payload-meta-override-pattern]] — главный hub по META-каскаду
+- [[concepts/sage-silent-presence-mode]] — silent_presence META (PR-3b), прошла этот gate
 - [[concepts/sage-food-log-llm-integration]] — host архитектура
 - [[concepts/sassy-sage-dialog-variants]] — fallback'ы и вариативность
 
