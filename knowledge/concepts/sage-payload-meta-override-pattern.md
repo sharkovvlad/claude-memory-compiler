@@ -239,7 +239,7 @@ UPDATE public.app_constants SET value='false' WHERE key='sage_late_night_close_e
 - `services/sage.py` — `_repeat_suppression_meta`, `_rule7_hard_guard_meta`, `_budget_directive`, `_late_night_close_meta` (PR #392), `_language_lock_meta` / `_quiet_steady_no_push_meta` (PR-3a), `_streak_naming_meta` + `_STREAK_NATIVE_WORD` mapping (PR #402, 2026-06-13 EOD), `time_meta_warning`, `_fire_sage_telemetry`, `_fire_food_log_fallback_telemetry`, voice cards в `_DEFAULT_SYSTEM_PROMPT_EN` / `_DEFAULT_SYSTEM_PROMPT_MY_DAY_EN`
 - `migrations/496_sage_recent_reactions_rpc.sql` — RPC за `VARIATION GUARD`
 - `migrations/503_sage_late_night_close_flag.sql` — флаг late_night_close (PR #392)
-- `migrations/507_streak_native_words_audit.sql` — UI-хардкоды `progress.skip_streak_chip` для UK/FA/HI/ID, native-слова из KB (PR #402)
+- `migrations/508_streak_native_words_audit.sql` — UI-хардкоды `progress.skip_streak_chip` для UK/FA/HI/ID, native-слова из KB (PR #402; originally apply'нут как 507, renumbered после CI sanity-guard collision)
 - `tools/audit_streak_literal.py` — reusable audit для streak-токенов в `ui_translations` (case-insensitive cyr-транслитерации)
 - `tools/sage_dry_run_streak_only.py` — 5× repro owner-сценария RU/streak=42 (тип теста для аналогичных tone-bugs)
 - `tests/services/test_sage_repeat_suppression.py` — coverage META-плумбинга
