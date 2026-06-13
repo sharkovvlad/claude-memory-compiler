@@ -38,6 +38,7 @@
 | **n8n workflow правка** | 🔥 `n8n-data-flow-patterns`, `n8n-subworkflow-contract`, `n8n-selfhost-migration` |
 | **Payment / Stripe / Stars** | `payment-idempotency-pattern`, `payment-integration`, `subscription-management-headless`, `claim-vs-check-idempotency-anti-pattern`, 🔥 `stars-subscriptions-botfather-prereq` (P0 2026-05-28) |
 | **Перевод / 13 langs / Sage** | `copywriter-playbook`, `ui-translations-bulk-update-recipe`, `sassy-sage-multilingual-glossary`, `double-emoji-button-anti-pattern`, `i18n-rpc-audit-pattern` |
+| **Trust / wisdom layer (explainable Sage, future feature)** | 🔥 `nutrition-trust-layer` (PROPOSED 2026-06-13, before any implementation), `sage-payload-meta-override-pattern`, `sage-tone-dry-run-protocol` (HARD GATE), `copywriter-playbook` |
 | **Adaptive modifiers (sleep/stress/luteal)** | `adaptive-modifiers-architecture`, `safety-guard-ux-pattern` |
 | **Cron / scheduled jobs** | `reminder-types-inventory` (🔥 HUB), `cron-silent-failure-alerting`, `cron-reminder-suppression-tunables`, `cron-pushed-callback-fallback-pattern`, `cron-user-local-tz-pattern` |
 | **Deploy / TLS / Caddy issue** | `release-protocol`, `tls-caddy-nomsbot` |
@@ -192,6 +193,7 @@ _6 files · 54 incoming refs (30d)_
 - [[phantom-pet-entity]] ⛔ **owner rule** — Слово «Pet»/«Пет» в текстах ЗАПРЕЩЕНО (нет отдельной сущности-питомца; компаньон = сам бот). Уже чистилось в mig 278, всплыло в `sage.guarded.*`. Ссылаться на питомца — только когда будет app с визуальным Pet, и только на тех экранах (2026-06-07).
 - [[sassy-sage-dialog-variants]] — Sassy Sage Dialog Variants System
 - [[sassy-sage-multilingual-glossary]] — Sassy Sage Multilingual Glossary
+- [[nutrition-trust-layer]] **`🔥 HUB · PROPOSED 2026-06-13`** — Explainable wisdom (raскрывающийся блок «🧠 Почему такой совет?») + Telegram Rich Message Formatting (32k+, `expandable_blockquote`, custom emoji). Owner-approved design spike, не реализация. Hybrid C архитектура: pre-gen base в `ui_translations` + LLM personal lead-in 40-60 tok (cost negligible, quality > economy). Все формулы читаются live из `calculate_user_targets.calculations.*` (`bmr/tdee/bmr_formula/pal_*/deficit_or_surplus_pct/protein_g_per_kg`) — никаких hardcoded literals, compatibility с adaptive TDEE roadmap. 7 wisdom examples (RU drafts, single-source per mig 412). Phase 2 MVP = #1 (protein push при `goal=lose`). Free для всех (retention lever, не paywall). Phase 1.5 prereq — multi-lang term lock «логи»→native per 13 langs (как mig 507 для streak).
 - [[ui-translations-bulk-update-recipe]] — UI Translations Bulk Update Recipe
 - [[handover/2026-06-01_fiverr_dunning_l1_review_brief]] **`📬 open handover`** — Fiverr brief для native-review dunning + plan_name × 7 langs (AR/FA/HI/PL priority, ID/PT/UK sign-off); 70 strings, ~$120-180, owner action.
 
